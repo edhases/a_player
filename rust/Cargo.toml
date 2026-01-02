@@ -1,0 +1,18 @@
+[package]
+name = "rust_lib_vor_player"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+flutter_rust_bridge = "2"
+anyhow = "1.0"
+log = "0.4"
+android_logger = "0.15.1"
+
+# --- ВАЖЛИВО: Ці бібліотеки тепер тільки для Android ---
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.13"
+oboe = { version = "0.6", features = ["java-interface", "shared-stdcxx"] }
