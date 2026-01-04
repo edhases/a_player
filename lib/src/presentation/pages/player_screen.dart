@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:oxide_player/src/data/datasources/app_database.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/material.dart';
 import 'package:oxide_player/main.dart';
+import 'package:oxide_player/src/data/datasources/app_database.dart';
 import 'package:rxdart/rxdart.dart';
 
 class PlayerScreen extends StatefulWidget {

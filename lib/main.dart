@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:oxide_player/src/core/services/audio_handler.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
 import 'package:oxide_player/src/presentation/pages/folder_list_screen.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:get_it/get_it.dart';
-import 'package:provider/provider.dart';
+import 'package:oxide_player/src/core/services/audio_handler.dart';
 import 'package:oxide_player/src/presentation/widgets/permission_gate.dart';
+import 'package:provider/provider.dart';
 
-// Service locator
 final getIt = GetIt.instance;
 
 Future<void> main() async {

@@ -18,6 +18,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   MyAudioHandler() {
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+    // Propagate the current item to the audio service stream.
+    _player.currentIndexStream.listen((index) {
+      if (index != null && queue.value.isNotEmpty) {
+        mediaItem.add(queue.value[index]);
+      }
+    });
     _player.setAudioSource(_playlist);
   }
 
@@ -25,7 +31,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> addQueueItems(List<MediaItem> mediaItems) async {
     await _playlist.clear();
     final audioSources = mediaItems
-        .map((item) => AudioSource.uri(Uri.parse(item.id), tag: item))
+        .map((item) => AudioSource.uri(Uri.file(item.id), tag: item))
         .toList();
     await _playlist.addAll(audioSources);
     queue.add(mediaItems);

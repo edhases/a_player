@@ -19,6 +19,11 @@ class Tracks extends Table {
   TextColumn get artworkUri => text().nullable()();
   DateTimeColumn get addedAt => dateTime()();
   TextColumn get sourceType => text().withDefault(const Constant('local'))();
+
+  @override
+  List<Set<Column>> get indexes => [
+        {folderPath},
+      ];
 }
 
 @DriftDatabase(tables: [Tracks])
