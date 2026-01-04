@@ -1,7 +1,8 @@
+import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
-Future<AudioHandler> initAudioService() async {
+Future<MyAudioHandler> initAudioService() async {
   return await AudioService.init(
     builder: () => MyAudioHandler(),
     config: const AudioServiceConfig(
@@ -13,10 +14,27 @@ Future<AudioHandler> initAudioService() async {
 }
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  final _player = AudioPlayer();
+  late AudioPlayer _player;
   final _playlist = ConcatenatingAudioSource(children: []);
+  AndroidEqualizer? _equalizer;
+  AndroidLoudnessEnhancer? _loudnessEnhancer;
 
   MyAudioHandler() {
+    if (Platform.isAndroid) {
+      _equalizer = AndroidEqualizer();
+      _loudnessEnhancer = AndroidLoudnessEnhancer();
+      _player = AudioPlayer(
+        audioPipeline: AudioPipeline(
+          androidAudioEffects: [
+            _equalizer!,
+            _loudnessEnhancer!,
+          ],
+        ),
+      );
+    } else {
+      _player = AudioPlayer();
+    }
+
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
     // Propagate the current item to the audio service stream.
     _player.currentIndexStream.listen((index) {
@@ -26,6 +44,43 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     });
     _player.setAudioSource(_playlist);
   }
+
+  AndroidEqualizer? get equalizer => _equalizer;
+
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    if (Platform.isAndroid) {
+      await _equalizer?.setEnabled(enabled);
+    }
+  }
+
+  Future<void> setBandLevel(int bandIndex, double level) async {
+    if (Platform.isAndroid) {
+      final parameters = await _equalizer!.parameters;
+      parameters.bands[bandIndex].setGain(level);
+    }
+  }
+
+  Future<double> getBandLevel(int bandIndex) async {
+    if (Platform.isAndroid) {
+      final parameters = await _equalizer!.parameters;
+      return parameters.bands[bandIndex].gain;
+    }
+    return 0.0;
+  }
+
+  Future<double> getCenterFreq(int bandIndex) async {
+    if (Platform.isAndroid) {
+      final parameters = await _equalizer!.parameters;
+      return parameters.bands[bandIndex].centerFrequency;
+    }
+    return 0.0;
+  }
+
+  @override
+  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+
+  @override
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
 
   @override
   Future<void> addQueueItems(List<MediaItem> mediaItems) async {

@@ -3,15 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:oxide_player/main.dart';
 import 'package:oxide_player/src/core/services/artwork_search_service.dart';
 import 'package:oxide_player/src/core/services/settings_service.dart';
+import 'dart:async';
+import 'dart:io';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
+import 'package:oxide_player/src/presentation/pages/equalizer_screen.dart';
 import 'package:oxide_player/src/presentation/widgets/artwork_widget.dart';
 import 'package:provider/provider.dart';
 import 'package:rxdart/rxdart.dart';
 
 class PlayerScreen extends StatefulWidget {
-  final Track track;
-
-  const PlayerScreen({super.key, required this.track});
+  const PlayerScreen({super.key});
 
   @override
   _PlayerScreenState createState() => _PlayerScreenState();
@@ -20,7 +21,8 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   late AudioHandler _audioHandler;
   late Stream<PositionData> _positionDataStream;
-  late Stream<Track> _trackStream;
+
+  late StreamSubscription<MediaItem?> _mediaItemSubscription;
 
   @override
   void initState() {
@@ -33,14 +35,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
       (position, bufferedPosition, duration) =>
           PositionData(position, duration ?? Duration.zero),
     );
+    _mediaItemSubscription = _audioHandler.mediaItem.listen((mediaItem) {
+      if (mediaItem != null) {
+        final track = mediaItem.extras?['track'] as Track?;
+        if (track != null) {
+          _fetchArtworkIfNeeded(track);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _mediaItemSubscription.cancel();
+    super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final db = context.read<AppDatabase>();
-    _trackStream = (db.select(db.tracks)..where((t) => t.id.equals(widget.track.id))).watchSingle();
-    _fetchArtworkIfNeeded(widget.track);
   }
 
   void _fetchArtworkIfNeeded(Track track) {
@@ -62,38 +75,66 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Track>(
-      stream: _trackStream,
-      initialData: widget.track,
-      builder: (context, snapshot) {
-        final track = snapshot.data!;
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Now Playing'),
-          ),
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ArtworkWidget(track: track, size: 250),
-                const SizedBox(height: 20),
-                Text(
-                  track.title,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  track.artist ?? 'Unknown Artist',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 20),
-                _buildSeekBar(),
-                const SizedBox(height: 20),
-                _buildControls(),
-              ],
+    return StreamBuilder<MediaItem?>(
+      stream: _audioHandler.mediaItem,
+      builder: (context, mediaItemSnapshot) {
+        final mediaItem = mediaItemSnapshot.data;
+        if (mediaItem == null) {
+          return const Scaffold(
+            body: Center(
+              child: Text('No track playing'),
             ),
-          ),
+          );
+        }
+        final initialTrack = mediaItem.extras!['track'] as Track;
+        return StreamBuilder<Track>(
+          stream: (context.read<AppDatabase>().select(context.read<AppDatabase>().tracks)..where((t) => t.id.equals(initialTrack.id))).watchSingle(),
+          initialData: initialTrack,
+          builder: (context, trackSnapshot) {
+            final track = trackSnapshot.data!;
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text('Now Playing'),
+                actions: [
+                  if (Platform.isAndroid)
+                    IconButton(
+                      icon: const Icon(Icons.equalizer),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const EqualizerScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ArtworkWidget(track: track, size: 250),
+                    const SizedBox(height: 20),
+                    Text(
+                      track.title,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      track.artist ?? 'Unknown Artist',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 20),
+                    _buildSeekBar(),
+                    const SizedBox(height: 20),
+                    _buildControls(),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
