@@ -1,172 +1,104 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:oxide_player/main.dart';
-import 'package:oxide_player/src/core/services/artwork_search_service.dart';
-import 'package:oxide_player/src/core/services/settings_service.dart';
-import 'dart:async';
-import 'dart:io';
-import 'package:oxide_player/src/data/datasources/app_database.dart';
-import 'package:oxide_player/src/presentation/pages/equalizer_screen.dart';
-import 'package:oxide_player/src/presentation/widgets/artwork_widget.dart';
-import 'package:provider/provider.dart';
-import 'package:rxdart/rxdart.dart';
+import 'package:get_it/get_it.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:oxide_player/src/core/services/audio_handler.dart';
 
-class PlayerScreen extends StatefulWidget {
+class PlayerScreen extends StatelessWidget {
   const PlayerScreen({super.key});
 
   @override
-  _PlayerScreenState createState() => _PlayerScreenState();
-}
-
-class _PlayerScreenState extends State<PlayerScreen> {
-  late AudioHandler _audioHandler;
-  late Stream<PositionData> _positionDataStream;
-
-  late StreamSubscription<MediaItem?> _mediaItemSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _audioHandler = getIt<AudioHandler>();
-    _positionDataStream = Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
-      AudioService.position,
-      _audioHandler.playbackState.map((state) => state.bufferedPosition),
-      _audioHandler.mediaItem.map((item) => item?.duration),
-      (position, bufferedPosition, duration) =>
-          PositionData(position, duration ?? Duration.zero),
-    );
-    _mediaItemSubscription = _audioHandler.mediaItem.listen((mediaItem) {
-      if (mediaItem != null) {
-        final track = mediaItem.extras?['track'] as Track?;
-        if (track != null) {
-          _fetchArtworkIfNeeded(track);
-        }
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _mediaItemSubscription.cancel();
-    super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-  }
-
-  void _fetchArtworkIfNeeded(Track track) {
-    final settings = getIt<SettingsService>();
-    if (settings.autoFetchArtwork &&
-        track.artworkUri == null &&
-        track.remoteArtworkUri == null) {
-      final artworkService = getIt<ArtworkSearchService>();
-      artworkService
-          .searchArtwork(track.artist ?? '', track.title)
-          .then((url) {
-        if (url != null) {
-          final db = context.read<AppDatabase>();
-          db.updateRemoteArtwork(track.id, url);
-        }
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<MediaItem?>(
-      stream: _audioHandler.mediaItem,
-      builder: (context, mediaItemSnapshot) {
-        final mediaItem = mediaItemSnapshot.data;
-        if (mediaItem == null) {
-          return const Scaffold(
-            body: Center(
-              child: Text('No track playing'),
+    final audioHandler = GetIt.I<MyAudioHandler>();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Now Playing'),
+      ),
+      body: StreamBuilder<MediaItem?>(
+        stream: audioHandler.mediaItem,
+        builder: (context, snapshot) {
+          final mediaItem = snapshot.data;
+          if (mediaItem == null) {
+            return const Center(child: Text('Not Playing'));
+          }
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildArtwork(mediaItem),
+                const SizedBox(height: 20),
+                Text(
+                  mediaItem.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  mediaItem.artist ?? 'Unknown Artist',
+                  style: Theme.of(context).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                _buildProgressBar(audioHandler),
+                _buildControls(context, audioHandler),
+              ],
             ),
           );
-        }
-        final initialTrack = mediaItem.extras!['track'] as Track;
-        return StreamBuilder<Track>(
-          stream: (context.read<AppDatabase>().select(context.read<AppDatabase>().tracks)..where((t) => t.id.equals(initialTrack.id))).watchSingle(),
-          initialData: initialTrack,
-          builder: (context, trackSnapshot) {
-            final track = trackSnapshot.data!;
-            return Scaffold(
-              appBar: AppBar(
-                title: const Text('Now Playing'),
-                actions: [
-                  if (Platform.isAndroid)
-                    IconButton(
-                      icon: const Icon(Icons.equalizer),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const EqualizerScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ArtworkWidget(track: track, size: 250),
-                    const SizedBox(height: 20),
-                    Text(
-                      track.title,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      track.artist ?? 'Unknown Artist',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSeekBar(),
-                    const SizedBox(height: 20),
-                    _buildControls(),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+        },
+      ),
     );
   }
 
-  Widget _buildSeekBar() {
-    return StreamBuilder<PositionData>(
-      stream: _positionDataStream,
-      builder: (context, snapshot) {
-        final positionData = snapshot.data;
-        final position = positionData?.position ?? Duration.zero;
-        final duration = positionData?.duration ?? Duration.zero;
+  Widget _buildArtwork(MediaItem mediaItem) {
+    final artworkUrl = mediaItem.artUri?.toString();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8.0),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: artworkUrl != null && artworkUrl.startsWith('http')
+            ? CachedNetworkImage(
+                imageUrl: artworkUrl,
+                fit: BoxFit.cover,
+                placeholder: (context, url) =>
+                    const Center(child: CircularProgressIndicator()),
+                errorWidget: (context, url, error) =>
+                    const Icon(Icons.music_note, size: 100),
+              )
+            : Container(
+                color: Colors.grey,
+                child: const Icon(Icons.music_note,
+                    color: Colors.white, size: 100),
+              ),
+      ),
+    );
+  }
 
+  Widget _buildProgressBar(MyAudioHandler audioHandler) {
+    return StreamBuilder<PlaybackState>(
+      stream: audioHandler.playbackState,
+      builder: (context, snapshot) {
+        final position = snapshot.data?.updatePosition ?? Duration.zero;
+        final duration =
+            audioHandler.mediaItem.value?.duration ?? Duration.zero;
         return Column(
           children: [
             Slider(
-              min: 0.0,
+              value: position.inMilliseconds
+                  .toDouble()
+                  .clamp(0.0, duration.inMilliseconds.toDouble()),
               max: duration.inMilliseconds.toDouble(),
-              value: position.inMilliseconds.toDouble().clamp(0.0, duration.inMilliseconds.toDouble()),
               onChanged: (value) {
-                _audioHandler.seek(Duration(milliseconds: value.toInt()));
+                audioHandler.seek(Duration(milliseconds: value.toInt()));
               },
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(_formatDuration(position)),
-                  Text(_formatDuration(duration)),
-                ],
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_formatDuration(position)),
+                Text(_formatDuration(duration)),
+              ],
             ),
           ],
         );
@@ -174,29 +106,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildControls(BuildContext context, MyAudioHandler audioHandler) {
     return StreamBuilder<PlaybackState>(
-      stream: _audioHandler.playbackState,
+      stream: audioHandler.playbackState,
       builder: (context, snapshot) {
-        final playbackState = snapshot.data;
-        final playing = playbackState?.playing ?? false;
+        final isPlaying = snapshot.data?.playing ?? false;
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             IconButton(
               icon: const Icon(Icons.skip_previous),
-              iconSize: 60,
-              onPressed: _audioHandler.skipToPrevious,
+              iconSize: 48,
+              onPressed: audioHandler.skipToPrevious,
             ),
             IconButton(
-              icon: Icon(playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
-              iconSize: 80,
-              onPressed: playing ? _audioHandler.pause : _audioHandler.play,
+              icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+              iconSize: 64,
+              onPressed: () {
+                if (isPlaying) {
+                  audioHandler.pause();
+                } else {
+                  audioHandler.play();
+                }
+              },
             ),
             IconButton(
               icon: const Icon(Icons.skip_next),
-              iconSize: 60,
-              onPressed: _audioHandler.skipToNext,
+              iconSize: 48,
+              onPressed: audioHandler.skipToNext,
             ),
           ],
         );
@@ -204,16 +141,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
-}
-
-class PositionData {
-  final Duration position;
-  final Duration duration;
-
-  PositionData(this.position, this.duration);
 }

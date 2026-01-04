@@ -1,101 +1,46 @@
-import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
-Future<MyAudioHandler> initAudioService() async {
-  return await AudioService.init(
-    builder: () => MyAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.mycompany.myapp.channel.audio',
-      androidNotificationChannelName: 'Audio playback',
-      androidNotificationOngoing: true,
-    ),
-  );
-}
-
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  late AudioPlayer _player;
+  final _player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
-  AndroidEqualizer? _equalizer;
-  AndroidLoudnessEnhancer? _loudnessEnhancer;
 
   MyAudioHandler() {
-    if (Platform.isAndroid) {
-      _equalizer = AndroidEqualizer();
-      _loudnessEnhancer = AndroidLoudnessEnhancer();
-      _player = AudioPlayer(
-        audioPipeline: AudioPipeline(
-          androidAudioEffects: [
-            _equalizer!,
-            _loudnessEnhancer!,
-          ],
-        ),
-      );
-    } else {
-      _player = AudioPlayer();
-    }
-
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
-    // Propagate the current item to the audio service stream.
-    _player.currentIndexStream.listen((index) {
-      if (index != null && queue.value.isNotEmpty) {
-        mediaItem.add(queue.value[index]);
+
+    // Propagate media item changes to the audio_service client.
+    _player.sequenceStateStream.listen((sequenceState) {
+      final currentItem = sequenceState?.currentSource?.tag as MediaItem?;
+      if (currentItem != null) {
+        mediaItem.add(currentItem);
       }
     });
+
     _player.setAudioSource(_playlist);
   }
 
-  AndroidEqualizer? get equalizer => _equalizer;
-
-  Future<void> setEqualizerEnabled(bool enabled) async {
-    if (Platform.isAndroid) {
-      await _equalizer?.setEnabled(enabled);
-    }
-  }
-
-  Future<void> setBandLevel(int bandIndex, double level) async {
-    if (Platform.isAndroid) {
-      final parameters = await _equalizer!.parameters;
-      parameters.bands[bandIndex].setGain(level);
-    }
-  }
-
-  Future<double> getBandLevel(int bandIndex) async {
-    if (Platform.isAndroid) {
-      final parameters = await _equalizer!.parameters;
-      return parameters.bands[bandIndex].gain;
-    }
-    return 0.0;
-  }
-
-  Future<double> getCenterFreq(int bandIndex) async {
-    if (Platform.isAndroid) {
-      final parameters = await _equalizer!.parameters;
-      return parameters.bands[bandIndex].centerFrequency;
-    }
-    return 0.0;
+  AudioSource _createAudioSource(MediaItem mediaItem) {
+    // Check if the path is a URL or a local file
+    final uri = mediaItem.id.startsWith('http')
+        ? Uri.parse(mediaItem.id)
+        : Uri.file(mediaItem.id);
+    return AudioSource.uri(uri, tag: mediaItem);
   }
 
   @override
-  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
-
-  @override
-  Future<void> setVolume(double volume) => _player.setVolume(volume);
+  Future<void> updateQueue(List<MediaItem> newQueue) async {
+    final audioSources = newQueue.map(_createAudioSource).toList();
+    await _playlist.clear();
+    await _playlist.addAll(audioSources);
+    queue.add(newQueue);
+  }
 
   @override
   Future<void> addQueueItems(List<MediaItem> mediaItems) async {
-    await _playlist.clear();
-    final audioSources = mediaItems
-        .map((item) => AudioSource.uri(Uri.file(item.id), tag: item))
-        .toList();
+    final audioSources = mediaItems.map(_createAudioSource).toList();
     await _playlist.addAll(audioSources);
-    queue.add(mediaItems);
-  }
-
-  @override
-  Future<void> skipToQueueItem(int index) async {
-    if (index < 0 || index >= _playlist.length) return;
-    await _player.seek(Duration.zero, index: index);
+    final newQueue = queue.value..addAll(mediaItems);
+    queue.add(newQueue);
   }
 
   @override
@@ -108,24 +53,31 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> seek(Duration position) => _player.seek(position);
 
   @override
+  Future<void> stop() async {
+    await _player.stop();
+    await super.stop();
+  }
+
+  @override
   Future<void> skipToNext() => _player.seekToNext();
 
   @override
   Future<void> skipToPrevious() => _player.seekToPrevious();
 
   @override
-  Future<void> stop() async {
-    await _player.stop();
-    await super.stop();
+  Future<void> skipToQueueItem(int index) async {
+    if (index < 0 || index >= _playlist.length) return;
+    await _player.seek(Duration.zero, index: index);
+    play();
   }
 
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [
-        MediaControl.skipToPrevious,
+        MediaControl.rewind,
         if (_player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.stop,
-        MediaControl.skipToNext,
+        MediaControl.fastForward,
       ],
       systemActions: const {
         MediaAction.seek,
