@@ -19,6 +19,8 @@ dependencies:
   # Audio Core
   just_audio: ^0.9.36
   just_audio_background: ^0.0.1-beta.17
+  audio_service: ^0.18.12
+  on_audio_query: ^2.9.0
 
   # Data
   drift: ^2.14.0
@@ -35,11 +37,8 @@ dependencies:
   get_it: ^7.6.0
   injectable: ^2.3.2
   logger: ^2.0.0
-  
-  # Повернемось на стабільну версію тут
-  on_audio_query: ^2.9.0 
   rxdart: ^0.28.0
-  http: ^1.6.0
+  http: ^1.2.1
 
 dev_dependencies:
   flutter_test:
@@ -48,13 +47,6 @@ dev_dependencies:
   drift_dev: ^2.14.0
   build_runner: ^2.4.8
   injectable_generator: ^2.4.1
-
-# !!!!!!!!!!! ДОДАЙТЕ ЦЕЙ БЛОК !!!!!!!!!!!
-dependency_overrides:
-  # Це примусово замінить зламану 1.0.0-prerelease на робочу 1.1.0
-  on_audio_query_android: 1.0.1 
-  # Це також може знадобитись для iOS
-  on_audio_query_ios: ^1.1.0
 
 flutter:
   uses-material-design: true
