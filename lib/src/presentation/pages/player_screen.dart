@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:provider/provider.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:oxide_player/main.dart';
 import 'package:rxdart/rxdart.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -15,25 +14,20 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  late AudioPlayer _audioHandler;
+  late AudioHandler _audioHandler;
+  late Stream<PositionData> _positionDataStream;
 
   @override
   void initState() {
     super.initState();
-    _audioHandler = Provider.of<AudioPlayer>(context, listen: false);
-    _playTrack();
-  }
-
-  void _playTrack() async {
-    final mediaItem = MediaItem(
-      id: widget.track.path,
-      title: widget.track.title,
-      artist: widget.track.artist,
-      album: widget.track.album,
-      duration: Duration(milliseconds: widget.track.durationMs),
+    _audioHandler = getIt<AudioHandler>();
+    _positionDataStream = Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
+      AudioService.position,
+      _audioHandler.playbackState.map((state) => state.bufferedPosition),
+      _audioHandler.mediaItem.map((item) => item?.duration),
+      (position, bufferedPosition, duration) =>
+          PositionData(position, duration ?? Duration.zero),
     );
-    await _audioHandler.setAudioSource(AudioSource.uri(Uri.file(widget.track.path), tag: mediaItem));
-    _audioHandler.play();
   }
 
   @override
@@ -103,26 +97,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildControls() {
-    return StreamBuilder<PlayerState>(
-      stream: _audioHandler.playerStateStream,
+    return StreamBuilder<PlaybackState>(
+      stream: _audioHandler.playbackState,
       builder: (context, snapshot) {
-        final playerState = snapshot.data;
-        final playing = playerState?.playing ?? false;
-        return IconButton(
-          icon: Icon(playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
-          iconSize: 80,
-          onPressed: playing ? _audioHandler.pause : _audioHandler.play,
+        final playbackState = snapshot.data;
+        final playing = playbackState?.playing ?? false;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.skip_previous),
+              iconSize: 60,
+              onPressed: _audioHandler.skipToPrevious,
+            ),
+            IconButton(
+              icon: Icon(playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
+              iconSize: 80,
+              onPressed: playing ? _audioHandler.pause : _audioHandler.play,
+            ),
+            IconButton(
+              icon: const Icon(Icons.skip_next),
+              iconSize: 60,
+              onPressed: _audioHandler.skipToNext,
+            ),
+          ],
         );
       },
     );
   }
-
-  Stream<PositionData> get _positionDataStream =>
-      Rx.combineLatest2<Duration, Duration?, PositionData>(
-        _audioHandler.positionStream,
-        _audioHandler.durationStream,
-        (position, duration) => PositionData(position, duration ?? Duration.zero),
-      );
 
   String _formatDuration(Duration duration) {
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');

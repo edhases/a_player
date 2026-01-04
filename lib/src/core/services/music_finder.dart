@@ -35,20 +35,27 @@ class MusicFinder {
       ignoreCase: true,
     );
 
-    for (final song in songs) {
-      final track = TracksCompanion.insert(
-        path: song.data,
-        title: song.title,
-        artist: Value(song.artist),
-        album: Value(song.album),
-        durationMs: song.duration ?? 0,
-        folderPath: song.data.substring(0, song.data.lastIndexOf('/')),
-        artworkUri: Value(song.uri),
-        addedAt: DateTime.now(),
-      );
-      // This will insert or update the track if it already exists.
-      await database.into(database.tracks).insert(track, onConflict: DoUpdate((old) => track, target: [database.tracks.path]));
-    }
+    await database.batch((batch) {
+      for (final song in songs) {
+        try {
+          final track = TracksCompanion.insert(
+            path: song.data,
+            title: song.title,
+            artist: Value(song.artist),
+            album: Value(song.album),
+            durationMs: song.duration ?? 0,
+            folderPath: song.data.substring(0, song.data.lastIndexOf('/')),
+            artworkUri: Value(song.uri),
+            addedAt: DateTime.now(),
+            sourceType: const Value('local'),
+          );
+          batch.insert(database.tracks, track,
+              onConflict: DoUpdate((old) => track, target: [database.tracks.path]));
+        } catch (e) {
+          debugPrint('Error processing song ${song.title}: $e');
+        }
+      }
+    });
     await database.close();
   }
 }

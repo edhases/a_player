@@ -22,16 +22,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   @override
-  Future<void> addQueueItem(MediaItem mediaItem) async {
-    // Clear the playlist before adding a new item.
-    // This ensures that we're only playing one track at a time.
+  Future<void> addQueueItems(List<MediaItem> mediaItems) async {
     await _playlist.clear();
-    final audioSource = AudioSource.uri(
-      Uri.parse(mediaItem.id),
-      tag: mediaItem,
-    );
-    await _playlist.add(audioSource);
-    queue.add([mediaItem]);
+    final audioSources = mediaItems
+        .map((item) => AudioSource.uri(Uri.parse(item.id), tag: item))
+        .toList();
+    await _playlist.addAll(audioSources);
+    queue.add(mediaItems);
+  }
+
+  @override
+  Future<void> skipToQueueItem(int index) async {
+    if (index < 0 || index >= _playlist.length) return;
+    await _player.seek(Duration.zero, index: index);
   }
 
   @override
@@ -44,6 +47,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> seek(Duration position) => _player.seek(position);
 
   @override
+  Future<void> skipToNext() => _player.seekToNext();
+
+  @override
+  Future<void> skipToPrevious() => _player.seekToPrevious();
+
+  @override
   Future<void> stop() async {
     await _player.stop();
     await super.stop();
@@ -52,15 +61,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [
-        MediaControl.rewind,
+        MediaControl.skipToPrevious,
         if (_player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.stop,
-        MediaControl.fastForward,
+        MediaControl.skipToNext,
       ],
       systemActions: const {
         MediaAction.seek,
         MediaAction.seekForward,
         MediaAction.seekBackward,
+        MediaAction.skipToNext,
+        MediaAction.skipToPrevious,
       },
       androidCompactActionIndices: const [0, 1, 3],
       processingState: _getProcessingState(event.processingState),

@@ -2,30 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:oxide_player/src/core/services/audio_handler.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
 import 'package:oxide_player/src/presentation/pages/folder_list_screen.dart';
-import 'package:oxide_player/src/presentation/widgets/permission_gate.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:oxide_player/src/presentation/widgets/permission_gate.dart';
 
-late AudioPlayer _audioHandler;
+// Service locator
+final getIt = GetIt.instance;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
-    androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: true,
-  );
-  _audioHandler = AudioPlayer();
+  final audioHandler = await initAudioService();
+  getIt.registerSingleton<AudioHandler>(audioHandler);
   runApp(
     MultiProvider(
       providers: [
         Provider<AppDatabase>(
           create: (context) => AppDatabase(),
           dispose: (context, db) => db.close(),
-        ),
-        Provider<AudioPlayer>(
-          create: (context) => _audioHandler,
         ),
       ],
       child: const MyApp(),

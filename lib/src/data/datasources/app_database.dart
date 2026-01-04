@@ -18,6 +18,7 @@ class Tracks extends Table {
   TextColumn get folderPath => text()();
   TextColumn get artworkUri => text().nullable()();
   DateTimeColumn get addedAt => dateTime()();
+  TextColumn get sourceType => text().withDefault(const Constant('local'))();
 }
 
 @DriftDatabase(tables: [Tracks])
@@ -27,7 +28,17 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forIsolate(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(tracks, tracks.sourceType);
+          }
+        },
+      );
 }
 
 LazyDatabase _openConnection() {
