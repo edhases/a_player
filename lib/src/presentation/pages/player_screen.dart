@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
-import 'package:audio_service/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:rxdart/rxdart.dart';
 
@@ -14,16 +15,16 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  late AudioHandler _audioHandler;
+  late AudioPlayer _audioHandler;
 
   @override
   void initState() {
     super.initState();
-    _audioHandler = Provider.of<AudioHandler>(context, listen: false);
+    _audioHandler = Provider.of<AudioPlayer>(context, listen: false);
     _playTrack();
   }
 
-  void _playTrack() {
+  void _playTrack() async {
     final mediaItem = MediaItem(
       id: widget.track.path,
       title: widget.track.title,
@@ -31,7 +32,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       album: widget.track.album,
       duration: Duration(milliseconds: widget.track.durationMs),
     );
-    _audioHandler.addQueueItem(mediaItem);
+    await _audioHandler.setAudioSource(AudioSource.uri(Uri.file(widget.track.path), tag: mediaItem));
     _audioHandler.play();
   }
 
@@ -68,12 +69,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildSeekBar() {
-    return StreamBuilder<MediaState>(
-      stream: _mediaStateStream,
+    return StreamBuilder<PositionData>(
+      stream: _positionDataStream,
       builder: (context, snapshot) {
-        final mediaState = snapshot.data;
-        final position = mediaState?.position ?? Duration.zero;
-        final duration = mediaState?.mediaItem?.duration ?? Duration.zero;
+        final positionData = snapshot.data;
+        final position = positionData?.position ?? Duration.zero;
+        final duration = positionData?.duration ?? Duration.zero;
 
         return Column(
           children: [
@@ -102,10 +103,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildControls() {
-    return StreamBuilder<PlaybackState>(
-      stream: _audioHandler.playbackState,
+    return StreamBuilder<PlayerState>(
+      stream: _audioHandler.playerStateStream,
       builder: (context, snapshot) {
-        final playing = snapshot.data?.playing ?? false;
+        final playerState = snapshot.data;
+        final playing = playerState?.playing ?? false;
         return IconButton(
           icon: Icon(playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
           iconSize: 80,
@@ -115,11 +117,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Stream<MediaState> get _mediaStateStream =>
-      Rx.combineLatest2<MediaItem?, Duration, MediaState>(
-        _audioHandler.mediaItem,
-        AudioService.position,
-        (mediaItem, position) => MediaState(mediaItem, position),
+  Stream<PositionData> get _positionDataStream =>
+      Rx.combineLatest2<Duration, Duration?, PositionData>(
+        _audioHandler.positionStream,
+        _audioHandler.durationStream,
+        (position, duration) => PositionData(position, duration ?? Duration.zero),
       );
 
   String _formatDuration(Duration duration) {
@@ -129,9 +131,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 }
 
-class MediaState {
-  final MediaItem? mediaItem;
+class PositionData {
   final Duration position;
+  final Duration duration;
 
-  MediaState(this.mediaItem, this.position);
+  PositionData(this.position, this.duration);
 }

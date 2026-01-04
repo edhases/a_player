@@ -24,6 +24,8 @@ class Tracks extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  AppDatabase.forIsolate(QueryExecutor executor) : super(executor);
+
   @override
   int get schemaVersion => 1;
 }

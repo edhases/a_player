@@ -4,13 +4,19 @@ import 'package:oxide_player/src/data/datasources/app_database.dart';
 import 'package:oxide_player/src/presentation/pages/folder_list_screen.dart';
 import 'package:oxide_player/src/presentation/widgets/permission_gate.dart';
 import 'package:provider/provider.dart';
-import 'package:audio_service/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
-late AudioHandler _audioHandler;
+late AudioPlayer _audioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  _audioHandler = await initAudioService();
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
+  _audioHandler = AudioPlayer();
   runApp(
     MultiProvider(
       providers: [
@@ -18,7 +24,7 @@ Future<void> main() async {
           create: (context) => AppDatabase(),
           dispose: (context, db) => db.close(),
         ),
-        Provider<AudioHandler>(
+        Provider<AudioPlayer>(
           create: (context) => _audioHandler,
         ),
       ],
