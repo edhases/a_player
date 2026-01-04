@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
 
 class TrackListProvider extends ChangeNotifier {
   final AppDatabase _database;
   final String folderPath;
+  late StreamSubscription _tracksSubscription;
 
   TrackListProvider(this._database, this.folderPath) {
-    _fetchTracks();
+    _watchTracks();
   }
 
   bool _isLoading = true;
@@ -15,19 +17,26 @@ class TrackListProvider extends ChangeNotifier {
   List<Track> _tracks = [];
   List<Track> get tracks => _tracks;
 
-  Future<void> _fetchTracks() async {
+  void _watchTracks() {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      final query = _database.select(_database.tracks)
-        ..where((t) => t.folderPath.equals(folderPath));
-      _tracks = await query.get();
-    } catch (e) {
-      debugPrint('Error fetching tracks: $e');
-    }
+    final query = _database.select(_database.tracks)
+      ..where((t) => t.folderPath.equals(folderPath));
+    _tracksSubscription = query.watch().listen((tracks) {
+      _tracks = tracks;
+      _isLoading = false;
+      notifyListeners();
+    }, onError: (e) {
+      debugPrint('Error watching tracks: $e');
+      _isLoading = false;
+      notifyListeners();
+    });
+  }
 
-    _isLoading = false;
-    notifyListeners();
+  @override
+  void dispose() {
+    _tracksSubscription.cancel();
+    super.dispose();
   }
 }
