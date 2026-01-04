@@ -39,11 +39,11 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
   late final GeneratedColumn<String> album = GeneratedColumn<String>(
       'album', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _durationMsMeta =
-      const VerificationMeta('durationMs');
+  static const VerificationMeta _durationMeta =
+      const VerificationMeta('duration');
   @override
-  late final GeneratedColumn<int> durationMs = GeneratedColumn<int>(
-      'duration_ms', aliasedName, false,
+  late final GeneratedColumn<int> duration = GeneratedColumn<int>(
+      'duration', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
   static const VerificationMeta _folderPathMeta =
       const VerificationMeta('folderPath');
@@ -51,18 +51,6 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
   late final GeneratedColumn<String> folderPath = GeneratedColumn<String>(
       'folder_path', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _artworkUriMeta =
-      const VerificationMeta('artworkUri');
-  @override
-  late final GeneratedColumn<String> artworkUri = GeneratedColumn<String>(
-      'artwork_uri', aliasedName, true,
-      type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _addedAtMeta =
-      const VerificationMeta('addedAt');
-  @override
-  late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
-      'added_at', aliasedName, false,
-      type: DriftSqlType.dateTime, requiredDuringInsert: true);
   static const VerificationMeta _sourceTypeMeta =
       const VerificationMeta('sourceType');
   @override
@@ -77,6 +65,14 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
   late final GeneratedColumn<String> remoteArtworkUri = GeneratedColumn<String>(
       'remote_artwork_uri', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _addedAtMeta =
+      const VerificationMeta('addedAt');
+  @override
+  late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
+      'added_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -84,12 +80,11 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
         title,
         artist,
         album,
-        durationMs,
+        duration,
         folderPath,
-        artworkUri,
-        addedAt,
         sourceType,
-        remoteArtworkUri
+        remoteArtworkUri,
+        addedAt
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -124,13 +119,11 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
       context.handle(
           _albumMeta, album.isAcceptableOrUnknown(data['album']!, _albumMeta));
     }
-    if (data.containsKey('duration_ms')) {
-      context.handle(
-          _durationMsMeta,
-          durationMs.isAcceptableOrUnknown(
-              data['duration_ms']!, _durationMsMeta));
+    if (data.containsKey('duration')) {
+      context.handle(_durationMeta,
+          duration.isAcceptableOrUnknown(data['duration']!, _durationMeta));
     } else if (isInserting) {
-      context.missing(_durationMsMeta);
+      context.missing(_durationMeta);
     }
     if (data.containsKey('folder_path')) {
       context.handle(
@@ -139,18 +132,6 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
               data['folder_path']!, _folderPathMeta));
     } else if (isInserting) {
       context.missing(_folderPathMeta);
-    }
-    if (data.containsKey('artwork_uri')) {
-      context.handle(
-          _artworkUriMeta,
-          artworkUri.isAcceptableOrUnknown(
-              data['artwork_uri']!, _artworkUriMeta));
-    }
-    if (data.containsKey('added_at')) {
-      context.handle(_addedAtMeta,
-          addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta));
-    } else if (isInserting) {
-      context.missing(_addedAtMeta);
     }
     if (data.containsKey('source_type')) {
       context.handle(
@@ -163,6 +144,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
           _remoteArtworkUriMeta,
           remoteArtworkUri.isAcceptableOrUnknown(
               data['remote_artwork_uri']!, _remoteArtworkUriMeta));
+    }
+    if (data.containsKey('added_at')) {
+      context.handle(_addedAtMeta,
+          addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta));
     }
     return context;
   }
@@ -183,18 +168,16 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
           .read(DriftSqlType.string, data['${effectivePrefix}artist']),
       album: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}album']),
-      durationMs: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}duration_ms'])!,
+      duration: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}duration'])!,
       folderPath: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}folder_path'])!,
-      artworkUri: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}artwork_uri']),
-      addedAt: attachedDatabase.typeMapping
-          .read(DriftSqlType.dateTime, data['${effectivePrefix}added_at'])!,
       sourceType: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}source_type'])!,
       remoteArtworkUri: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}remote_artwork_uri']),
+      addedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}added_at'])!,
     );
   }
 
@@ -210,24 +193,22 @@ class Track extends DataClass implements Insertable<Track> {
   final String title;
   final String? artist;
   final String? album;
-  final int durationMs;
+  final int duration;
   final String folderPath;
-  final String? artworkUri;
-  final DateTime addedAt;
   final String sourceType;
   final String? remoteArtworkUri;
+  final DateTime addedAt;
   const Track(
       {required this.id,
       required this.path,
       required this.title,
       this.artist,
       this.album,
-      required this.durationMs,
+      required this.duration,
       required this.folderPath,
-      this.artworkUri,
-      required this.addedAt,
       required this.sourceType,
-      this.remoteArtworkUri});
+      this.remoteArtworkUri,
+      required this.addedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -240,16 +221,13 @@ class Track extends DataClass implements Insertable<Track> {
     if (!nullToAbsent || album != null) {
       map['album'] = Variable<String>(album);
     }
-    map['duration_ms'] = Variable<int>(durationMs);
+    map['duration'] = Variable<int>(duration);
     map['folder_path'] = Variable<String>(folderPath);
-    if (!nullToAbsent || artworkUri != null) {
-      map['artwork_uri'] = Variable<String>(artworkUri);
-    }
-    map['added_at'] = Variable<DateTime>(addedAt);
     map['source_type'] = Variable<String>(sourceType);
     if (!nullToAbsent || remoteArtworkUri != null) {
       map['remote_artwork_uri'] = Variable<String>(remoteArtworkUri);
     }
+    map['added_at'] = Variable<DateTime>(addedAt);
     return map;
   }
 
@@ -262,16 +240,13 @@ class Track extends DataClass implements Insertable<Track> {
           artist == null && nullToAbsent ? const Value.absent() : Value(artist),
       album:
           album == null && nullToAbsent ? const Value.absent() : Value(album),
-      durationMs: Value(durationMs),
+      duration: Value(duration),
       folderPath: Value(folderPath),
-      artworkUri: artworkUri == null && nullToAbsent
-          ? const Value.absent()
-          : Value(artworkUri),
-      addedAt: Value(addedAt),
       sourceType: Value(sourceType),
       remoteArtworkUri: remoteArtworkUri == null && nullToAbsent
           ? const Value.absent()
           : Value(remoteArtworkUri),
+      addedAt: Value(addedAt),
     );
   }
 
@@ -284,12 +259,11 @@ class Track extends DataClass implements Insertable<Track> {
       title: serializer.fromJson<String>(json['title']),
       artist: serializer.fromJson<String?>(json['artist']),
       album: serializer.fromJson<String?>(json['album']),
-      durationMs: serializer.fromJson<int>(json['durationMs']),
+      duration: serializer.fromJson<int>(json['duration']),
       folderPath: serializer.fromJson<String>(json['folderPath']),
-      artworkUri: serializer.fromJson<String?>(json['artworkUri']),
-      addedAt: serializer.fromJson<DateTime>(json['addedAt']),
       sourceType: serializer.fromJson<String>(json['sourceType']),
       remoteArtworkUri: serializer.fromJson<String?>(json['remoteArtworkUri']),
+      addedAt: serializer.fromJson<DateTime>(json['addedAt']),
     );
   }
   @override
@@ -301,12 +275,11 @@ class Track extends DataClass implements Insertable<Track> {
       'title': serializer.toJson<String>(title),
       'artist': serializer.toJson<String?>(artist),
       'album': serializer.toJson<String?>(album),
-      'durationMs': serializer.toJson<int>(durationMs),
+      'duration': serializer.toJson<int>(duration),
       'folderPath': serializer.toJson<String>(folderPath),
-      'artworkUri': serializer.toJson<String?>(artworkUri),
-      'addedAt': serializer.toJson<DateTime>(addedAt),
       'sourceType': serializer.toJson<String>(sourceType),
       'remoteArtworkUri': serializer.toJson<String?>(remoteArtworkUri),
+      'addedAt': serializer.toJson<DateTime>(addedAt),
     };
   }
 
@@ -316,26 +289,24 @@ class Track extends DataClass implements Insertable<Track> {
           String? title,
           Value<String?> artist = const Value.absent(),
           Value<String?> album = const Value.absent(),
-          int? durationMs,
+          int? duration,
           String? folderPath,
-          Value<String?> artworkUri = const Value.absent(),
-          DateTime? addedAt,
           String? sourceType,
-          Value<String?> remoteArtworkUri = const Value.absent()}) =>
+          Value<String?> remoteArtworkUri = const Value.absent(),
+          DateTime? addedAt}) =>
       Track(
         id: id ?? this.id,
         path: path ?? this.path,
         title: title ?? this.title,
         artist: artist.present ? artist.value : this.artist,
         album: album.present ? album.value : this.album,
-        durationMs: durationMs ?? this.durationMs,
+        duration: duration ?? this.duration,
         folderPath: folderPath ?? this.folderPath,
-        artworkUri: artworkUri.present ? artworkUri.value : this.artworkUri,
-        addedAt: addedAt ?? this.addedAt,
         sourceType: sourceType ?? this.sourceType,
         remoteArtworkUri: remoteArtworkUri.present
             ? remoteArtworkUri.value
             : this.remoteArtworkUri,
+        addedAt: addedAt ?? this.addedAt,
       );
   Track copyWithCompanion(TracksCompanion data) {
     return Track(
@@ -344,18 +315,15 @@ class Track extends DataClass implements Insertable<Track> {
       title: data.title.present ? data.title.value : this.title,
       artist: data.artist.present ? data.artist.value : this.artist,
       album: data.album.present ? data.album.value : this.album,
-      durationMs:
-          data.durationMs.present ? data.durationMs.value : this.durationMs,
+      duration: data.duration.present ? data.duration.value : this.duration,
       folderPath:
           data.folderPath.present ? data.folderPath.value : this.folderPath,
-      artworkUri:
-          data.artworkUri.present ? data.artworkUri.value : this.artworkUri,
-      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
       sourceType:
           data.sourceType.present ? data.sourceType.value : this.sourceType,
       remoteArtworkUri: data.remoteArtworkUri.present
           ? data.remoteArtworkUri.value
           : this.remoteArtworkUri,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
     );
   }
 
@@ -367,19 +335,18 @@ class Track extends DataClass implements Insertable<Track> {
           ..write('title: $title, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
-          ..write('durationMs: $durationMs, ')
+          ..write('duration: $duration, ')
           ..write('folderPath: $folderPath, ')
-          ..write('artworkUri: $artworkUri, ')
-          ..write('addedAt: $addedAt, ')
           ..write('sourceType: $sourceType, ')
-          ..write('remoteArtworkUri: $remoteArtworkUri')
+          ..write('remoteArtworkUri: $remoteArtworkUri, ')
+          ..write('addedAt: $addedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, path, title, artist, album, durationMs,
-      folderPath, artworkUri, addedAt, sourceType, remoteArtworkUri);
+  int get hashCode => Object.hash(id, path, title, artist, album, duration,
+      folderPath, sourceType, remoteArtworkUri, addedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -389,12 +356,11 @@ class Track extends DataClass implements Insertable<Track> {
           other.title == this.title &&
           other.artist == this.artist &&
           other.album == this.album &&
-          other.durationMs == this.durationMs &&
+          other.duration == this.duration &&
           other.folderPath == this.folderPath &&
-          other.artworkUri == this.artworkUri &&
-          other.addedAt == this.addedAt &&
           other.sourceType == this.sourceType &&
-          other.remoteArtworkUri == this.remoteArtworkUri);
+          other.remoteArtworkUri == this.remoteArtworkUri &&
+          other.addedAt == this.addedAt);
 }
 
 class TracksCompanion extends UpdateCompanion<Track> {
@@ -403,24 +369,22 @@ class TracksCompanion extends UpdateCompanion<Track> {
   final Value<String> title;
   final Value<String?> artist;
   final Value<String?> album;
-  final Value<int> durationMs;
+  final Value<int> duration;
   final Value<String> folderPath;
-  final Value<String?> artworkUri;
-  final Value<DateTime> addedAt;
   final Value<String> sourceType;
   final Value<String?> remoteArtworkUri;
+  final Value<DateTime> addedAt;
   const TracksCompanion({
     this.id = const Value.absent(),
     this.path = const Value.absent(),
     this.title = const Value.absent(),
     this.artist = const Value.absent(),
     this.album = const Value.absent(),
-    this.durationMs = const Value.absent(),
+    this.duration = const Value.absent(),
     this.folderPath = const Value.absent(),
-    this.artworkUri = const Value.absent(),
-    this.addedAt = const Value.absent(),
     this.sourceType = const Value.absent(),
     this.remoteArtworkUri = const Value.absent(),
+    this.addedAt = const Value.absent(),
   });
   TracksCompanion.insert({
     this.id = const Value.absent(),
@@ -428,29 +392,26 @@ class TracksCompanion extends UpdateCompanion<Track> {
     required String title,
     this.artist = const Value.absent(),
     this.album = const Value.absent(),
-    required int durationMs,
+    required int duration,
     required String folderPath,
-    this.artworkUri = const Value.absent(),
-    required DateTime addedAt,
     this.sourceType = const Value.absent(),
     this.remoteArtworkUri = const Value.absent(),
+    this.addedAt = const Value.absent(),
   })  : path = Value(path),
         title = Value(title),
-        durationMs = Value(durationMs),
-        folderPath = Value(folderPath),
-        addedAt = Value(addedAt);
+        duration = Value(duration),
+        folderPath = Value(folderPath);
   static Insertable<Track> custom({
     Expression<int>? id,
     Expression<String>? path,
     Expression<String>? title,
     Expression<String>? artist,
     Expression<String>? album,
-    Expression<int>? durationMs,
+    Expression<int>? duration,
     Expression<String>? folderPath,
-    Expression<String>? artworkUri,
-    Expression<DateTime>? addedAt,
     Expression<String>? sourceType,
     Expression<String>? remoteArtworkUri,
+    Expression<DateTime>? addedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -458,12 +419,11 @@ class TracksCompanion extends UpdateCompanion<Track> {
       if (title != null) 'title': title,
       if (artist != null) 'artist': artist,
       if (album != null) 'album': album,
-      if (durationMs != null) 'duration_ms': durationMs,
+      if (duration != null) 'duration': duration,
       if (folderPath != null) 'folder_path': folderPath,
-      if (artworkUri != null) 'artwork_uri': artworkUri,
-      if (addedAt != null) 'added_at': addedAt,
       if (sourceType != null) 'source_type': sourceType,
       if (remoteArtworkUri != null) 'remote_artwork_uri': remoteArtworkUri,
+      if (addedAt != null) 'added_at': addedAt,
     });
   }
 
@@ -473,24 +433,22 @@ class TracksCompanion extends UpdateCompanion<Track> {
       Value<String>? title,
       Value<String?>? artist,
       Value<String?>? album,
-      Value<int>? durationMs,
+      Value<int>? duration,
       Value<String>? folderPath,
-      Value<String?>? artworkUri,
-      Value<DateTime>? addedAt,
       Value<String>? sourceType,
-      Value<String?>? remoteArtworkUri}) {
+      Value<String?>? remoteArtworkUri,
+      Value<DateTime>? addedAt}) {
     return TracksCompanion(
       id: id ?? this.id,
       path: path ?? this.path,
       title: title ?? this.title,
       artist: artist ?? this.artist,
       album: album ?? this.album,
-      durationMs: durationMs ?? this.durationMs,
+      duration: duration ?? this.duration,
       folderPath: folderPath ?? this.folderPath,
-      artworkUri: artworkUri ?? this.artworkUri,
-      addedAt: addedAt ?? this.addedAt,
       sourceType: sourceType ?? this.sourceType,
       remoteArtworkUri: remoteArtworkUri ?? this.remoteArtworkUri,
+      addedAt: addedAt ?? this.addedAt,
     );
   }
 
@@ -512,23 +470,20 @@ class TracksCompanion extends UpdateCompanion<Track> {
     if (album.present) {
       map['album'] = Variable<String>(album.value);
     }
-    if (durationMs.present) {
-      map['duration_ms'] = Variable<int>(durationMs.value);
+    if (duration.present) {
+      map['duration'] = Variable<int>(duration.value);
     }
     if (folderPath.present) {
       map['folder_path'] = Variable<String>(folderPath.value);
-    }
-    if (artworkUri.present) {
-      map['artwork_uri'] = Variable<String>(artworkUri.value);
-    }
-    if (addedAt.present) {
-      map['added_at'] = Variable<DateTime>(addedAt.value);
     }
     if (sourceType.present) {
       map['source_type'] = Variable<String>(sourceType.value);
     }
     if (remoteArtworkUri.present) {
       map['remote_artwork_uri'] = Variable<String>(remoteArtworkUri.value);
+    }
+    if (addedAt.present) {
+      map['added_at'] = Variable<DateTime>(addedAt.value);
     }
     return map;
   }
@@ -541,12 +496,11 @@ class TracksCompanion extends UpdateCompanion<Track> {
           ..write('title: $title, ')
           ..write('artist: $artist, ')
           ..write('album: $album, ')
-          ..write('durationMs: $durationMs, ')
+          ..write('duration: $duration, ')
           ..write('folderPath: $folderPath, ')
-          ..write('artworkUri: $artworkUri, ')
-          ..write('addedAt: $addedAt, ')
           ..write('sourceType: $sourceType, ')
-          ..write('remoteArtworkUri: $remoteArtworkUri')
+          ..write('remoteArtworkUri: $remoteArtworkUri, ')
+          ..write('addedAt: $addedAt')
           ..write(')'))
         .toString();
   }
@@ -569,12 +523,11 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   required String title,
   Value<String?> artist,
   Value<String?> album,
-  required int durationMs,
+  required int duration,
   required String folderPath,
-  Value<String?> artworkUri,
-  required DateTime addedAt,
   Value<String> sourceType,
   Value<String?> remoteArtworkUri,
+  Value<DateTime> addedAt,
 });
 typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int> id,
@@ -582,12 +535,11 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<String> title,
   Value<String?> artist,
   Value<String?> album,
-  Value<int> durationMs,
+  Value<int> duration,
   Value<String> folderPath,
-  Value<String?> artworkUri,
-  Value<DateTime> addedAt,
   Value<String> sourceType,
   Value<String?> remoteArtworkUri,
+  Value<DateTime> addedAt,
 });
 
 class $$TracksTableFilterComposer
@@ -614,17 +566,11 @@ class $$TracksTableFilterComposer
   ColumnFilters<String> get album => $composableBuilder(
       column: $table.album, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<int> get durationMs => $composableBuilder(
-      column: $table.durationMs, builder: (column) => ColumnFilters(column));
+  ColumnFilters<int> get duration => $composableBuilder(
+      column: $table.duration, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get folderPath => $composableBuilder(
       column: $table.folderPath, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get artworkUri => $composableBuilder(
-      column: $table.artworkUri, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get addedAt => $composableBuilder(
-      column: $table.addedAt, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get sourceType => $composableBuilder(
       column: $table.sourceType, builder: (column) => ColumnFilters(column));
@@ -632,6 +578,9 @@ class $$TracksTableFilterComposer
   ColumnFilters<String> get remoteArtworkUri => $composableBuilder(
       column: $table.remoteArtworkUri,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get addedAt => $composableBuilder(
+      column: $table.addedAt, builder: (column) => ColumnFilters(column));
 }
 
 class $$TracksTableOrderingComposer
@@ -658,17 +607,11 @@ class $$TracksTableOrderingComposer
   ColumnOrderings<String> get album => $composableBuilder(
       column: $table.album, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<int> get durationMs => $composableBuilder(
-      column: $table.durationMs, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<int> get duration => $composableBuilder(
+      column: $table.duration, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get folderPath => $composableBuilder(
       column: $table.folderPath, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get artworkUri => $composableBuilder(
-      column: $table.artworkUri, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
-      column: $table.addedAt, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get sourceType => $composableBuilder(
       column: $table.sourceType, builder: (column) => ColumnOrderings(column));
@@ -676,6 +619,9 @@ class $$TracksTableOrderingComposer
   ColumnOrderings<String> get remoteArtworkUri => $composableBuilder(
       column: $table.remoteArtworkUri,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
+      column: $table.addedAt, builder: (column) => ColumnOrderings(column));
 }
 
 class $$TracksTableAnnotationComposer
@@ -702,23 +648,20 @@ class $$TracksTableAnnotationComposer
   GeneratedColumn<String> get album =>
       $composableBuilder(column: $table.album, builder: (column) => column);
 
-  GeneratedColumn<int> get durationMs => $composableBuilder(
-      column: $table.durationMs, builder: (column) => column);
+  GeneratedColumn<int> get duration =>
+      $composableBuilder(column: $table.duration, builder: (column) => column);
 
   GeneratedColumn<String> get folderPath => $composableBuilder(
       column: $table.folderPath, builder: (column) => column);
-
-  GeneratedColumn<String> get artworkUri => $composableBuilder(
-      column: $table.artworkUri, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get addedAt =>
-      $composableBuilder(column: $table.addedAt, builder: (column) => column);
 
   GeneratedColumn<String> get sourceType => $composableBuilder(
       column: $table.sourceType, builder: (column) => column);
 
   GeneratedColumn<String> get remoteArtworkUri => $composableBuilder(
       column: $table.remoteArtworkUri, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
 }
 
 class $$TracksTableTableManager extends RootTableManager<
@@ -749,12 +692,11 @@ class $$TracksTableTableManager extends RootTableManager<
             Value<String> title = const Value.absent(),
             Value<String?> artist = const Value.absent(),
             Value<String?> album = const Value.absent(),
-            Value<int> durationMs = const Value.absent(),
+            Value<int> duration = const Value.absent(),
             Value<String> folderPath = const Value.absent(),
-            Value<String?> artworkUri = const Value.absent(),
-            Value<DateTime> addedAt = const Value.absent(),
             Value<String> sourceType = const Value.absent(),
             Value<String?> remoteArtworkUri = const Value.absent(),
+            Value<DateTime> addedAt = const Value.absent(),
           }) =>
               TracksCompanion(
             id: id,
@@ -762,12 +704,11 @@ class $$TracksTableTableManager extends RootTableManager<
             title: title,
             artist: artist,
             album: album,
-            durationMs: durationMs,
+            duration: duration,
             folderPath: folderPath,
-            artworkUri: artworkUri,
-            addedAt: addedAt,
             sourceType: sourceType,
             remoteArtworkUri: remoteArtworkUri,
+            addedAt: addedAt,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -775,12 +716,11 @@ class $$TracksTableTableManager extends RootTableManager<
             required String title,
             Value<String?> artist = const Value.absent(),
             Value<String?> album = const Value.absent(),
-            required int durationMs,
+            required int duration,
             required String folderPath,
-            Value<String?> artworkUri = const Value.absent(),
-            required DateTime addedAt,
             Value<String> sourceType = const Value.absent(),
             Value<String?> remoteArtworkUri = const Value.absent(),
+            Value<DateTime> addedAt = const Value.absent(),
           }) =>
               TracksCompanion.insert(
             id: id,
@@ -788,12 +728,11 @@ class $$TracksTableTableManager extends RootTableManager<
             title: title,
             artist: artist,
             album: album,
-            durationMs: durationMs,
+            duration: duration,
             folderPath: folderPath,
-            artworkUri: artworkUri,
-            addedAt: addedAt,
             sourceType: sourceType,
             remoteArtworkUri: remoteArtworkUri,
+            addedAt: addedAt,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

@@ -14,45 +14,30 @@ class Tracks extends Table {
   TextColumn get title => text()();
   TextColumn get artist => text().nullable()();
   TextColumn get album => text().nullable()();
-  IntColumn get durationMs => integer()();
+  IntColumn get duration => integer()();
   TextColumn get folderPath => text()();
-  TextColumn get artworkUri => text().nullable()();
-  DateTimeColumn get addedAt => dateTime()();
   TextColumn get sourceType => text().withDefault(const Constant('local'))();
   TextColumn get remoteArtworkUri => text().nullable()();
-
-  @override
-  List<Set<Column>> get indexes => [
-        {folderPath},
-      ];
+  DateTimeColumn get addedAt =>
+      dateTime().withDefault(currentDateAndTime)();
 }
 
 @DriftDatabase(tables: [Tracks])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
-  AppDatabase.forIsolate(QueryExecutor executor) : super(executor);
-
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
-          if (from < 2) {
+          if (from == 1) {
             await m.addColumn(tracks, tracks.sourceType);
-          }
-          if (from < 3) {
             await m.addColumn(tracks, tracks.remoteArtworkUri);
           }
         },
       );
-
-  Future<void> updateRemoteArtwork(int trackId, String artworkUrl) {
-    return (update(tracks)..where((t) => t.id.equals(trackId)))
-        .write(TracksCompanion(remoteArtworkUri: Value(artworkUrl)));
-  }
 }
 
 LazyDatabase _openConnection() {
