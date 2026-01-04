@@ -56,6 +56,5 @@ class MusicFinder {
         }
       }
     });
-    await database.close();
   }
 }

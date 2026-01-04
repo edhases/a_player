@@ -58,6 +58,7 @@ class TrackListScreen extends StatelessWidget {
                     artist: track.artist,
                     album: track.album,
                     duration: Duration(milliseconds: track.durationMs),
+                    extras: {'track': track},
                   ),
                 )
                 .toList();
@@ -67,7 +68,7 @@ class TrackListScreen extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => PlayerScreen(track: track),
+                builder: (context) => const PlayerScreen(),
               ),
             );
           },

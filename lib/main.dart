@@ -14,7 +14,7 @@ final getIt = GetIt.instance;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final audioHandler = await initAudioService();
-  getIt.registerSingleton<AudioHandler>(audioHandler);
+  getIt.registerSingleton<MyAudioHandler>(audioHandler);
   getIt.registerSingleton<SettingsService>(SettingsService());
   getIt.registerSingleton<ArtworkSearchService>(ArtworkSearchService());
   runApp(
