@@ -4,6 +4,7 @@ import 'package:oxide_player/main.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
 import 'package:oxide_player/src/presentation/pages/player_screen.dart';
 import 'package:oxide_player/src/presentation/providers/track_list_provider.dart';
+import 'package:oxide_player/src/presentation/widgets/artwork_widget.dart';
 import 'package:provider/provider.dart';
 
 class TrackListScreen extends StatelessWidget {
@@ -44,6 +45,7 @@ class TrackListScreen extends StatelessWidget {
       itemBuilder: (context, index) {
         final track = provider.tracks[index];
         return ListTile(
+          leading: ArtworkWidget(track: track),
           title: Text(track.title),
           subtitle: Text(track.artist ?? 'Unknown Artist'),
           onTap: () {

@@ -19,6 +19,7 @@ class Tracks extends Table {
   TextColumn get artworkUri => text().nullable()();
   DateTimeColumn get addedAt => dateTime()();
   TextColumn get sourceType => text().withDefault(const Constant('local'))();
+  TextColumn get remoteArtworkUri => text().nullable()();
 
   @override
   List<Set<Column>> get indexes => [
@@ -33,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forIsolate(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -42,8 +43,16 @@ class AppDatabase extends _$AppDatabase {
           if (from < 2) {
             await m.addColumn(tracks, tracks.sourceType);
           }
+          if (from < 3) {
+            await m.addColumn(tracks, tracks.remoteArtworkUri);
+          }
         },
       );
+
+  Future<void> updateRemoteArtwork(int trackId, String artworkUrl) {
+    return (update(tracks)..where((t) => t.id.equals(trackId)))
+        .write(TracksCompanion(remoteArtworkUri: Value(artworkUrl)));
+  }
 }
 
 LazyDatabase _openConnection() {

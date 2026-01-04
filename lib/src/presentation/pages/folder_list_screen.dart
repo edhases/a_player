@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' as d;
 import 'package:oxide_player/src/core/services/music_finder.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
+import 'package:oxide_player/src/presentation/pages/settings_screen.dart';
 import 'package:oxide_player/src/presentation/pages/track_list_screen.dart';
 import 'package:provider/provider.dart';
 
@@ -51,6 +52,17 @@ class _FolderListScreenState extends State<FolderListScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _startScan,
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),

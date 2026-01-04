@@ -1,7 +1,11 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:oxide_player/main.dart';
+import 'package:oxide_player/src/core/services/artwork_search_service.dart';
+import 'package:oxide_player/src/core/services/settings_service.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
+import 'package:oxide_player/src/presentation/widgets/artwork_widget.dart';
+import 'package:provider/provider.dart';
 import 'package:rxdart/rxdart.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -16,6 +20,7 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   late AudioHandler _audioHandler;
   late Stream<PositionData> _positionDataStream;
+  late Stream<Track> _trackStream;
 
   @override
   void initState() {
@@ -31,34 +36,66 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final db = context.read<AppDatabase>();
+    _trackStream = (db.select(db.tracks)..where((t) => t.id.equals(widget.track.id))).watchSingle();
+    _fetchArtworkIfNeeded(widget.track);
+  }
+
+  void _fetchArtworkIfNeeded(Track track) {
+    final settings = getIt<SettingsService>();
+    if (settings.autoFetchArtwork &&
+        track.artworkUri == null &&
+        track.remoteArtworkUri == null) {
+      final artworkService = getIt<ArtworkSearchService>();
+      artworkService
+          .searchArtwork(track.artist ?? '', track.title)
+          .then((url) {
+        if (url != null) {
+          final db = context.read<AppDatabase>();
+          db.updateRemoteArtwork(track.id, url);
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Now Playing'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.music_note, size: 150),
-            const SizedBox(height: 20),
-            Text(
-              widget.track.title,
-              style: Theme.of(context).textTheme.headlineSmall,
-              textAlign: TextAlign.center,
+    return StreamBuilder<Track>(
+      stream: _trackStream,
+      initialData: widget.track,
+      builder: (context, snapshot) {
+        final track = snapshot.data!;
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Now Playing'),
+          ),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ArtworkWidget(track: track, size: 250),
+                const SizedBox(height: 20),
+                Text(
+                  track.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  track.artist ?? 'Unknown Artist',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 20),
+                _buildSeekBar(),
+                const SizedBox(height: 20),
+                _buildControls(),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              widget.track.artist ?? 'Unknown Artist',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 20),
-            _buildSeekBar(),
-            const SizedBox(height: 20),
-            _buildControls(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
