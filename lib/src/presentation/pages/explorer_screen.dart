@@ -3,16 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/music_finder.dart';
-import '../../../main.dart'; // для доступу до audioHandler
+import '../../../main.dart'; // Ensure this import points to where audioHandler is defined
 
-class ExplorerScreen extends StatefulWidget {
+class ExplorerScreen extends StatelessWidget {
   const ExplorerScreen({super.key});
 
-  @override
-  State<ExplorerScreen> createState() => _ExplorerScreenState();
-}
-
-class _ExplorerScreenState extends State<ExplorerScreen> {
   @override
   Widget build(BuildContext context) {
     final db = Provider.of<AppDatabase>(context);
@@ -23,16 +18,13 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
         title: const Text('Library'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.add),
             onPressed: () async {
-              // Запуск сканування
-              await musicFinder.pickFolderAndScan(); // Або scanAndSaveToDb()
-              setState(() {}); // Оновити UI після сканування
+              await musicFinder.pickFolderAndScan();
             },
-          )
+          ),
         ],
       ),
-      // StreamBuilder автоматично оновлює список, коли змінюється БД
       body: StreamBuilder<List<Track>>(
         stream: db.select(db.tracks).watch(),
         builder: (context, snapshot) {
@@ -47,7 +39,8 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('No music found yet.'),
+                  const Text('No music found.'),
+                  const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () => musicFinder.pickFolderAndScan(),
                     child: const Text('Scan Music Folder'),
@@ -77,17 +70,15 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   }
 
   Future<void> _playTrack(Track track) async {
-    // Конвертуємо Track з БД в MediaItem для AudioService
     final mediaItem = MediaItem(
-      id: track.path, // Шлях до файлу
+      id: track.path,
       album: track.album ?? '',
       title: track.title,
       artist: track.artist,
       duration: Duration(milliseconds: track.duration),
-      artUri: null, // Поки що без картинок, щоб не крешилось
+      artUri: null, // Keep null to prevent crashes
     );
 
-    // Додаємо в чергу і граємо
     await audioHandler.addQueueItems([mediaItem]);
     await audioHandler.play();
   }
