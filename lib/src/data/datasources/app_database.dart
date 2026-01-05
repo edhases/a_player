@@ -36,7 +36,6 @@ class AppDatabase extends _$AppDatabase {
           if (from == 1) {
             await m.addColumn(tracks, tracks.sourceType);
             await m.addColumn(tracks, tracks.remoteArtworkUri);
-            await m.addColumn(tracks, tracks.artworkUri);
           }
           if (from == 2) {
             await m.addColumn(tracks, tracks.artworkUri);
@@ -49,6 +48,7 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'db.sqlite'));
+    if (await file.exists()) await file.delete(); // Temporary: delete existing DB
     return NativeDatabase(file);
   });
 }
