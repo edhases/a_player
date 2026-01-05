@@ -12,7 +12,7 @@ class HierarchyService {
     final List<Track> directFiles = [];
 
     // Use a canonical path format to avoid issues with/without trailing slashes
-    final normalizedPath = path == '/' ? '' : path;
+    final normalizedPath = path == '/' ? '/' : path;
 
     for (final track in allTracks) {
       // Ensure the track's folder path is a descendant of the current path
@@ -27,11 +27,14 @@ class HierarchyService {
       }
 
       // Identify direct subfolders
-      final restOfPath = track.folderPath.substring(normalizedPath.length + (normalizedPath.isEmpty ? 0 : 1));
+      var restOfPath = track.folderPath.substring(normalizedPath.length);
+      if (restOfPath.startsWith('/')) {
+        restOfPath = restOfPath.substring(1);
+      }
       final parts = restOfPath.split('/');
-      if (parts.isNotEmpty) {
+      if (parts.isNotEmpty && parts.first.isNotEmpty) {
         final subfolderName = parts.first;
-        final subfolderPath = normalizedPath.isEmpty ? subfolderName : '$normalizedPath/$subfolderName';
+        final subfolderPath = normalizedPath == '/' ? '/$subfolderName' : '$normalizedPath/$subfolderName';
         directSubfolders.add(subfolderPath);
       }
     }

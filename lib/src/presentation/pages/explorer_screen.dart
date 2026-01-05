@@ -32,6 +32,16 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
     _hierarchyService = HierarchyService(database);
     _musicFinder = MusicFinder(database);
     _entriesFuture = _hierarchyService.getEntriesForPath(widget.path);
+    // Auto scan if no entries
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final entries = await _entriesFuture;
+      if (entries.isEmpty && widget.path == '/') {
+        await _musicFinder.startScan();
+        setState(() {
+          _entriesFuture = _hierarchyService.getEntriesForPath(widget.path);
+        });
+      }
+    });
   }
 
   @override
