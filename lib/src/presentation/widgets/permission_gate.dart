@@ -67,26 +67,51 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
     }
   }
 
+  // Змінна для блокування подвійних натискань
+  bool _isRequesting = false;
+
   Future<void> _requestPermissions() async {
-    final permissions = await _getPermissions();
+    // Якщо запит вже йде - нічого не робимо
+    if (_isRequesting) return;
 
-    // Запитуємо всі дозволи одразу
-    // request() повертає Map<Permission, PermissionStatus>
-    Map<Permission, PermissionStatus> statuses = await permissions.request();
+    setState(() {
+      _isRequesting = true;
+    });
 
-    // Перевіряємо результат
-    final allGranted = statuses.values.every((status) => status.isGranted);
+    try {
+      final permissions = await _getPermissions();
 
-    if (mounted) {
-      setState(() {
-        _hasPermissions = allGranted;
+      // Запитуємо дозволи
+      Map<Permission, PermissionStatus> statuses = await permissions.request();
+
+      // Перевіряємо результат
+      // Для Android 13+ Notification може бути "denied", але це не критично для запуску аудіо,
+      // тому можна перевіряти тільки критичні дозволи (аудіо/storage)
+      final allGranted = statuses.entries.every((entry) {
+        // Ігноруємо відмову в нотифікаціях для критичної перевірки, якщо хочете
+        // або вимагаємо все:
+        return entry.value.isGranted;
       });
-    }
 
-    if (!allGranted) {
-      // Якщо користувач натиснув "Don't ask again" або система заблокувала
-      // Можна показати діалог з пропозицією відкрити налаштування
-      print("Permissions denied even after request.");
+      if (mounted) {
+        setState(() {
+          _hasPermissions = allGranted;
+        });
+      }
+
+      if (!allGranted) {
+         debugPrint("Permissions denied: $statuses");
+         // Тут можна показати SnackBar або діалог
+      }
+
+    } catch (e) {
+      debugPrint("Error requesting permissions: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRequesting = false;
+        });
+      }
     }
   }
 
@@ -148,11 +173,17 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(
-                  onPressed: _requestPermissions,
+                  onPressed: _isRequesting ? null : _requestPermissions, // Вимикаємо кнопку
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   ),
-                  child: const Text('Надати дозволи', style: TextStyle(fontSize: 18)),
+                  child: _isRequesting
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2)
+                      )
+                    : const Text('Надати дозволи', style: TextStyle(fontSize: 18)),
                 ),
                 const SizedBox(height: 16),
                 TextButton(
