@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:oxide_player/src/domain/models/file_system_entry.dart';
 import 'package:oxide_player/src/domain/services/hierarchy_service.dart';
@@ -198,12 +199,25 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
       title: track.title,
       artist: track.artist,
       duration: Duration(milliseconds: track.duration),
-      artUri: track.remoteArtworkUri != null
-          ? Uri.parse(track.remoteArtworkUri!)
-          : (track.artworkUri != null ? Uri.parse(track.artworkUri!) : null),
+      artUri: _getArtUri(track.artworkUri),
       extras: <String, dynamic>{
         'id': track.id.toString(),
       },
     );
+  }
+
+  Uri? _getArtUri(String? artworkUri) {
+    if (artworkUri == null) {
+      return null;
+    }
+    final uri = Uri.parse(artworkUri);
+    // Check if the file exists for local files
+    if (uri.scheme == 'file') {
+      final file = File(uri.path);
+      if (!file.existsSync()) {
+        return null;
+      }
+    }
+    return uri;
   }
 }

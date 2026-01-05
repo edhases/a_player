@@ -33,11 +33,11 @@ class AppDatabase extends _$AppDatabase {
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
-          if (from == 1) {
+          if (from < 2) {
             await m.addColumn(tracks, tracks.sourceType);
             await m.addColumn(tracks, tracks.remoteArtworkUri);
           }
-          if (from == 2) {
+          if (from < 3) {
             await m.addColumn(tracks, tracks.artworkUri);
           }
         },
