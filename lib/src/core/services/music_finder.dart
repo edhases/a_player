@@ -41,6 +41,7 @@ class MusicFinder {
               album: Value(song.album),
               duration: song.duration ?? 0,
               folderPath: song.data.substring(0, song.data.lastIndexOf('/')),
+              artworkUri: Value(song.uri),
             );
           })
           .whereType<TracksCompanion>()

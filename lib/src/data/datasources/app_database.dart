@@ -17,6 +17,7 @@ class Tracks extends Table {
   IntColumn get duration => integer()();
   TextColumn get folderPath => text()();
   TextColumn get sourceType => text().withDefault(const Constant('local'))();
+  TextColumn get artworkUri => text().nullable()();
   TextColumn get remoteArtworkUri => text().nullable()();
   DateTimeColumn get addedAt =>
       dateTime().withDefault(currentDateAndTime)();
@@ -27,7 +28,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -35,6 +36,10 @@ class AppDatabase extends _$AppDatabase {
           if (from == 1) {
             await m.addColumn(tracks, tracks.sourceType);
             await m.addColumn(tracks, tracks.remoteArtworkUri);
+            await m.addColumn(tracks, tracks.artworkUri);
+          }
+          if (from == 2) {
+            await m.addColumn(tracks, tracks.artworkUri);
           }
         },
       );
