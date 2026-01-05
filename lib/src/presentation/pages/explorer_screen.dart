@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/music_finder.dart';
-import '../../../main.dart'; // Ensure this import points to where audioHandler is defined
+import '../../core/services/audio_handler.dart';
 
 class ExplorerScreen extends StatelessWidget {
   const ExplorerScreen({super.key});
@@ -12,6 +12,7 @@ class ExplorerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final db = Provider.of<AppDatabase>(context);
     final musicFinder = Provider.of<MusicFinder>(context);
+    final audioHandler = Provider.of<MyAudioHandler>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -59,7 +60,7 @@ class ExplorerScreen extends StatelessWidget {
                 title: Text(track.title),
                 subtitle: Text(track.artist ?? 'Unknown'),
                 onTap: () {
-                  _playTrack(track);
+                  _playTrack(track, audioHandler);
                 },
               );
             },
@@ -69,7 +70,7 @@ class ExplorerScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _playTrack(Track track) async {
+  Future<void> _playTrack(Track track, MyAudioHandler audioHandler) async {
     final mediaItem = MediaItem(
       id: track.path,
       album: track.album ?? '',

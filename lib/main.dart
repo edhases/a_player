@@ -1,34 +1,28 @@
-import 'package:flutter/material.dart';
-import 'package:metadata_god/metadata_god.dart'; // Не забудьте додати в pubspec
-import 'package:provider/provider.dart'; // Рекомендую додати provider для DI
-// ... інші імпорти
+import 'package/flutter/material.dart';
+import 'package:metadata_god/metadata_god.dart';
+import 'package:provider/provider.dart';
 import 'src/data/datasources/app_database.dart';
 import 'src/core/services/audio_handler.dart';
 import 'src/core/services/music_finder.dart';
 import 'package:audio_service/audio_service.dart';
 import 'src/presentation/pages/explorer_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
-
-// Глобальна змінна для доступу до хендлера (або через GetIt/Provider)
-late MyAudioHandler audioHandler;
+import 'src/core/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Ініціалізація читача метаданих
   await MetadataGod.initialize();
 
-  // Ініціалізація AudioService
-  audioHandler = await AudioService.init(
+  final audioHandler = await AudioService.init(
     builder: () => MyAudioHandler(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.oxide_player.channel.audio',
-      androidNotificationChannelName: 'Audio Playback',
+      androidNotificationChannelId: kNotificationChannelId,
+      androidNotificationChannelName: kNotificationChannelName,
       androidNotificationOngoing: true,
     ),
   );
 
-  // Створення інстансу БД
   final db = AppDatabase();
 
   runApp(
@@ -36,6 +30,7 @@ void main() async {
       providers: [
         Provider<AppDatabase>.value(value: db),
         Provider<MusicFinder>(create: (_) => MusicFinder(db)),
+        Provider<MyAudioHandler>.value(value: audioHandler),
       ],
       child: const MainApp(),
     ),
