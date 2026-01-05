@@ -6,7 +6,7 @@ import 'src/data/datasources/app_database.dart';
 import 'src/core/services/audio_handler.dart';
 import 'src/core/services/music_finder.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package/oxide_player/src/presentation/pages/explorer_screen.dart';
+import 'src/presentation/pages/explorer_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
 
 // Глобальна змінна для доступу до хендлера (або через GetIt/Provider)
@@ -50,7 +50,7 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       title: 'Oxide Player',
       theme: ThemeData.dark(),
-      home: const PermissionGate(child: ExplorerScreen()),
+      home: PermissionGate(child: ExplorerScreen()),
     );
   }
 }

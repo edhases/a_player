@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/music_finder.dart';
-import 'package:oxide_player/main.dart'; // для доступу до audioHandler
+import '../../../main.dart'; // для доступу до audioHandler
 
 class ExplorerScreen extends StatefulWidget {
   const ExplorerScreen({super.key});
