@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import 'package:oxide_player/src/core/services/audio_handler.dart';
 import 'package:oxide_player/src/presentation/pages/player_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
@@ -77,25 +78,24 @@ class MiniPlayer extends StatelessWidget {
   }
 
   Widget _buildArtwork(MediaItem mediaItem) {
-    final artworkUrl = mediaItem.artUri?.toString();
     return ClipRRect(
       borderRadius: BorderRadius.circular(4.0),
       child: SizedBox(
         width: 50,
         height: 50,
-        child: artworkUrl != null && artworkUrl.startsWith('http')
-            ? CachedNetworkImage(
-                imageUrl: artworkUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    const Center(child: CircularProgressIndicator()),
-                errorWidget: (context, url, error) =>
-                    const Icon(Icons.music_note),
-              )
-            : Container(
-                color: Colors.grey,
-                child: const Icon(Icons.music_note, color: Colors.white),
-              ),
+        child: QueryArtworkWidget(
+          id: int.parse(mediaItem.extras!['id']),
+          type: ArtworkType.AUDIO,
+          artworkFit: BoxFit.cover,
+          nullArtworkWidget: CachedNetworkImage(
+            imageUrl: mediaItem.artUri.toString(),
+            fit: BoxFit.cover,
+            placeholder: (context, url) =>
+                const Center(child: CircularProgressIndicator()),
+            errorWidget: (context, url, error) =>
+                const Icon(Icons.music_note),
+          ),
+        ),
       ),
     );
   }
