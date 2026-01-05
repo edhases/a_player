@@ -2,53 +2,50 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:metadata_god/metadata_god.dart';
-import 'package:drift/drift.dart' as drift; // Для Value
-import '../../data/datasources/app_database.dart'; // Імпорт вашої БД
+import 'package:drift/drift.dart' as drift;
+import '../data/datasources/app_database.dart';
 
 class MusicFinder {
   final AppDatabase _db;
 
   MusicFinder(this._db);
 
-  /// Сканує пристрій (або вибрані папки) та оновлює БД
-  Future<void> scanAndSaveToDb() async {
-    // 1. Перевірка дозволів (на всяк випадок)
-    if (!await Permission.audio.isGranted && !await Permission.storage.isGranted) {
-      print("Permissions not granted");
-      return;
-    }
-
-    // В ідеалі тут ми використовуємо SAF або скануємо відомі папки.
-    // Для спрощення на цьому етапі - скануємо стандартну папку Music
-    // Або можна викликати FilePicker, щоб користувач вибрав папку.
-
-    // Тимчасове рішення для тесту: сканування /storage/emulated/0/Music
-    // Увага: На Android 11+ прямий доступ обмежений, краще використовувати pickDirectory
-    // Але якщо права надані через PermissionGate (Manage External Storage або Audio), спробуємо знайти.
-
-    final Directory dir = Directory('/storage/emulated/0/Music');
-    if (await dir.exists()) {
-      await _scanDirectory(dir);
-    } else {
-      print("Music directory not found default path");
-    }
-  }
-
-  // Метод для виклику з UI для вибору папки
+  /// Scans a selected folder and updates the DB
   Future<void> pickFolderAndScan() async {
+    // Request storage permissions if not already granted (redundant if PermissionGate works, but safe)
+    var status = await Permission.storage.status;
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+      if (!status.isGranted) {
+        // Handle audio permission for Android 13+
+        var audioStatus = await Permission.audio.status;
+        if (!audioStatus.isGranted) {
+          await Permission.audio.request();
+        }
+      }
+    }
+
     String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
     if (selectedDirectory != null) {
-      await _scanDirectory(Directory(selectedDirectory));
+      final dir = Directory(selectedDirectory);
+      if (await dir.exists()) {
+        await _scanDirectory(dir);
+      }
     }
   }
 
   Future<void> _scanDirectory(Directory dir) async {
-    final List<FileSystemEntity> entities = dir.listSync(recursive: true);
+    try {
+      final List<FileSystemEntity> entities = dir.listSync(recursive: true);
 
-    for (var entity in entities) {
-      if (entity is File && _isAudioFile(entity.path)) {
-        await _processFile(entity);
+      for (var entity in entities) {
+        if (entity is File && _isAudioFile(entity.path)) {
+          await _processFile(entity);
+        }
       }
+    } catch (e) {
+      print("Error scanning directory: $e");
     }
   }
 
@@ -60,14 +57,11 @@ class MusicFinder {
   Future<void> _processFile(File file) async {
     Metadata? metadata;
     try {
-      // Використовуємо metadata_god для зчитування тегів
-      // Переконайтесь, що ініціалізували його в main.dart: await MetadataGod.initialize();
       metadata = await MetadataGod.readMetadata(file: file.path);
     } catch (e) {
       print("Error reading metadata for ${file.path}: $e");
     }
 
-    // Створюємо запис для БД
     final trackCompanion = TracksCompanion(
       path: drift.Value(file.path),
       title: drift.Value(metadata?.title ?? file.path.split('/').last),
@@ -75,16 +69,12 @@ class MusicFinder {
       album: drift.Value(metadata?.album ?? 'Unknown Album'),
       duration: drift.Value(metadata?.durationMs?.toInt() ?? 0),
       folderPath: drift.Value(file.parent.path),
-      // Увага: тут ми обробляємо картинку. Якщо є картинка - зберігати поки не будемо в БД як BLOB,
-      // бо це уповільнить. Зазвичай зберігають шлях до кешованого файлу.
-      // Для Етапу 2 поки залишимо artworkUri пустим або null.
-      artworkUri: drift.Value(null),
+      artworkUri: drift.Value(null), // Avoid artwork crashes for now
     );
 
-    // Вставка в БД (Drift) з ігноруванням дублікатів (якщо path unique)
     try {
       await _db.into(_db.tracks).insertOnConflictUpdate(trackCompanion);
-      print("Added: ${file.path}");
+      print("Added to DB: ${file.path}");
     } catch (e) {
       print("DB Insert Error: $e");
     }

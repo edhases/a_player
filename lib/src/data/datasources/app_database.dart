@@ -48,7 +48,6 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'db.sqlite'));
-    if (await file.exists()) await file.delete(); // Temporary: delete existing DB
-    return NativeDatabase(file);
+    return NativeDatabase.createInBackground(file);
   });
 }
