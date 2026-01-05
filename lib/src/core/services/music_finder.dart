@@ -3,7 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:drift/drift.dart' as drift;
-import '../data/datasources/app_database.dart';
+import '../../data/datasources/app_database.dart';
 
 class MusicFinder {
   final AppDatabase _db;
