@@ -62,7 +62,7 @@ class MusicFinder {
     try {
       // Використовуємо metadata_god для зчитування тегів
       // Переконайтесь, що ініціалізували його в main.dart: await MetadataGod.initialize();
-      metadata = await MetadataGod.getMetadata(file.path);
+      metadata = await MetadataGod.readMetadata(file.path);
     } catch (e) {
       print("Error reading metadata for ${file.path}: $e");
     }
