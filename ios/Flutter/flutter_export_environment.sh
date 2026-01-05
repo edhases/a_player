@@ -1,7 +1,7 @@
 #!/bin/sh
 # This is a generated file; do not edit or check into version control.
 export "FLUTTER_ROOT=E:\Rust Project\flutter"
-export "FLUTTER_APPLICATION_PATH=E:\Rust Project\a_player-main"
+export "FLUTTER_APPLICATION_PATH=E:\Main\BrunchAntiphish2\a_player"
 export "COCOAPODS_PARALLEL_CODE_SIGN=true"
 export "FLUTTER_TARGET=lib\main.dart"
 export "FLUTTER_BUILD_DIR=build"

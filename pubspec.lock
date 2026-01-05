@@ -585,7 +585,7 @@ packages:
     source: hosted
     version: "2.9.0"
   on_audio_query_android:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: on_audio_query_android
       sha256: c0b946011ee7aa8ec76b21837f0cb0007120ac291202ed6c6fb4c498ba2ff6fe

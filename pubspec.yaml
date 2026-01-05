@@ -39,6 +39,7 @@ dependencies:
   logger: ^2.0.0
   rxdart: ^0.28.0
   http: ^1.2.1
+  on_audio_query_android: ^1.1.0
 
 dev_dependencies:
   flutter_test:
