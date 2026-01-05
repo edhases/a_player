@@ -90,23 +90,29 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
   }
 
   Future<List<Permission>> _getPermissions() async {
-    if (await _isAndroid13OrAbove()) {
-      // Для Android 13+ (API 33+)
-      // Note: audio service needs FOREGROUND_SERVICE permissions declared in manifest too
-      return [
-        Permission.audio,
-        Permission.notification
-      ];
-    } else {
-      // Для Android 12 і нижче
-      return [Permission.storage];
+    final platform = Theme.of(context).platform;
+
+    if (platform == TargetPlatform.android) {
+      if (await _isAndroid13OrAbove()) {
+        // For Android 13+ (API 33+)
+        return [Permission.audio, Permission.notification];
+      } else {
+        // For Android 12 and below
+        return [Permission.storage];
+      }
+    } else if (platform == TargetPlatform.iOS) {
+      // For iOS
+      return [Permission.mediaLibrary];
     }
+
+    // Default for unsupported platforms
+    return [];
   }
 
   Future<bool> _isAndroid13OrAbove() async {
     if (Theme.of(context).platform == TargetPlatform.android) {
-        final deviceInfo = await DeviceInfoPlugin().androidInfo;
-        return deviceInfo.version.sdkInt >= 33;
+      final deviceInfo = await DeviceInfoPlugin().androidInfo;
+      return deviceInfo.version.sdkInt >= 33;
     }
     return false;
   }
