@@ -12,38 +12,43 @@ class PermissionGate extends StatefulWidget {
 }
 
 class _PermissionGateState extends State<PermissionGate> {
-  PermissionStatus _permissionStatus = PermissionStatus.denied;
+  bool _hasPermissions = false;
 
   @override
   void initState() {
     super.initState();
-    _checkPermissionStatus();
+    _checkPermissions();
   }
 
-  Future<void> _checkPermissionStatus() async {
-    final permission = await _getPermission();
-    final status = await permission.status;
-    setState(() {
-      _permissionStatus = status;
-    });
-    if (status.isDenied) {
-      _requestPermission();
+  Future<void> _checkPermissions() async {
+    final permissions = await _getPermissions();
+    final statuses = await permissions.map((p) => p.status).toList();
+    final allGranted = statuses.every((status) => status.isGranted);
+
+    if (allGranted) {
+      setState(() => _hasPermissions = true);
+    } else {
+      _requestPermissions();
     }
   }
 
-  Future<void> _requestPermission() async {
-    final permission = await _getPermission();
-    final status = await permission.request();
+  Future<void> _requestPermissions() async {
+    final permissions = await _getPermissions();
+    await permissions.request();
+
+    final statuses = await permissions.map((p) => p.status).toList();
+    final allGranted = statuses.every((status) => status.isGranted);
+
     setState(() {
-      _permissionStatus = status;
+      _hasPermissions = allGranted;
     });
   }
 
-  Future<Permission> _getPermission() async {
+  Future<List<Permission>> _getPermissions() async {
     if (await _isAndroid13OrAbove()) {
-      return Permission.audio;
+      return [Permission.audio, Permission.notification];
     } else {
-      return Permission.storage;
+      return [Permission.storage];
     }
   }
 
@@ -54,20 +59,33 @@ class _PermissionGateState extends State<PermissionGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_permissionStatus.isGranted) {
+    if (_hasPermissions) {
       return widget.child;
     } else {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('Storage permission is required to play music.'),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _requestPermission,
-              child: const Text('Request Permission'),
-            ),
-          ],
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                'Permissions Required',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 32.0),
+                child: Text(
+                  'To play music and show playback controls in the notification area, this app needs access to your audio files and permission to post notifications.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _requestPermissions,
+                child: const Text('Grant Permissions'),
+              ),
+            ],
+          ),
         ),
       );
     }
