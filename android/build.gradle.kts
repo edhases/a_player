@@ -28,6 +28,10 @@ subprojects {
         plugins.withId("com.android.library") {
             extensions.configure<LibraryExtension>("android") {
                 namespace = "com.lucasferreira.on_audio_query_android"
+                compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_1_8
+                    targetCompatibility = JavaVersion.VERSION_1_8
+                }
             }
         }
     }
