@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -90,9 +91,7 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
   }
 
   Future<List<Permission>> _getPermissions() async {
-    final platform = Theme.of(context).platform;
-
-    if (platform == TargetPlatform.android) {
+    if (Platform.isAndroid) {
       if (await _isAndroid13OrAbove()) {
         // For Android 13+ (API 33+)
         return [Permission.audio, Permission.notification];
@@ -100,7 +99,7 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
         // For Android 12 and below
         return [Permission.storage];
       }
-    } else if (platform == TargetPlatform.iOS) {
+    } else if (Platform.isIOS) {
       // For iOS
       return [Permission.mediaLibrary];
     }
@@ -110,7 +109,7 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
   }
 
   Future<bool> _isAndroid13OrAbove() async {
-    if (Theme.of(context).platform == TargetPlatform.android) {
+    if (Platform.isAndroid) {
       final deviceInfo = await DeviceInfoPlugin().androidInfo;
       return deviceInfo.version.sdkInt >= 33;
     }
