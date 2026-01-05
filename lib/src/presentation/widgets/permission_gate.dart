@@ -11,80 +11,151 @@ class PermissionGate extends StatefulWidget {
   _PermissionGateState createState() => _PermissionGateState();
 }
 
-class _PermissionGateState extends State<PermissionGate> {
+class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObserver {
   bool _hasPermissions = false;
+  bool _isChecking = true; // Додаємо стан завантаження
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Перевіряємо дозволи, коли користувач повертається з налаштувань
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissions();
+    }
   }
 
   Future<void> _checkPermissions() async {
     final permissions = await _getPermissions();
-    final statuses = await permissions.map((p) => p.status).toList();
+
+    // Правильний спосіб перевірити список асинхронних статусів
+    // 1. Отримуємо список Future<PermissionStatus>
+    final futures = permissions.map((p) => p.status);
+
+    // 2. Чекаємо виконання всіх Future і отримуємо список реальних статусів
+    final statuses = await Future.wait(futures);
+
+    // 3. Перевіряємо, чи всі надані
     final allGranted = statuses.every((status) => status.isGranted);
 
-    if (allGranted) {
-      setState(() => _hasPermissions = true);
-    } else {
-      _requestPermissions();
+    if (mounted) {
+      setState(() {
+        _hasPermissions = allGranted;
+        _isChecking = false;
+      });
+    }
+
+    // Для дебагу - виводимо в консоль, чого не вистачає
+    if (!allGranted) {
+      for (int i = 0; i < permissions.length; i++) {
+        if (!statuses[i].isGranted) {
+          print("Missing permission: ${permissions[i]} (Status: ${statuses[i]})");
+        }
+      }
     }
   }
 
   Future<void> _requestPermissions() async {
     final permissions = await _getPermissions();
-    await permissions.request();
 
-    final statuses = await permissions.map((p) => p.status).toList();
-    final allGranted = statuses.every((status) => status.isGranted);
+    // Запитуємо всі дозволи одразу
+    // request() повертає Map<Permission, PermissionStatus>
+    Map<Permission, PermissionStatus> statuses = await permissions.request();
 
-    setState(() {
-      _hasPermissions = allGranted;
-    });
+    // Перевіряємо результат
+    final allGranted = statuses.values.every((status) => status.isGranted);
+
+    if (mounted) {
+      setState(() {
+        _hasPermissions = allGranted;
+      });
+    }
+
+    if (!allGranted) {
+      // Якщо користувач натиснув "Don't ask again" або система заблокувала
+      // Можна показати діалог з пропозицією відкрити налаштування
+      print("Permissions denied even after request.");
+    }
   }
 
   Future<List<Permission>> _getPermissions() async {
     if (await _isAndroid13OrAbove()) {
-      return [Permission.audio, Permission.notification];
+      // Для Android 13+ (API 33+)
+      // Note: audio service needs FOREGROUND_SERVICE permissions declared in manifest too
+      return [
+        Permission.audio,
+        Permission.notification
+      ];
     } else {
+      // Для Android 12 і нижче
       return [Permission.storage];
     }
   }
 
   Future<bool> _isAndroid13OrAbove() async {
-    final deviceInfo = await DeviceInfoPlugin().androidInfo;
-    return deviceInfo.version.sdkInt >= 33;
+    if (Theme.of(context).platform == TargetPlatform.android) {
+        final deviceInfo = await DeviceInfoPlugin().androidInfo;
+        return deviceInfo.version.sdkInt >= 33;
+    }
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isChecking) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (_hasPermissions) {
       return widget.child;
     } else {
       return Scaffold(
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Permissions Required',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 32.0),
-                child: Text(
-                  'To play music and show playback controls in the notification area, this app needs access to your audio files and permission to post notifications.',
-                  textAlign: TextAlign.center,
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.music_note, size: 64, color: Colors.blue),
+                const SizedBox(height: 24),
+                const Text(
+                  'Потрібен доступ',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _requestPermissions,
-                child: const Text('Grant Permissions'),
-              ),
-            ],
+                const SizedBox(height: 16),
+                const Text(
+                  'Щоб програвати вашу музику та показувати сповіщення, додатку потрібен доступ до аудіофайлів на цьому пристрої.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: _requestPermissions,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  ),
+                  child: const Text('Надати дозволи', style: TextStyle(fontSize: 18)),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: openAppSettings, // Вбудована функція permission_handler
+                  child: const Text('Відкрити налаштування системи'),
+                ),
+              ],
+            ),
           ),
         ),
       );
