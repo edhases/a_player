@@ -44,7 +44,6 @@ class ArtistsScreen extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (context) => DetailScreen(
                         type: DetailScreenType.artist,
-                        entityId: artist.id,
                         title: artist.name,
                       ),
                     ),
