@@ -226,6 +226,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
+              icon: const Icon(Icons.equalizer, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const EqualizerScreen()),
+                );
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.shuffle, color: Colors.white),
               color: shuffleMode == AudioServiceShuffleMode.all
                   ? Theme.of(context).colorScheme.secondary
