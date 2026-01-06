@@ -18,15 +18,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await MetadataGod.initialize();
 
-  // Initialize and register the settings service
   final settingsService = SettingsService();
   await settingsService.init();
   GetIt.I.registerSingleton<SettingsService>(settingsService);
 
-  // Create the database instance
   final db = AppDatabase();
+  final musicFinder = MusicFinder(db);
 
-  // Initialize AudioService with the handler, passing the DB instance
   audioHandler = await AudioService.init(
     builder: () => MyAudioHandler(db),
     config: const AudioServiceConfig(
@@ -36,14 +34,13 @@ void main() async {
     ),
   );
 
-  // Register the handler with GetIt for UI access
   GetIt.I.registerSingleton<MyAudioHandler>(audioHandler);
 
   runApp(
     MultiProvider(
       providers: [
         Provider<AppDatabase>.value(value: db),
-        Provider<MusicFinder>(create: (_) => MusicFinder(db)),
+        Provider<MusicFinder>.value(value: musicFinder),
       ],
       child: const MainApp(),
     ),
@@ -55,19 +52,51 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final musicFinder = Provider.of<MusicFinder>(context, listen: false);
+
     return MaterialApp(
       title: 'Oxide Player',
       theme: ThemeData.dark(),
-      // The PermissionGate now wraps the main app structure.
-      home: const PermissionGate(
-        // The main UI is a Scaffold containing the HomeScreen and MiniPlayer
+      home: PermissionGate(
         child: Scaffold(
-          body: Column(
+          // Using a Stack to overlay the progress indicator on top of the main UI
+          body: Stack(
             children: [
-              Expanded(
-                child: HomeScreen(),
+              // Main content
+              const Column(
+                children: [
+                  Expanded(
+                    child: HomeScreen(),
+                  ),
+                  MiniPlayer(),
+                ],
               ),
-              MiniPlayer(),
+              // Global scanning progress indicator
+              ValueListenableBuilder<bool>(
+                valueListenable: musicFinder.isScanning,
+                builder: (context, isScanning, child) {
+                  if (isScanning) {
+                    return Container(
+                      color: Colors.black.withOpacity(0.7),
+                      child: const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text(
+                              'Scanning for music...',
+                              style: TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  } else {
+                    return const SizedBox.shrink();
+                  }
+                },
+              ),
             ],
           ),
         ),
