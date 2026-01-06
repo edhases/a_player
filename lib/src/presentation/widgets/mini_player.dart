@@ -20,12 +20,13 @@ class MiniPlayer extends StatelessWidget {
         }
 
         final mediaItem = mediaItemSnapshot.data!;
+        final heroTag = 'player_art_${mediaItem.id}';
 
         return GestureDetector(
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const PlayerScreen()),
+              MaterialPageRoute(builder: (context) => PlayerScreen(heroTag: heroTag)),
             );
           },
           child: Container(
@@ -33,36 +34,14 @@ class MiniPlayer extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    // Artwork with Hero animation tag
-                    Hero(
-                      tag: mediaItem.id,
-                      child: _buildArtwork(mediaItem),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            mediaItem.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                          Text(
-                            mediaItem.artist ?? 'Unknown',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    _buildControls(audioHandler),
-                  ],
+                ListTile(
+                  leading: Hero(
+                    tag: heroTag,
+                    child: _buildArtwork(mediaItem),
+                  ),
+                  title: Text(mediaItem.title, maxLines: 1),
+                  subtitle: Text(mediaItem.artist ?? 'Unknown', maxLines: 1),
+                  trailing: _buildControls(audioHandler),
                 ),
                 _buildProgressBar(audioHandler),
               ],
@@ -74,23 +53,21 @@ class MiniPlayer extends StatelessWidget {
   }
 
   Widget _buildArtwork(MediaItem mediaItem) {
-    return SizedBox(
-      width: 50,
-      height: 50,
-      child: FutureBuilder<Metadata?>(
-        future: MetadataGod.readMetadata(file: mediaItem.id),
-        builder: (context, snapshot) {
-          final artwork = snapshot.data?.picture?.data;
-          if (artwork != null) {
-            return Image.memory(
-              artwork,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-            );
-          }
-          return const Icon(Icons.music_note, color: Colors.grey);
-        },
-      ),
+    return FutureBuilder<Metadata?>(
+      future: MetadataGod.readMetadata(file: mediaItem.id),
+      builder: (context, snapshot) {
+        final artwork = snapshot.data?.picture?.data;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(4.0),
+          child: SizedBox(
+            width: 50,
+            height: 50,
+            child: artwork != null
+                ? Image.memory(artwork, fit: BoxFit.cover, gaplessPlayback: true)
+                : const Icon(Icons.music_note),
+          ),
+        );
+      },
     );
   }
 

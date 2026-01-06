@@ -5,7 +5,8 @@ import 'package:metadata_god/metadata_god.dart';
 import 'package:oxide_player/src/core/services/audio_handler.dart';
 
 class PlayerScreen extends StatelessWidget {
-  const PlayerScreen({super.key});
+  final String heroTag;
+  const PlayerScreen({super.key, required this.heroTag});
 
   @override
   Widget build(BuildContext context) {
@@ -44,9 +45,8 @@ class PlayerScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Spacer(),
-                    // Artwork with Hero animation tag
                     Hero(
-                      tag: mediaItem.id,
+                      tag: heroTag,
                       child: _buildArtwork(mediaItem),
                     ),
                     const Spacer(),
@@ -87,23 +87,17 @@ class PlayerScreen extends StatelessWidget {
           return Material(
             elevation: 8,
             borderRadius: BorderRadius.circular(12.0),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12.0),
               child: artwork != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(12.0),
-                      child: Image.memory(
-                        artwork,
-                        key: ValueKey(artwork.hashCode),
-                        gaplessPlayback: true,
-                        fit: BoxFit.cover,
-                      ),
+                  ? Image.memory(
+                      artwork,
+                      gaplessPlayback: true,
+                      fit: BoxFit.cover,
                     )
                   : Container(
-                      key: const ValueKey('placeholder'),
                       decoration: BoxDecoration(
                         color: Colors.grey.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12.0),
                       ),
                       child: const Icon(Icons.music_note, size: 100),
                     ),
@@ -155,7 +149,7 @@ class PlayerScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-              icon: const Icon(Icons.shuffle, color: Colors.white),
+              icon: const Icon(Icons.shuffle),
               color: shuffleMode == AudioServiceShuffleMode.all
                   ? Theme.of(context).colorScheme.secondary
                   : Colors.white,

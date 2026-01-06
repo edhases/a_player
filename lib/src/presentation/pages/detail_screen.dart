@@ -9,21 +9,19 @@ enum DetailScreenType { album, artist }
 
 class DetailScreen extends StatelessWidget {
   final DetailScreenType type;
-  final int entityId;
   final String title;
 
   const DetailScreen({
     super.key,
     required this.type,
-    required this.entityId,
     required this.title,
   });
 
   Future<List<Track>> _fetchTracks(AppDatabase db) {
     if (type == DetailScreenType.album) {
-      return db.getTracksForAlbum(entityId);
+      return db.getTracksByAlbum(title);
     } else {
-      return db.getTracksForArtist(entityId);
+      return db.getTracksByArtist(title);
     }
   }
 
