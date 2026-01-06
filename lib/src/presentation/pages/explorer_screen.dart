@@ -3,7 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/music_finder.dart';
-import '../../core/services/audio_handler.dart';
+import '../../../main.dart';
+import '../widgets/mini_player.dart'; // 1. Імпорт віджета
 
 class ExplorerScreen extends StatelessWidget {
   const ExplorerScreen({super.key});
@@ -12,7 +13,6 @@ class ExplorerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final db = Provider.of<AppDatabase>(context);
     final musicFinder = Provider.of<MusicFinder>(context);
-    final audioHandler = Provider.of<MyAudioHandler>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -26,58 +26,68 @@ class ExplorerScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: StreamBuilder<List<Track>>(
-        stream: db.select(db.tracks).watch(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      // 2. Використовуємо Column для розміщення списку і плеєра
+      body: Column(
+        children: [
+          // Expanded займає весь доступний простір для списку
+          Expanded(
+            child: StreamBuilder<List<Track>>(
+              stream: db.select(db.tracks).watch(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          final tracks = snapshot.data!;
+                final tracks = snapshot.data!;
 
-          if (tracks.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('No music found.'),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () => musicFinder.pickFolderAndScan(),
-                    child: const Text('Scan Music Folder'),
-                  ),
-                ],
-              ),
-            );
-          }
+                if (tracks.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('No music found.'),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: () => musicFinder.pickFolderAndScan(),
+                          child: const Text('Scan Music Folder'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
 
-          return ListView.builder(
-            itemCount: tracks.length,
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              return ListTile(
-                leading: const Icon(Icons.music_note),
-                title: Text(track.title),
-                subtitle: Text(track.artist ?? 'Unknown'),
-                onTap: () {
-                  _playTrack(track, audioHandler);
-                },
-              );
-            },
-          );
-        },
+                return ListView.builder(
+                  itemCount: tracks.length,
+                  itemBuilder: (context, index) {
+                    final track = tracks[index];
+                    return ListTile(
+                      leading: const Icon(Icons.music_note),
+                      title: Text(track.title),
+                      subtitle: Text(track.artist ?? 'Unknown'),
+                      onTap: () {
+                        _playTrack(track);
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          // 3. Додаємо МініПлеєр в самий низ
+          const MiniPlayer(),
+        ],
       ),
     );
   }
 
-  Future<void> _playTrack(Track track, MyAudioHandler audioHandler) async {
+  Future<void> _playTrack(Track track) async {
     final mediaItem = MediaItem(
       id: track.path,
       album: track.album ?? '',
       title: track.title,
       artist: track.artist,
       duration: Duration(milliseconds: track.duration),
-      artUri: null, // Keep null to prevent crashes
+      artUri: null,
     );
 
     await audioHandler.addQueueItems([mediaItem]);

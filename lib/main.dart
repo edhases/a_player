@@ -1,27 +1,32 @@
-import 'package/flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:provider/provider.dart';
+import 'package:get_it/get_it.dart'; // 1. Додайте цей імпорт
+
 import 'src/data/datasources/app_database.dart';
 import 'src/core/services/audio_handler.dart';
 import 'src/core/services/music_finder.dart';
 import 'package:audio_service/audio_service.dart';
 import 'src/presentation/pages/explorer_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
-import 'src/core/constants.dart';
+
+late MyAudioHandler audioHandler;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await MetadataGod.initialize();
 
-  final audioHandler = await AudioService.init(
+  audioHandler = await AudioService.init(
     builder: () => MyAudioHandler(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: kNotificationChannelId,
-      androidNotificationChannelName: kNotificationChannelName,
+      androidNotificationChannelId: 'com.example.oxide_player.channel.audio',
+      androidNotificationChannelName: 'Audio Playback',
       androidNotificationOngoing: true,
     ),
   );
+
+  // 2. Зареєструйте хендлер в GetIt
+  GetIt.I.registerSingleton<MyAudioHandler>(audioHandler);
 
   final db = AppDatabase();
 
@@ -30,7 +35,6 @@ void main() async {
       providers: [
         Provider<AppDatabase>.value(value: db),
         Provider<MusicFinder>(create: (_) => MusicFinder(db)),
-        Provider<MyAudioHandler>.value(value: audioHandler),
       ],
       child: const MainApp(),
     ),
