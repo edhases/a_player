@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:metadata_god/metadata_god.dart';
 import '../../data/datasources/app_database.dart';
-import 'detail_screen.dart'; // Will be created next
+import 'detail_screen.dart';
 
 class AlbumsScreen extends StatelessWidget {
   const AlbumsScreen({super.key});
@@ -15,8 +15,7 @@ class AlbumsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Albums'),
       ),
-      body: FutureBuilder<List<AppDatabase.AlbumWithArtwork>>(
-        // Use the new, efficient query from the database class
+      body: FutureBuilder<List<AlbumWithArtwork>>(
         future: db.getAllAlbums(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -42,6 +41,8 @@ class AlbumsScreen extends StatelessWidget {
             itemCount: albums.length,
             itemBuilder: (context, index) {
               final album = albums[index];
+              final heroTag = 'album_art_${album.title}';
+
               return InkWell(
                 onTap: () {
                   Navigator.push(
@@ -49,8 +50,7 @@ class AlbumsScreen extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (context) => DetailScreen(
                         type: DetailScreenType.album,
-                        entityId: album.album.id,
-                        title: album.album.name,
+                        title: album.title,
                       ),
                     ),
                   );
@@ -61,12 +61,15 @@ class AlbumsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
-                        child: _buildArtwork(album),
+                        child: Hero(
+                          tag: heroTag,
+                          child: _buildArtwork(album),
+                        ),
                       ),
                       Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Text(
-                          album.album.name,
+                          album.title,
                           style: Theme.of(context).textTheme.bodyMedium,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -83,8 +86,7 @@ class AlbumsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildArtwork(AppDatabase.AlbumWithArtwork album) {
-    // The artworkPath can be null if an album has no tracks
+  Widget _buildArtwork(AlbumWithArtwork album) {
     if (album.artworkPath == null) {
       return const Icon(Icons.album, size: 60, color: Colors.grey);
     }
