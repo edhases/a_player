@@ -1,10 +1,9 @@
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import 'package:oxide_player/src/core/services/audio_handler.dart';
-import 'package:oxide_player/src/presentation/pages/player_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:on_audio_query/on_audio_query.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:metadata_god/metadata_god.dart';
+import '../pages/player_screen.dart';
+import '../../core/services/audio_handler.dart';
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
@@ -19,6 +18,7 @@ class MiniPlayer extends StatelessWidget {
         if (!mediaItemSnapshot.hasData || mediaItemSnapshot.data == null) {
           return const SizedBox.shrink();
         }
+
         final mediaItem = mediaItemSnapshot.data!;
 
         return GestureDetector(
@@ -29,11 +29,41 @@ class MiniPlayer extends StatelessWidget {
             );
           },
           child: Container(
-            color: Colors.grey.shade900,
+            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildPlayerControls(context, audioHandler, mediaItem),
+                Row(
+                  children: [
+                    // Artwork with Hero animation tag
+                    Hero(
+                      tag: mediaItem.id,
+                      child: _buildArtwork(mediaItem),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            mediaItem.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          Text(
+                            mediaItem.artist ?? 'Unknown',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildControls(audioHandler),
+                  ],
+                ),
                 _buildProgressBar(audioHandler),
               ],
             ),
@@ -43,60 +73,46 @@ class MiniPlayer extends StatelessWidget {
     );
   }
 
-  Widget _buildPlayerControls(
-      BuildContext context, MyAudioHandler audioHandler, MediaItem mediaItem) {
-    return ListTile(
-      leading: _buildArtwork(mediaItem),
-      title: Text(mediaItem.title, maxLines: 1),
-      subtitle: Text(mediaItem.artist ?? 'Unknown Artist', maxLines: 1),
-      trailing: StreamBuilder<PlaybackState>(
-        stream: audioHandler.playbackState,
-        builder: (context, playbackStateSnapshot) {
-          final isPlaying = playbackStateSnapshot.data?.playing ?? false;
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                onPressed: () {
-                  if (isPlaying) {
-                    audioHandler.pause();
-                  } else {
-                    audioHandler.play();
-                  }
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.skip_next),
-                onPressed: audioHandler.skipToNext,
-              ),
-            ],
-          );
+  Widget _buildArtwork(MediaItem mediaItem) {
+    return SizedBox(
+      width: 50,
+      height: 50,
+      child: FutureBuilder<Metadata?>(
+        future: MetadataGod.readMetadata(file: mediaItem.id),
+        builder: (context, snapshot) {
+          final artwork = snapshot.data?.picture?.data;
+          if (artwork != null) {
+            return Image.memory(
+              artwork,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+            );
+          }
+          return const Icon(Icons.music_note, color: Colors.grey);
         },
       ),
     );
   }
 
-  Widget _buildArtwork(MediaItem mediaItem) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4.0),
-      child: SizedBox(
-        width: 50,
-        height: 50,
-        child: QueryArtworkWidget(
-          id: int.parse(mediaItem.extras!['id']),
-          type: ArtworkType.AUDIO,
-          artworkFit: BoxFit.cover,
-          nullArtworkWidget: CachedNetworkImage(
-            imageUrl: mediaItem.artUri.toString(),
-            fit: BoxFit.cover,
-            placeholder: (context, url) =>
-                const Center(child: CircularProgressIndicator()),
-            errorWidget: (context, url, error) =>
-                const Icon(Icons.music_note),
-          ),
-        ),
-      ),
+  Widget _buildControls(MyAudioHandler audioHandler) {
+    return StreamBuilder<PlaybackState>(
+      stream: audioHandler.playbackState,
+      builder: (context, playbackStateSnapshot) {
+        final isPlaying = playbackStateSnapshot.data?.playing ?? false;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+              onPressed: isPlaying ? audioHandler.pause : audioHandler.play,
+            ),
+            IconButton(
+              icon: const Icon(Icons.skip_next),
+              onPressed: audioHandler.skipToNext,
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -105,15 +121,13 @@ class MiniPlayer extends StatelessWidget {
       stream: audioHandler.playbackState,
       builder: (context, snapshot) {
         final position = snapshot.data?.updatePosition ?? Duration.zero;
-        final duration =
-            audioHandler.mediaItem.value?.duration ?? Duration.zero;
+        final duration = audioHandler.mediaItem.value?.duration ?? Duration.zero;
         final progress = (duration.inMilliseconds > 0)
             ? position.inMilliseconds / duration.inMilliseconds
             : 0.0;
         return LinearProgressIndicator(
-          value: progress.isNaN || progress.isInfinite ? 0.0 : progress,
-          backgroundColor: Colors.grey.shade700,
-          valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
+          value: progress.clamp(0.0, 1.0),
+          minHeight: 2,
         );
       },
     );

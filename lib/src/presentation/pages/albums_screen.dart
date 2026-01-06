@@ -1,40 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:collection/collection.dart';
 import 'package:metadata_god/metadata_god.dart';
 import '../../data/datasources/app_database.dart';
-
-// 1. New data class to represent an album.
-class Album {
-  final String title;
-  final String? artist;
-  final String artworkTrackPath; // Path to a track for fetching artwork
-
-  Album({required this.title, this.artist, required this.artworkTrackPath});
-}
+import 'detail_screen.dart'; // Will be created next
 
 class AlbumsScreen extends StatelessWidget {
   const AlbumsScreen({super.key});
-
-  // 2. New method to fetch and group tracks into albums.
-  Future<List<Album>> _getAlbums(AppDatabase db) async {
-    final allTracks = await db.select(db.tracks).get();
-    final groupedByAlbum = groupBy(allTracks, (Track track) => track.album ?? 'Unknown Album');
-
-    final albums = groupedByAlbum.entries.map((entry) {
-      final firstTrack = entry.value.first;
-      return Album(
-        title: entry.key,
-        artist: firstTrack.artist,
-        artworkTrackPath: firstTrack.path,
-      );
-    }).toList();
-
-    // Sort albums alphabetically
-    albums.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-
-    return albums;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,8 +15,9 @@ class AlbumsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Albums'),
       ),
-      body: FutureBuilder<List<Album>>(
-        future: _getAlbums(db),
+      body: FutureBuilder<List<AppDatabase.AlbumWithArtwork>>(
+        // Use the new, efficient query from the database class
+        future: db.getAllAlbums(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -58,11 +30,11 @@ class AlbumsScreen extends StatelessWidget {
           }
 
           final albums = snapshot.data!;
-          // 3. Display albums in a GridView.
+
           return GridView.builder(
             padding: const EdgeInsets.all(8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2, // 2 albums per row
+              crossAxisCount: 2,
               childAspectRatio: 0.8,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
@@ -70,24 +42,38 @@ class AlbumsScreen extends StatelessWidget {
             itemCount: albums.length,
             itemBuilder: (context, index) {
               final album = albums[index];
-              return Card(
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _buildArtwork(album),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        album.title,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+              return InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DetailScreen(
+                        type: DetailScreenType.album,
+                        entityId: album.album.id,
+                        title: album.album.name,
                       ),
                     ),
-                  ],
+                  );
+                },
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildArtwork(album),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          album.album.name,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -97,9 +83,14 @@ class AlbumsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildArtwork(Album album) {
+  Widget _buildArtwork(AppDatabase.AlbumWithArtwork album) {
+    // The artworkPath can be null if an album has no tracks
+    if (album.artworkPath == null) {
+      return const Icon(Icons.album, size: 60, color: Colors.grey);
+    }
+
     return FutureBuilder<Metadata?>(
-      future: MetadataGod.readMetadata(file: album.artworkTrackPath),
+      future: MetadataGod.readMetadata(file: album.artworkPath!),
       builder: (context, snapshot) {
         final artwork = snapshot.data?.picture?.data;
         return Container(

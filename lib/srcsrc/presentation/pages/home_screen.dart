@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../data/datasources/app_database.dart';
-import '../widgets/search/search_delegate.dart';
 import 'folder_screen.dart';
 import 'all_tracks_screen.dart';
 import 'albums_screen.dart';
-import 'artists_screen.dart';
+import 'artists_screen.dart'; // Import the new screen
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
     FolderScreen(path: '.'),
     AllTracksScreen(),
     AlbumsScreen(),
-    ArtistsScreen(),
+    ArtistsScreen(), // Add the new screen to the list
   ];
 
   void _onItemTapped(int index) {
@@ -32,33 +29,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<AppDatabase>(context, listen: false);
-
     return Scaffold(
-      // The AppBar is now part of HomeScreen to be consistent across tabs.
-      // Note: The individual screens (FolderScreen, etc.) still have their own AppBars,
-      // which will appear *below* this one. This is a known issue to be addressed
-      // by refactoring the individual screens to remove their AppBars. For now,
-      // this is the simplest way to add a global search button.
-      appBar: AppBar(
-        title: const Text('A Player'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              showSearch(
-                context: context,
-                delegate: MusicSearchDelegate(db),
-              );
-            },
-          ),
-        ],
-      ),
       body: IndexedStack(
         index: _selectedIndex,
         children: _widgetOptions,
       ),
       bottomNavigationBar: BottomNavigationBar(
+        // To prevent the layout from changing when a new item is selected
         type: BottomNavigationBarType.fixed,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -74,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Albums',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
+            icon: Icon(Icons.person), // Add the new tab item
             label: 'Artists',
           ),
         ],
