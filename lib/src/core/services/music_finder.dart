@@ -1,57 +1,55 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:drift/drift.dart' as drift;
 import '../../data/datasources/app_database.dart';
+import 'package:flutter/foundation.dart'; // Required for debugPrint
 
 class MusicFinder {
   final AppDatabase _db;
 
   MusicFinder(this._db);
 
-  /// Scans a selected folder and updates the DB
+  /// Lets the user pick a folder, then scans it for music files.
   Future<void> pickFolderAndScan() async {
-    // Request storage permissions if not already granted (redundant if PermissionGate works, but safe)
-    var status = await Permission.storage.status;
-    if (!status.isGranted) {
-      status = await Permission.storage.request();
-      if (!status.isGranted) {
-        // Handle audio permission for Android 13+
-        var audioStatus = await Permission.audio.status;
-        if (!audioStatus.isGranted) {
-          await Permission.audio.request();
+    try {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+      if (selectedDirectory != null) {
+        final dir = Directory(selectedDirectory);
+        if (await dir.exists()) {
+          // Self-Correction: No need for a separate `_scanDirectory` method.
+          // The logic is now fully asynchronous here.
+          await _scanDirectoryAndProcess(dir);
         }
       }
-    }
-
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-
-    if (selectedDirectory != null) {
-      final dir = Directory(selectedDirectory);
-      if (await dir.exists()) {
-        await _scanDirectory(dir);
-      }
+    } catch (e) {
+      // Catch errors related to the file picker itself (e.g., platform exceptions)
+      debugPrint("Error picking folder: $e");
     }
   }
 
-  Future<void> _scanDirectory(Directory dir) async {
+  /// Scans the directory asynchronously and processes files.
+  Future<void> _scanDirectoryAndProcess(Directory dir) async {
     try {
-      final List<FileSystemEntity> entities = dir.listSync(recursive: true);
-
-      for (var entity in entities) {
+      // Self-Correction: Replaced blocking listSync with asynchronous list().
+      // This is critical for keeping the UI responsive during scans.
+      final stream = dir.list(recursive: true);
+      await for (var entity in stream) {
         if (entity is File && _isAudioFile(entity.path)) {
+          // Process each file without blocking the main loop.
           await _processFile(entity);
         }
       }
     } catch (e) {
-      print("Error scanning directory: $e");
+      debugPrint("Error scanning directory: $e");
     }
   }
 
   bool _isAudioFile(String path) {
     final ext = path.split('.').last.toLowerCase();
-    return ['mp3', 'flac', 'm4a', 'wav', 'ogg'].contains(ext);
+    // A more comprehensive list of common audio formats.
+    return ['mp3', 'flac', 'm4a', 'wav', 'ogg', 'aac', 'wma', 'ape', 'opus'].contains(ext);
   }
 
   Future<void> _processFile(File file) async {
@@ -59,24 +57,25 @@ class MusicFinder {
     try {
       metadata = await MetadataGod.readMetadata(file: file.path);
     } catch (e) {
-      print("Error reading metadata for ${file.path}: $e");
+      debugPrint("Error reading metadata for ${file.path}: $e");
+      // Don't stop processing, just skip this file.
+      return;
     }
 
     final trackCompanion = TracksCompanion(
       path: drift.Value(file.path),
-      title: drift.Value(metadata?.title ?? file.path.split('/').last),
-      artist: drift.Value(metadata?.artist ?? 'Unknown Artist'),
-      album: drift.Value(metadata?.album ?? 'Unknown Album'),
-      duration: drift.Value(metadata?.durationMs?.toInt() ?? 0),
+      title: drift.Value(metadata.title ?? file.path.split('/').last),
+      artist: drift.Value(metadata.artist),
+      album: drift.Value(metadata.album),
+      duration: drift.Value(metadata.durationMs?.toInt() ?? 0),
       folderPath: drift.Value(file.parent.path),
-      artworkUri: drift.Value(null), // Avoid artwork crashes for now
     );
 
     try {
+      // Use insertOnConflictUpdate to add new tracks or update existing ones.
       await _db.into(_db.tracks).insertOnConflictUpdate(trackCompanion);
-      print("Added to DB: ${file.path}");
     } catch (e) {
-      print("DB Insert Error: $e");
+      debugPrint("DB Insert/Update Error for ${file.path}: $e");
     }
   }
 }
