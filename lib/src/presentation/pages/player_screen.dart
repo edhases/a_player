@@ -1,17 +1,69 @@
-import 'package:audio_service/audio_service.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:metadata_god/metadata_god.dart';
-import 'package:oxide_player/src/core/services/audio_handler.dart';
+import '../../core/services/audio_handler.dart';
 
-class PlayerScreen extends StatelessWidget {
-  final String heroTag;
-  const PlayerScreen({super.key, required this.heroTag});
+class PlayerScreen extends StatefulWidget {
+  const PlayerScreen({super.key});
+
+  @override
+  State<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends State<PlayerScreen> {
+  final MyAudioHandler _audioHandler = GetIt.I<MyAudioHandler>();
+  late final PlayerController _waveformController;
+  StreamSubscription<MediaItem?>? _mediaItemSubscription;
+  StreamSubscription<PlaybackState>? _playbackStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveformController = PlayerController();
+    _subscribeToPlayer();
+  }
+
+  @override
+  void dispose() {
+    _mediaItemSubscription?.cancel();
+    _playbackStateSubscription?.cancel();
+    _waveformController.dispose();
+    super.dispose();
+  }
+
+  void _subscribeToPlayer() {
+    _mediaItemSubscription = _audioHandler.mediaItem.listen((mediaItem) {
+      if (mediaItem != null) {
+        _prepareWaveform(mediaItem);
+      }
+    });
+
+    _playbackStateSubscription = _audioHandler.playbackState.listen((playbackState) {
+      if (playbackState.playing) {
+        _waveformController.startPlayer(finishMode: FinishMode.pause);
+      } else {
+        _waveformController.pausePlayer();
+      }
+    });
+  }
+
+  Future<void> _prepareWaveform(MediaItem mediaItem) async {
+    await _waveformController.preparePlayer(
+      path: mediaItem.id,
+      shouldExtractWaveform: true,
+      noOfSamples: 100, // Number of bars
+      volume: 1.0,
+    );
+    // Sync waveform to current player position
+    final currentPosition = _audioHandler.playbackState.value.updatePosition;
+    _waveformController.seekTo(currentPosition.inMilliseconds);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final audioHandler = GetIt.I<MyAudioHandler>();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Now Playing'),
@@ -25,8 +77,7 @@ class PlayerScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.black.withOpacity(0.8),
-              Colors.black.withOpacity(0.9),
+              Theme.of(context).colorScheme.primary.withOpacity(0.5),
               Colors.black,
             ],
           ),
@@ -35,37 +86,20 @@ class PlayerScreen extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(20.0),
             child: StreamBuilder<MediaItem?>(
-              stream: audioHandler.mediaItem,
+              stream: _audioHandler.mediaItem,
               builder: (context, snapshot) {
                 final mediaItem = snapshot.data;
-                if (mediaItem == null) {
-                  return const Center(child: Text('Not Playing'));
-                }
+                if (mediaItem == null) return const SizedBox.shrink();
+
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Spacer(),
-                    Hero(
-                      tag: heroTag,
-                      child: _buildArtwork(mediaItem),
-                    ),
+                    _buildArtwork(mediaItem),
                     const Spacer(),
-                    Text(
-                      mediaItem.title,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      mediaItem.artist ?? 'Unknown Artist',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
-                      textAlign: TextAlign.center,
-                    ),
+                    _buildTrackInfo(context, mediaItem),
                     const SizedBox(height: 20),
-                    _buildProgressBar(audioHandler),
-                    _buildControls(context, audioHandler),
+                    _buildWaveformSeekbar(),
+                    _buildControls(context),
                     const SizedBox(height: 20),
                   ],
                 );
@@ -78,67 +112,101 @@ class PlayerScreen extends StatelessWidget {
   }
 
   Widget _buildArtwork(MediaItem mediaItem) {
-    return AspectRatio(
-      aspectRatio: 1,
-      child: FutureBuilder<Metadata?>(
-        future: MetadataGod.readMetadata(file: mediaItem.id),
-        builder: (context, snapshot) {
-          final artwork = snapshot.data?.picture?.data;
-          return Material(
-            elevation: 8,
-            borderRadius: BorderRadius.circular(12.0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12.0),
-              child: artwork != null
-                  ? Image.memory(
-                      artwork,
-                      gaplessPlayback: true,
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.2),
-                      ),
-                      child: const Icon(Icons.music_note, size: 100),
-                    ),
-            ),
-          );
-        },
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity! > 100) {
+          _audioHandler.skipToPrevious();
+        } else if (details.primaryVelocity! < -100) {
+          _audioHandler.skipToNext();
+        }
+      },
+      child: Hero(
+        tag: 'player_art_${mediaItem.id}',
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: FutureBuilder<Metadata?>(
+            future: MetadataGod.readMetadata(file: mediaItem.id),
+            builder: (context, snapshot) {
+              final artwork = snapshot.data?.picture?.data;
+              return Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(12.0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12.0),
+                  child: artwork != null
+                      ? Image.memory(artwork, fit: BoxFit.cover, gaplessPlayback: true)
+                      : Container(
+                          color: Colors.grey.withOpacity(0.2),
+                          child: const Icon(Icons.music_note, size: 100),
+                        ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildProgressBar(MyAudioHandler audioHandler) {
-    return StreamBuilder<PlaybackState>(
-      stream: audioHandler.playbackState,
-      builder: (context, snapshot) {
-        final position = snapshot.data?.updatePosition ?? Duration.zero;
-        final duration = audioHandler.mediaItem.value?.duration ?? Duration.zero;
-        return Column(
-          children: [
-            Slider(
-              value: position.inSeconds.toDouble().clamp(0.0, duration.inSeconds.toDouble()),
-              max: duration.inSeconds.toDouble(),
-              onChanged: (value) {
-                audioHandler.seek(Duration(seconds: value.toInt()));
-              },
-            ),
-            Row(
+  Widget _buildTrackInfo(BuildContext context, MediaItem mediaItem) {
+    return Column(
+      children: [
+        Text(
+          mediaItem.title,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          mediaItem.artist ?? 'Unknown Artist',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWaveformSeekbar() {
+    return Column(
+      children: [
+        AudioFileWaveforms(
+          size: Size(MediaQuery.of(context).size.width, 100.0),
+          playerController: _waveformController,
+          enableSeekGesture: true,
+          waveformType: WaveformType.long,
+          playerWaveStyle: const PlayerWaveStyle(
+            fixedWaveColor: Colors.white30,
+            liveWaveColor: Colors.white,
+            spacing: 6.0,
+          ),
+          onSeekChange: (duration) {
+            _audioHandler.seek(duration);
+          },
+        ),
+        const SizedBox(height: 16),
+        StreamBuilder<Duration>(
+          stream: _audioHandler.player.positionStream,
+          builder: (context, snapshot) {
+            final position = snapshot.data ?? Duration.zero;
+            final duration = _audioHandler.mediaItem.value?.duration ?? Duration.zero;
+            return Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(_formatDuration(position), style: const TextStyle(color: Colors.white70)),
                 Text(_formatDuration(duration), style: const TextStyle(color: Colors.white70)),
               ],
-            ),
-          ],
-        );
-      },
+            );
+          },
+        ),
+      ],
     );
   }
 
-  Widget _buildControls(BuildContext context, MyAudioHandler audioHandler) {
+  Widget _buildControls(BuildContext context) {
     return StreamBuilder<PlaybackState>(
-      stream: audioHandler.playbackState,
+      stream: _audioHandler.playbackState,
       builder: (context, snapshot) {
         final playbackState = snapshot.data;
         final isPlaying = playbackState?.playing ?? false;
@@ -149,7 +217,7 @@ class PlayerScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-              icon: const Icon(Icons.shuffle),
+              icon: const Icon(Icons.shuffle, color: Colors.white),
               color: shuffleMode == AudioServiceShuffleMode.all
                   ? Theme.of(context).colorScheme.secondary
                   : Colors.white,
@@ -157,23 +225,23 @@ class PlayerScreen extends StatelessWidget {
                 final nextMode = shuffleMode == AudioServiceShuffleMode.all
                     ? AudioServiceShuffleMode.none
                     : AudioServiceShuffleMode.all;
-                audioHandler.setShuffleMode(nextMode);
+                _audioHandler.setShuffleMode(nextMode);
               },
             ),
             IconButton(
               icon: const Icon(Icons.skip_previous, color: Colors.white),
               iconSize: 48,
-              onPressed: audioHandler.skipToPrevious,
+              onPressed: _audioHandler.skipToPrevious,
             ),
             IconButton(
               icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.white),
               iconSize: 64,
-              onPressed: isPlaying ? audioHandler.pause : audioHandler.play,
+              onPressed: isPlaying ? _audioHandler.pause : _audioHandler.play,
             ),
             IconButton(
               icon: const Icon(Icons.skip_next, color: Colors.white),
               iconSize: 48,
-              onPressed: audioHandler.skipToNext,
+              onPressed: _audioHandler.skipToNext,
             ),
             IconButton(
               icon: _getRepeatIcon(repeatMode),
@@ -189,7 +257,7 @@ class PlayerScreen extends StatelessWidget {
                 } else {
                   nextMode = AudioServiceRepeatMode.none;
                 }
-                audioHandler.setRepeatMode(nextMode);
+                _audioHandler.setRepeatMode(nextMode);
               },
             ),
           ],
