@@ -15,7 +15,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   google_fonts: ^6.1.0
   cached_network_image: ^3.4.1
-  audio_waveforms: ^1.0.5
+  audio_waveforms: ^1.0.5 # For Waveform Seekbar
 
   # Audio Core
   just_audio: ^0.10.5

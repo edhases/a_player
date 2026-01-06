@@ -7,7 +7,8 @@ import 'package:metadata_god/metadata_god.dart';
 import '../../core/services/audio_handler.dart';
 
 class PlayerScreen extends StatefulWidget {
-  const PlayerScreen({super.key});
+  final String heroTag;
+  const PlayerScreen({super.key, required this.heroTag});
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -42,24 +43,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
 
     _playbackStateSubscription = _audioHandler.playbackState.listen((playbackState) {
-      if (playbackState.playing) {
+      if (!mounted) return;
+      final isPlaying = playbackState.playing;
+      final processingState = playbackState.processingState;
+
+      if (isPlaying) {
         _waveformController.startPlayer(finishMode: FinishMode.pause);
-      } else {
+      } else if (processingState != AudioProcessingState.completed) {
         _waveformController.pausePlayer();
       }
     });
   }
 
   Future<void> _prepareWaveform(MediaItem mediaItem) async {
-    await _waveformController.preparePlayer(
-      path: mediaItem.id,
-      shouldExtractWaveform: true,
-      noOfSamples: 100, // Number of bars
-      volume: 1.0,
-    );
-    // Sync waveform to current player position
-    final currentPosition = _audioHandler.playbackState.value.updatePosition;
-    _waveformController.seekTo(currentPosition.inMilliseconds);
+    // This can throw an exception if the file is not found, which is ok.
+    try {
+      await _waveformController.preparePlayer(
+        path: mediaItem.id,
+        shouldExtractWaveform: true,
+        noOfSamples: 100,
+        volume: 1.0,
+      );
+      final currentPosition = _audioHandler.playbackState.value.updatePosition;
+      _waveformController.seekTo(currentPosition.inMilliseconds);
+    } catch (e) {
+      debugPrint("Error preparing waveform: $e");
+    }
   }
 
   @override
@@ -121,7 +130,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         }
       },
       child: Hero(
-        tag: 'player_art_${mediaItem.id}',
+        tag: widget.heroTag,
         child: AspectRatio(
           aspectRatio: 1,
           child: FutureBuilder<Metadata?>(
