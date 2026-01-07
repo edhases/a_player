@@ -176,7 +176,8 @@ class InnerTubeService {
     final results = <YouTubeSong>[];
 
     try {
-      final contents = data['contents']
+      // Try path 1: Tabbed results (standard for search)
+      var contents = data['contents']
           ?['tabbedSearchResultsRenderer']
           ?['tabs']?[0]
           ?['tabRenderer']
@@ -184,7 +185,26 @@ class InnerTubeService {
           ?['sectionListRenderer']
           ?['contents'];
 
-      if (contents == null || contents is! List) return [];
+      // Try path 2: Direct section list
+      if (contents == null) {
+        contents = data['contents']?['sectionListRenderer']?['contents'];
+      }
+
+      // Try path 3: Single column results
+      if (contents == null) {
+         contents = data['contents']
+            ?['singleColumnSearchResultsRenderer']
+            ?['tabs']?[0]
+            ?['tabRenderer']
+            ?['content']
+            ?['sectionListRenderer']
+            ?['contents'];
+      }
+
+      if (contents == null || contents is! List) {
+        print('InnerTube Parser: No content found in response structure.');
+        return [];
+      }
 
       for (final section in contents) {
         final musicShelf = section['musicShelfRenderer'];
@@ -195,6 +215,7 @@ class InnerTubeService {
               final mrlir = item['musicResponsiveListItemRenderer'];
               if (mrlir != null) {
                 try {
+                  // ... (parsing logic remains similar)
                   // Title
                   final title = mrlir['flexColumns'][0]['musicResponsiveListItemFlexColumnRenderer']
                       ['text']['runs'][0]['text'] as String;
@@ -258,6 +279,8 @@ class InnerTubeService {
     } catch (e) {
       print('Parsing Error: $e');
     }
+    
+    print('InnerTube Parser: Found ${results.length} items.');
     return results;
   }
 }

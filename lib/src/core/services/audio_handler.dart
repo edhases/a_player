@@ -199,8 +199,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   AudioSource _createAudioSource(MediaItem item) {
-    if (item.id.startsWith('content://') || item.id.startsWith('http')) {
+    if (item.id.startsWith('content://')) {
       return AudioSource.uri(Uri.parse(item.id), tag: item);
+    }
+    if (item.id.startsWith('http')) {
+      final headers = <String, String>{};
+      if (item.id.contains('googlevideo.com')) {
+         // Emulate Android client to match the URL's 'c=ANDROID' parameter (avoid 403)
+         headers['User-Agent'] = 'com.google.android.apps.youtube.music/6.33.51 (Linux; U; Android 11; US) gzip';
+      }
+      return AudioSource.uri(Uri.parse(item.id), tag: item, headers: headers.isEmpty ? null : headers);
     }
     return AudioSource.uri(Uri.file(item.id), tag: item);
   }
