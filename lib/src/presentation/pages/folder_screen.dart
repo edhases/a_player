@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:path/path.dart' as p;
-import 'package:metadata_god/metadata_god.dart';
 
 import '../../data/datasources/app_database.dart';
 import '../../domain/services/hierarchy_service.dart';
 import '../../core/services/audio_handler.dart';
+import '../widgets/common_artwork.dart';
 
 /// Folder browser screen with track artwork thumbnails.
 class FolderScreen extends StatelessWidget {
@@ -103,6 +103,7 @@ class FolderScreen extends StatelessWidget {
       title: track.title,
       artist: track.artist,
       duration: Duration(milliseconds: track.duration),
+      extras: track.mediaStoreId != null ? {'mediaStoreId': track.mediaStoreId} : null,
     )).toList();
 
     final startIndex = tracks.indexOf(startTrack);
@@ -166,12 +167,13 @@ class _TrackListTile extends StatelessWidget {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: SizedBox(
-          width: 50,
-          height: 50,
-          child: _TrackArtwork(trackPath: track.path),
+      leading: SizedBox(
+        width: 50,
+        height: 50,
+        child: CommonArtwork(
+          mediaStoreId: track.mediaStoreId,
+          path: track.path,
+          size: 50,
         ),
       ),
       title: Text(
@@ -207,38 +209,5 @@ class _TrackListTile extends StatelessWidget {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
-  }
-}
-
-class _TrackArtwork extends StatelessWidget {
-  final String trackPath;
-
-  const _TrackArtwork({required this.trackPath});
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Metadata?>(
-      future: MetadataGod.readMetadata(file: trackPath),
-      builder: (context, snapshot) {
-        final artwork = snapshot.data?.picture?.data;
-        
-        if (artwork != null) {
-          return Image.memory(
-            artwork,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-          );
-        }
-        
-        return Container(
-          color: Colors.grey[850],
-          child: Icon(
-            Icons.music_note,
-            color: Colors.grey[600],
-            size: 24,
-          ),
-        );
-      },
-    );
   }
 }

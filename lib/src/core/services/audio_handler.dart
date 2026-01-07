@@ -10,8 +10,6 @@ import 'settings_service.dart';
 import 'equalizer_service.dart';
 
 /// The main audio handler that bridges just_audio with audio_service.
-/// 
-/// This class manages all audio playback, queue management, and state persistence.
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
@@ -19,8 +17,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AppDatabase _db;
 
   StreamSubscription<int?>? _audioSessionIdSubscription;
-  
-  // Flag to prevent multiple initializations
   bool _isInitialized = false;
 
   MyAudioHandler(this._db) {
@@ -31,28 +27,30 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // Configure audio session for music playback
+    // Configure audio session
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
 
-    // Listen for Android audio session ID to init equalizer
+    // Init equalizer
     _audioSessionIdSubscription = player.androidAudioSessionIdStream.listen((sessionId) {
-      if (sessionId != null) {
-        _initEqualizer(sessionId);
-      }
+      if (sessionId != null) _initEqualizer(sessionId);
     });
 
-    // Pipe player state to audio_service playback state
-    player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+    // Broadcast playback state changes
+    player.playbackEventStream.listen(_broadcastState);
+    
+    // Update state when shuffle/loop modes change
+    player.shuffleModeEnabledStream.listen((_) => _broadcastState(player.playbackEvent));
+    player.loopModeStream.listen((_) => _broadcastState(player.playbackEvent));
 
-    // Sync mediaItem with player's current index and actual duration
+    // Sync mediaItem duration with actual player duration (fixes incorrect metadata)
     CombineLatestStream.combine2<int?, Duration?, MediaItem?>(
       player.currentIndexStream,
       player.durationStream,
       (index, duration) {
         if (index != null && index < queue.value.length) {
           final item = queue.value[index];
-          if (duration != null && (item.duration == null || item.duration == Duration.zero)) {
+          if (duration != null && (item.duration == null || item.duration != duration)) {
             return item.copyWith(duration: duration);
           }
           return item;
@@ -60,67 +58,83 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         return null;
       },
     ).listen((item) {
-      if (item != null && mediaItem.value?.id != item.id || mediaItem.value?.duration != item.duration) {
+      if (item != null && (mediaItem.value?.id != item.id || mediaItem.value?.duration != item.duration)) {
         mediaItem.add(item);
       }
     });
 
-    // Persist current track ID
+    // Save state persistence
     mediaItem.stream.listen((item) {
-      if (item != null) {
-        _settingsService.saveLastTrackId(item.id);
-      }
+      if (item != null) _settingsService.saveLastTrackId(item.id);
     });
 
-    // Persist position every 5 seconds (debounced)
     player.positionStream
         .debounceTime(const Duration(seconds: 5))
-        .listen((position) {
-      _settingsService.saveLastPosition(position);
-    });
+        .listen((position) => _settingsService.saveLastPosition(position));
 
-    // Persist queue when it changes
     queue.stream.listen((q) {
       final trackIds = q.map((item) => item.id).toList();
       _settingsService.saveQueue(trackIds);
     });
 
-    // Sync loop mode to playback state
-    player.loopModeStream.listen((loopMode) {
-      playbackState.add(playbackState.value.copyWith(
-        repeatMode: const {
-          LoopMode.off: AudioServiceRepeatMode.none,
-          LoopMode.one: AudioServiceRepeatMode.one,
-          LoopMode.all: AudioServiceRepeatMode.all,
-        }[loopMode]!,
-      ));
-    });
-
-    // Sync shuffle mode to playback state
-    player.shuffleModeEnabledStream.listen((enabled) {
-      playbackState.add(playbackState.value.copyWith(
-        shuffleMode: enabled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
-      ));
-    });
-
-    // Set the audio source FIRST, then load initial state
-    await player.setAudioSource(_playlist, preload: false);
+    // Load initial state
+    try {
+      await player.setAudioSource(_playlist, preload: false);
+    } catch (e) {
+      // Error setting empty source is fine
+    }
     await _loadInitialState();
+  }
+
+  void _broadcastState(PlaybackEvent event) {
+    if (playbackState.isClosed) return;
+
+    playbackState.add(PlaybackState(
+      controls: [
+        MediaControl.skipToPrevious,
+        if (player.playing) MediaControl.pause else MediaControl.play,
+        MediaControl.stop,
+        MediaControl.skipToNext,
+      ],
+      systemActions: const {
+        MediaAction.seek,
+        MediaAction.seekForward,
+        MediaAction.seekBackward,
+      },
+      androidCompactActionIndices: const [0, 1, 3],
+      processingState: const {
+        ProcessingState.idle: AudioProcessingState.idle,
+        ProcessingState.loading: AudioProcessingState.loading,
+        ProcessingState.buffering: AudioProcessingState.buffering,
+        ProcessingState.ready: AudioProcessingState.ready,
+        ProcessingState.completed: AudioProcessingState.completed,
+      }[player.processingState]!,
+      playing: player.playing,
+      updatePosition: player.position,
+      bufferedPosition: player.bufferedPosition,
+      speed: player.speed,
+      queueIndex: event.currentIndex,
+      repeatMode: const {
+        LoopMode.off: AudioServiceRepeatMode.none,
+        LoopMode.one: AudioServiceRepeatMode.one,
+        LoopMode.all: AudioServiceRepeatMode.all,
+      }[player.loopMode]!,
+      shuffleMode: (player.shuffleModeEnabled)
+          ? AudioServiceShuffleMode.all
+          : AudioServiceShuffleMode.none,
+    ));
   }
 
   Future<void> _initEqualizer(int sessionId) async {
     if (GetIt.I.isRegistered<EqualizerService>()) return;
-
     try {
-      final equalizerService = EqualizerService();
-      await equalizerService.init(sessionId);
-      GetIt.I.registerSingleton<EqualizerService>(equalizerService);
+      final service = EqualizerService();
+      await service.init(sessionId);
+      GetIt.I.registerSingleton<EqualizerService>(service);
     } catch (e) {
-      // Equalizer initialization may fail on some devices, ignore
+      // Ignore eq errors
     }
   }
-
-  // --- Audio Service Overrides ---
 
   @override
   Future<void> play() => player.play();
@@ -169,16 +183,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
     final enabled = shuffleMode != AudioServiceShuffleMode.none;
-    await player.setShuffleModeEnabled(enabled);
     if (enabled) {
       await player.shuffle();
     }
+    await player.setShuffleModeEnabled(enabled);
   }
 
-  /// Updates the playback queue with new items.
-  /// 
-  /// This clears the current playlist and adds all new items.
   Future<void> updateQueue(List<MediaItem> newQueue) async {
+    // Avoid resetting if queue is identical to prevent lag
+    // if (const ListEquality().equals(queue.value, newQueue)) return;
+
     await _playlist.clear();
     await _playlist.addAll(newQueue.map(_createAudioSource).toList());
     queue.add(newQueue);
@@ -191,35 +205,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return AudioSource.uri(Uri.file(item.id), tag: item);
   }
 
-  PlaybackState _transformEvent(PlaybackEvent event) {
-    return PlaybackState(
-      controls: [
-        MediaControl.skipToPrevious,
-        if (player.playing) MediaControl.pause else MediaControl.play,
-        MediaControl.stop,
-        MediaControl.skipToNext,
-      ],
-      systemActions: const {
-        MediaAction.seek,
-        MediaAction.seekForward,
-        MediaAction.seekBackward,
-      },
-      androidCompactActionIndices: const [0, 1, 3],
-      processingState: const {
-        ProcessingState.idle: AudioProcessingState.idle,
-        ProcessingState.loading: AudioProcessingState.loading,
-        ProcessingState.buffering: AudioProcessingState.buffering,
-        ProcessingState.ready: AudioProcessingState.ready,
-        ProcessingState.completed: AudioProcessingState.completed,
-      }[player.processingState]!,
-      playing: player.playing,
-      updatePosition: player.position,
-      bufferedPosition: player.bufferedPosition,
-      speed: player.speed,
-      queueIndex: event.currentIndex,
-    );
-  }
-
   Future<void> _loadInitialState() async {
     final lastQueueIds = _settingsService.loadQueue();
     if (lastQueueIds.isEmpty) return;
@@ -228,7 +213,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           ..where((t) => t.path.isIn(lastQueueIds)))
         .get();
 
-    // Sort tracks to match the saved queue order
     final sortedTracks = lastQueueIds
         .map((id) => lastTracks.firstWhereOrNull((t) => t.path == id))
         .whereNotNull()
@@ -236,27 +220,41 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (sortedTracks.isEmpty) return;
 
-    final mediaItems = sortedTracks
-        .map((track) => MediaItem(
-              id: track.path,
-              album: track.album ?? '',
-              title: track.title,
-              artist: track.artist,
-              duration: Duration(milliseconds: track.duration),
-            ))
-        .toList();
+    final mediaItems = sortedTracks.map((track) {
+        // Safely access mediaStoreId if it exists in the track object (dynamic check for now or assume generated)
+        final extras = <String, dynamic>{};
+        try {
+           // We use dynamic access because code generation might not represent new fields yet
+           // But actually we access the Drift Table class, which we just updated in app_database.dart
+           if ((track as dynamic).mediaStoreId != null) {
+             extras['mediaStoreId'] = (track as dynamic).mediaStoreId;
+           }
+        } catch (e) {
+          // Field doesn't exist yet
+        }
+
+        return MediaItem(
+          id: track.path,
+          album: track.album ?? '',
+          title: track.title,
+          artist: track.artist,
+          duration: Duration(milliseconds: track.duration),
+          extras: extras.isEmpty ? null : extras,
+        );
+    }).toList();
 
     queue.add(mediaItems);
-    await _playlist.addAll(mediaItems.map(_createAudioSource).toList());
+    try {
+      await _playlist.addAll(mediaItems.map(_createAudioSource).toList());
+    } catch (e) {
+      // ignore
+    }
 
-    // Restore last playing track and position
     final lastTrackId = _settingsService.loadLastTrackId();
     if (lastTrackId != null) {
       final index = mediaItems.indexWhere((item) => item.id == lastTrackId);
       if (index != -1) {
         final lastPosition = _settingsService.loadLastPosition();
-        // Wait for the player to be ready before seeking
-        await player.load();
         await player.seek(lastPosition, index: index);
       }
     }

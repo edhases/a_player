@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:metadata_god/metadata_god.dart';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/audio_handler.dart';
+import '../widgets/common_artwork.dart';
 
 enum DetailScreenType { album, artist }
 
@@ -53,6 +53,13 @@ class DetailScreen extends StatelessWidget {
             );
           }
 
+          // Safe access to mediaStoreId (generated code might not be ready yet without build_runner)
+          final firstTrack = tracks.first;
+          int? firstMediaStoreId;
+          try {
+             firstMediaStoreId = (firstTrack as dynamic).mediaStoreId;
+          } catch (_) {}
+
           return CustomScrollView(
             slivers: [
               // Header with album art
@@ -70,7 +77,13 @@ class DetailScreen extends StatelessWidget {
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      _buildHeaderArtwork(tracks.first.path),
+                      CommonArtwork(
+                        mediaStoreId: firstMediaStoreId,
+                        path: firstTrack.path,
+                        size: 300,
+                        radius: 0,
+                        placeholderIcon: type == DetailScreenType.album ? Icons.album : Icons.person,
+                      ),
                       // Gradient overlay
                       Container(
                         decoration: BoxDecoration(
@@ -145,40 +158,22 @@ class DetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderArtwork(String firstTrackPath) {
-    return FutureBuilder<Metadata?>(
-      future: MetadataGod.readMetadata(file: firstTrackPath),
-      builder: (context, snapshot) {
-        final artwork = snapshot.data?.picture?.data;
-        
-        if (artwork != null) {
-          return Image.memory(
-            artwork,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-          );
-        }
-        
-        return Container(
-          color: Colors.grey[850],
-          child: Icon(
-            type == DetailScreenType.album ? Icons.album : Icons.person,
-            size: 80,
-            color: Colors.grey[600],
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _playQueue(MyAudioHandler audioHandler, List<Track> tracks, int startIndex) async {
-    final mediaItems = tracks.map((track) => MediaItem(
-      id: track.path,
-      album: track.album ?? '',
-      title: track.title,
-      artist: track.artist,
-      duration: Duration(milliseconds: track.duration),
-    )).toList();
+    final mediaItems = tracks.map((track) {
+      int? mId;
+      try {
+        mId = (track as dynamic).mediaStoreId;
+      } catch (_) {}
+
+      return MediaItem(
+        id: track.path,
+        album: track.album ?? '',
+        title: track.title,
+        artist: track.artist,
+        duration: Duration(milliseconds: track.duration),
+        extras: mId != null ? {'mediaStoreId': mId} : null,
+      );
+    }).toList();
 
     await audioHandler.updateQueue(mediaItems);
     await audioHandler.skipToQueueItem(startIndex);

@@ -19,6 +19,7 @@ class Tracks extends Table {
   TextColumn get folderPath => text()();
   TextColumn get artworkUri => text().nullable()();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+  IntColumn get mediaStoreId => integer().nullable()();
 
   @override
   Set<Column> get primaryKey => {path};
@@ -30,8 +31,14 @@ class AlbumWithArtwork {
   final String title;
   final String? artist;
   final String? artworkPath;
+  final int? mediaStoreId;
 
-  AlbumWithArtwork({required this.title, this.artist, this.artworkPath});
+  AlbumWithArtwork({
+    required this.title,
+    this.artist,
+    this.artworkPath,
+    this.mediaStoreId,
+  });
 }
 
 class Artist {
@@ -47,7 +54,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -59,6 +66,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 3) {
         await m.addColumn(tracks, tracks.isFavorite);
+      }
+      if (from < 4) {
+        await m.addColumn(tracks, tracks.mediaStoreId);
       }
     },
   );
@@ -75,6 +85,7 @@ class AppDatabase extends _$AppDatabase {
         title: entry.key,
         artist: firstTrack.artist,
         artworkPath: firstTrack.path, // Use the path of a track for artwork
+        mediaStoreId: firstTrack.mediaStoreId,
       );
     }).toList()
       ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));

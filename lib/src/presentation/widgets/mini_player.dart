@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:metadata_god/metadata_god.dart';
 import '../pages/player_screen.dart';
 import '../../core/services/audio_handler.dart';
+import 'common_artwork.dart';
 
 /// Mini player widget displayed at the bottom of the app.
 /// Poweramp-inspired design with smooth animations.
@@ -87,12 +87,14 @@ class MiniPlayer extends StatelessWidget {
                       // Album art
                       Hero(
                         tag: heroTag,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: SizedBox(
-                            width: 48,
-                            height: 48,
-                            child: _buildArtwork(mediaItem),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CommonArtwork(
+                            mediaStoreId: mediaItem.extras?['mediaStoreId'] as int?,
+                            path: mediaItem.id,
+                            size: 48,
+                            radius: 6,
                           ),
                         ),
                       ),
@@ -133,28 +135,6 @@ class MiniPlayer extends StatelessWidget {
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildArtwork(MediaItem mediaItem) {
-    return FutureBuilder<Metadata?>(
-      future: MetadataGod.readMetadata(file: mediaItem.id),
-      builder: (context, snapshot) {
-        final artwork = snapshot.data?.picture?.data;
-        
-        if (artwork != null) {
-          return Image.memory(
-            artwork,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-          );
-        }
-        
-        return Container(
-          color: Colors.grey[850],
-          child: Icon(Icons.music_note, color: Colors.grey[600], size: 24),
         );
       },
     );

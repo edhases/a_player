@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:metadata_god/metadata_god.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/audio_handler.dart';
 import '../../data/datasources/app_database.dart';
 import 'equalizer_screen.dart';
+import '../widgets/common_artwork.dart';
+import 'package:metadata_god/metadata_god.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -144,18 +145,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
             borderRadius: BorderRadius.circular(20),
             child: AspectRatio(
               aspectRatio: 1,
-              child: FutureBuilder<Metadata?>(
-                future: MetadataGod.readMetadata(file: mediaItem.id),
-                builder: (context, snapshot) {
-                  final artwork = snapshot.data?.picture?.data;
-                  if (artwork != null) {
-                    return Image.memory(artwork, fit: BoxFit.cover, gaplessPlayback: true);
-                  }
-                  return Container(
-                    color: Colors.grey[900],
-                    child: Icon(Icons.music_note, size: 100, color: Colors.grey[700]),
-                  );
-                },
+              child: CommonArtwork(
+                mediaStoreId: mediaItem.extras?['mediaStoreId'] as int?,
+                path: mediaItem.id,
+                size: 400,
+                radius: 0,
+                placeholderIcon: Icons.music_note,
               ),
             ),
           ),
@@ -343,7 +338,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       final item = currentQueue[index];
                       final isCurrent = _audioHandler.mediaItem.value?.id == item.id;
                       return ListTile(
-                        leading: _buildQueueArtwork(item.id),
+                        leading: _buildQueueArtwork(item),
                         title: Text(item.title, style: TextStyle(color: isCurrent ? Theme.of(context).colorScheme.primary : Colors.white)),
                         subtitle: Text(item.artist ?? '', style: const TextStyle(color: Colors.white70)),
                         onTap: () {
@@ -362,20 +357,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildQueueArtwork(String path) {
+  Widget _buildQueueArtwork(MediaItem item) {
     return SizedBox(
       width: 40,
       height: 40,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: FutureBuilder<Metadata?>(
-          future: MetadataGod.readMetadata(file: path),
-          builder: (context, snapshot) {
-            final artwork = snapshot.data?.picture?.data;
-            if (artwork != null) return Image.memory(artwork, fit: BoxFit.cover);
-            return Container(color: Colors.grey[800], child: const Icon(Icons.music_note, color: Colors.white54, size: 20));
-          },
-        ),
+      child: CommonArtwork(
+        mediaStoreId: item.extras?['mediaStoreId'] as int?,
+        path: item.id,
+        size: 40,
+        radius: 4,
       ),
     );
   }

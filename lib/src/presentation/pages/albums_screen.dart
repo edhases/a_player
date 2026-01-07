@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:metadata_god/metadata_god.dart';
 import '../../data/datasources/app_database.dart';
 import 'detail_screen.dart';
+import '../widgets/common_artwork.dart';
 
 class AlbumsScreen extends StatelessWidget {
   const AlbumsScreen({super.key});
@@ -63,7 +63,13 @@ class AlbumsScreen extends StatelessWidget {
                       Expanded(
                         child: Hero(
                           tag: heroTag,
-                          child: _buildArtwork(album),
+                          child: CommonArtwork(
+                            mediaStoreId: album.mediaStoreId,
+                            path: album.artworkPath,
+                            size: 200,
+                            radius: 0,
+                            placeholderIcon: Icons.album,
+                          ),
                         ),
                       ),
                       Padding(
@@ -83,29 +89,6 @@ class AlbumsScreen extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-
-  Widget _buildArtwork(AlbumWithArtwork album) {
-    if (album.artworkPath == null) {
-      return const Icon(Icons.album, size: 60, color: Colors.grey);
-    }
-
-    return FutureBuilder<Metadata?>(
-      future: MetadataGod.readMetadata(file: album.artworkPath!),
-      builder: (context, snapshot) {
-        final artwork = snapshot.data?.picture?.data;
-        return Container(
-          color: Colors.grey.withValues(alpha: 0.2),
-          child: artwork != null
-              ? Image.memory(
-                  artwork,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                )
-              : const Icon(Icons.album, size: 60, color: Colors.grey),
-        );
-      },
     );
   }
 }

@@ -57,6 +57,7 @@ class MusicFinder {
           album: Value(song.album != '<unknown>' ? song.album : null),
           duration: song.duration ?? 0,
           folderPath: p.dirname(song.data!),
+          mediaStoreId: Value(song.id),
         ));
       }
 
