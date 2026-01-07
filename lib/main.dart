@@ -10,6 +10,8 @@ import 'src/data/datasources/app_database.dart';
 import 'src/core/services/audio_handler.dart';
 import 'src/core/services/music_finder.dart';
 import 'src/core/services/settings_service.dart';
+import 'src/core/services/innertube_service.dart';
+import 'src/core/services/youtube_audio_source.dart';
 import 'src/presentation/pages/home_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
 import 'src/presentation/widgets/mini_player.dart';
@@ -32,6 +34,10 @@ void main() async {
   final settingsService = SettingsService();
   await settingsService.init();
   GetIt.I.registerSingleton<SettingsService>(settingsService);
+
+  // Register YouTube services
+  GetIt.I.registerSingleton<InnerTubeService>(InnerTubeService());
+  GetIt.I.registerSingleton<YouTubeHelper>(YouTubeHelper());
 
   final db = AppDatabase();
   final musicFinder = MusicFinder(db);

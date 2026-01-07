@@ -7,6 +7,7 @@ import 'folder_screen.dart';
 import 'albums_screen.dart';
 import 'artists_screen.dart';
 import 'settings_screen.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,9 +17,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0; // Tracks is now first (index 0)
+  int _selectedIndex = 0;
 
-  // Reordered: Tracks first, then Folders, Albums, Artists, Settings
   final List<Widget> _pages = [
     const AllTracksScreen(),
     FolderScreen(path: '.'),
@@ -36,7 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final db = Provider.of<AppDatabase>(context, listen: false);
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -45,6 +44,13 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
+           IconButton(
+            icon: const Icon(Icons.account_circle),
+            tooltip: 'Login to YouTube Music',
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {

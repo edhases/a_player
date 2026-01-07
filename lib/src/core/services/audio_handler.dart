@@ -199,7 +199,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   AudioSource _createAudioSource(MediaItem item) {
-    if (item.id.startsWith('content://')) {
+    if (item.id.startsWith('content://') || item.id.startsWith('http')) {
       return AudioSource.uri(Uri.parse(item.id), tag: item);
     }
     return AudioSource.uri(Uri.file(item.id), tag: item);
