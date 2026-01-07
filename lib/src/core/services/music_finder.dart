@@ -1,93 +1,100 @@
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:metadata_god/metadata_god.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:drift/drift.dart';
+import 'package:path/path.dart' as p;
 import '../../data/datasources/app_database.dart';
 
-/// A simple, serializable data class to pass data back from the isolate.
-class TrackInfo {
-  final String path;
-  final String title;
-  final String? artist;
-  final String? album;
-  final int duration;
-
-  TrackInfo({
-    required this.path,
-    required this.title,
-    this.artist,
-    this.album,
-    required this.duration,
-  });
-}
-
-/// This is the top-level function that will run in the isolate.
-Future<List<TrackInfo>> _scanInIsolate(String path) async {
-  final List<TrackInfo> trackInfos = [];
-  final dir = Directory(path);
-
-  try {
-    await for (final entity in dir.list(recursive: true)) {
-      if (entity is File && (entity.path.endsWith('.mp3') || entity.path.endsWith('.flac'))) {
-        try {
-          final metadata = await MetadataGod.readMetadata(file: entity.path);
-          trackInfos.add(TrackInfo(
-            path: entity.path,
-            title: metadata.title ?? entity.path.split('/').last,
-            artist: metadata.artist,
-            album: metadata.album,
-            duration: metadata.durationMs?.toInt() ?? 0,
-          ));
-        } catch (e) {
-          // Skip file if metadata read fails
-        }
-      }
-    }
-  } catch (e) {
-    // Handle errors like permission denied
-  }
-
-  return trackInfos;
-}
-
+/// Service for finding and scanning music files.
+/// Uses on_audio_query for fast MediaStore queries.
 class MusicFinder {
   final AppDatabase _db;
+  final OnAudioQuery _audioQuery = OnAudioQuery();
   final ValueNotifier<bool> isScanning = ValueNotifier(false);
+  final ValueNotifier<String> scanStatus = ValueNotifier('');
 
   MusicFinder(this._db);
 
-  Future<void> pickFolderAndScan() async {
+  /// Scans all music from device using Android MediaStore.
+  /// This is MUCH faster than manual file scanning with metadata_god.
+  Future<void> scanAllMusic() async {
     if (isScanning.value) return;
 
     try {
       isScanning.value = true;
-      final String? path = await FilePicker.platform.getDirectoryPath();
+      scanStatus.value = 'Querying music library...';
+      
+      // Query all songs from MediaStore
+      final songs = await _audioQuery.querySongs(
+        sortType: SongSortType.TITLE,
+        orderType: OrderType.ASC_OR_SMALLER,
+        uriType: UriType.EXTERNAL,
+        ignoreCase: true,
+      );
+      
+      debugPrint('[MusicFinder] Found ${songs.length} songs in MediaStore');
+      scanStatus.value = 'Found ${songs.length} songs...';
 
-      if (path != null) {
-        // Run the heavy lifting in an isolate
-        final trackInfos = await compute(_scanInIsolate, path);
-
-        // Perform the database insertion on the main thread
-        if (trackInfos.isNotEmpty) {
-          final trackCompanions = trackInfos.map((info) => TracksCompanion.insert(
-            path: info.path,
-            title: info.title,
-            artist: Value(info.artist),
-            album: Value(info.album),
-            duration: info.duration,
-            folderPath: Value(File(info.path).parent.path),
-          )).toList();
-
-          await _db.batch((batch) {
-            batch.insertAll(_db.tracks, trackCompanions, mode: InsertMode.replace);
-          });
-        }
+      if (songs.isEmpty) {
+        debugPrint('[MusicFinder] No songs found in MediaStore');
+        return;
       }
-    } catch (e) {
-      debugPrint("Error during scanning process: $e");
+
+      final List<TracksCompanion> trackCompanions = [];
+      
+      for (int i = 0; i < songs.length; i++) {
+        final song = songs[i];
+        
+        // Skip if no valid data
+        if (song.data == null || song.data!.isEmpty) continue;
+        
+        scanStatus.value = 'Processing ${i + 1} of ${songs.length}...';
+        
+        trackCompanions.add(TracksCompanion.insert(
+          path: song.data!,
+          title: song.title.isNotEmpty ? song.title : p.basenameWithoutExtension(song.data!),
+          artist: Value(song.artist != '<unknown>' ? song.artist : null),
+          album: Value(song.album != '<unknown>' ? song.album : null),
+          duration: song.duration ?? 0,
+          folderPath: p.dirname(song.data!),
+        ));
+      }
+
+      // Insert into database
+      if (trackCompanions.isNotEmpty) {
+        scanStatus.value = 'Saving ${trackCompanions.length} tracks...';
+        
+        await _db.batch((batch) {
+          batch.insertAll(_db.tracks, trackCompanions, mode: InsertMode.replace);
+        });
+        
+        debugPrint('[MusicFinder] Saved ${trackCompanions.length} tracks to database');
+      }
+      
+    } catch (e, stackTrace) {
+      debugPrint('[MusicFinder] Error: $e');
+      debugPrint('[MusicFinder] Stack: $stackTrace');
     } finally {
       isScanning.value = false;
+      scanStatus.value = '';
     }
+  }
+
+  /// Legacy method for picking a specific folder (slower, uses metadata_god).
+  /// Keep for cases where user wants to scan a specific folder.
+  Future<void> pickFolderAndScan() async {
+    // For now, just use the fast MediaStore scan
+    await scanAllMusic();
+  }
+
+  /// Clears all tracks from the database.
+  Future<void> clearLibrary() async {
+    await _db.delete(_db.tracks).go();
+    debugPrint('[MusicFinder] Library cleared');
+  }
+
+  /// Check and request audio permission.
+  Future<bool> checkPermission() async {
+    return await _audioQuery.checkAndRequest();
   }
 }

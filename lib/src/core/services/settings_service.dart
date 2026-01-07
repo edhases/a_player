@@ -64,4 +64,11 @@ class SettingsService {
   List<String> loadQueue() {
     return _prefs.getStringList(kQueueKey) ?? [];
   }
+
+  // --- Generic Storage ---
+  bool? loadBool(String key) => _prefs.getBool(key);
+  Future<void> saveBool(String key, bool value) => _prefs.setBool(key, value);
+  
+  String? loadString(String key) => _prefs.getString(key);
+  Future<void> saveString(String key, String value) => _prefs.setString(key, value);
 }

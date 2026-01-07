@@ -18,6 +18,7 @@ class Tracks extends Table {
   IntColumn get duration => integer()();
   TextColumn get folderPath => text()();
   TextColumn get artworkUri => text().nullable()();
+  BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {path};
@@ -46,7 +47,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -55,6 +56,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await m.addColumn(tracks, tracks.folderPath);
         await m.addColumn(tracks, tracks.artworkUri);
+      }
+      if (from < 3) {
+        await m.addColumn(tracks, tracks.isFavorite);
       }
     },
   );
@@ -94,6 +98,23 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<Track>> getTracksByArtist(String artistName) {
     return (select(tracks)..where((t) => t.artist.equals(artistName))).get();
+  }
+
+  // Toggle favorite status
+  Future<void> toggleFavorite(String path) async {
+    final track = await (select(tracks)..where((t) => t.path.equals(path))).getSingleOrNull();
+    if (track != null) {
+      await (update(tracks)..where((t) => t.path.equals(path))).write(
+        TracksCompanion(isFavorite: Value(!track.isFavorite)),
+      );
+    }
+  }
+
+  // Get favorite status stream
+  Stream<bool> watchIsFavorite(String path) {
+    return (select(tracks)..where((t) => t.path.equals(path)))
+        .watchSingle()
+        .map((t) => t.isFavorite);
   }
 }
 

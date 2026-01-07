@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
-import '../../data/datasources/app_database.dart';
-import '../../core/services/audio_handler.dart';
+import 'package:drift/drift.dart' hide Column;
+import '../../../data/datasources/app_database.dart';
+import '../../../core/services/audio_handler.dart';
 
 class MusicSearchDelegate extends SearchDelegate<Track?> {
   final AppDatabase db;
@@ -94,13 +95,13 @@ class MusicSearchDelegate extends SearchDelegate<Track?> {
     final lowerCaseQuery = '%${query.toLowerCase()}%';
     return (db.select(db.tracks)
           ..where((t) =>
-              t.title.toLowerCase().like(lowerCaseQuery) |
-              t.artist.toLowerCase().like(lowerCaseQuery) |
-              t.album.toLowerCase().like(lowerCaseQuery)))
+              t.title.lower().like(lowerCaseQuery) |
+              t.artist.lower().like(lowerCaseQuery) |
+              t.album.lower().like(lowerCaseQuery)))
         .get();
   }
 
-  void _playQueue(MyAudioHandler audioHandler, List<Track> tracks, int startIndex) {
+  Future<void> _playQueue(MyAudioHandler audioHandler, List<Track> tracks, int startIndex) async {
     final mediaItems = tracks.map((track) => MediaItem(
       id: track.path,
       album: track.album ?? '',
@@ -109,7 +110,7 @@ class MusicSearchDelegate extends SearchDelegate<Track?> {
       duration: Duration(milliseconds: track.duration),
     )).toList();
 
-    audioHandler.updateQueue(mediaItems);
-    audioHandler.skipToQueueItem(startIndex);
+    await audioHandler.updateQueue(mediaItems);
+    await audioHandler.skipToQueueItem(startIndex);
   }
 }

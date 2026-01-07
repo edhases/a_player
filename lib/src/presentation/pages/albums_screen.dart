@@ -96,7 +96,7 @@ class AlbumsScreen extends StatelessWidget {
       builder: (context, snapshot) {
         final artwork = snapshot.data?.picture?.data;
         return Container(
-          color: Colors.grey.withOpacity(0.2),
+          color: Colors.grey.withValues(alpha: 0.2),
           child: artwork != null
               ? Image.memory(
                   artwork,

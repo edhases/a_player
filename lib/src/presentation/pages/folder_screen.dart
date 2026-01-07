@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:path/path.dart' as p;
+import 'package:metadata_god/metadata_god.dart';
 
 import '../../data/datasources/app_database.dart';
 import '../../domain/services/hierarchy_service.dart';
 import '../../core/services/audio_handler.dart';
 
+/// Folder browser screen with track artwork thumbnails.
 class FolderScreen extends StatelessWidget {
   /// The path to display. '.' represents the root.
   final String path;
@@ -24,11 +26,7 @@ class FolderScreen extends StatelessWidget {
     final String title = isRoot ? 'Folders' : p.basename(path);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        // The root view doesn't get a back button in the app bar
-        automaticallyImplyLeading: !isRoot,
-      ),
+      appBar: isRoot ? null : AppBar(title: Text(title)),
       body: StreamBuilder<List<Track>>(
         stream: db.select(db.tracks).watch(),
         builder: (context, snapshot) {
@@ -43,17 +41,29 @@ class FolderScreen extends StatelessWidget {
           final entries = _hierarchyService.getEntriesForPath(allTracks, path);
 
           if (entries.isEmpty) {
-            return const Center(child: Text('This folder is empty.'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.folder_off_outlined, size: 64, color: Colors.grey[600]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'This folder is empty',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+            );
           }
 
           return ListView.builder(
             itemCount: entries.length,
             itemBuilder: (context, index) {
               final entry = entries[index];
+              
               if (entry is FolderEntry) {
-                return ListTile(
-                  leading: const Icon(Icons.folder),
-                  title: Text(entry.name),
+                return _FolderListTile(
+                  folder: entry,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -64,17 +74,16 @@ class FolderScreen extends StatelessWidget {
                   },
                 );
               } else if (entry is TrackEntry) {
-                return ListTile(
-                  leading: const Icon(Icons.music_note),
-                  title: Text(entry.track.title),
-                  subtitle: Text(entry.track.artist ?? 'Unknown Artist'),
+                final isCurrentTrack = audioHandler.mediaItem.value?.id == entry.track.path;
+                
+                return _TrackListTile(
+                  track: entry.track,
+                  isCurrentTrack: isCurrentTrack,
                   onTap: () {
-                    // Get all tracks in the current directory to form a queue.
                     final tracksInFolder = entries
                         .whereType<TrackEntry>()
                         .map((te) => te.track)
                         .toList();
-
                     _playQueue(audioHandler, tracksInFolder, entry.track);
                   },
                 );
@@ -87,7 +96,7 @@ class FolderScreen extends StatelessWidget {
     );
   }
 
-  void _playQueue(MyAudioHandler audioHandler, List<Track> tracks, Track startTrack) {
+  Future<void> _playQueue(MyAudioHandler audioHandler, List<Track> tracks, Track startTrack) async {
     final mediaItems = tracks.map((track) => MediaItem(
       id: track.path,
       album: track.album ?? '',
@@ -98,7 +107,138 @@ class FolderScreen extends StatelessWidget {
 
     final startIndex = tracks.indexOf(startTrack);
 
-    audioHandler.updateQueue(mediaItems);
-    audioHandler.skipToQueueItem(startIndex);
+    await audioHandler.updateQueue(mediaItems);
+    await audioHandler.skipToQueueItem(startIndex);
+  }
+}
+
+class _FolderListTile extends StatelessWidget {
+  final FolderEntry folder;
+  final VoidCallback onTap;
+
+  const _FolderListTile({
+    required this.folder,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(
+          Icons.folder,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+      title: Text(
+        folder.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w500),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+}
+
+class _TrackListTile extends StatelessWidget {
+  final Track track;
+  final bool isCurrentTrack;
+  final VoidCallback onTap;
+
+  const _TrackListTile({
+    required this.track,
+    required this.isCurrentTrack,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 50,
+          height: 50,
+          child: _TrackArtwork(trackPath: track.path),
+        ),
+      ),
+      title: Text(
+        track.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontWeight: isCurrentTrack ? FontWeight.bold : FontWeight.normal,
+          color: isCurrentTrack ? colorScheme.primary : null,
+        ),
+      ),
+      subtitle: Text(
+        track.artist ?? 'Unknown Artist',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          color: isCurrentTrack ? colorScheme.primary.withValues(alpha: 0.7) : Colors.grey[500],
+        ),
+      ),
+      trailing: Text(
+        _formatDuration(Duration(milliseconds: track.duration)),
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey[500],
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+}
+
+class _TrackArtwork extends StatelessWidget {
+  final String trackPath;
+
+  const _TrackArtwork({required this.trackPath});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Metadata?>(
+      future: MetadataGod.readMetadata(file: trackPath),
+      builder: (context, snapshot) {
+        final artwork = snapshot.data?.picture?.data;
+        
+        if (artwork != null) {
+          return Image.memory(
+            artwork,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          );
+        }
+        
+        return Container(
+          color: Colors.grey[850],
+          child: Icon(
+            Icons.music_note,
+            color: Colors.grey[600],
+            size: 24,
+          ),
+        );
+      },
+    );
   }
 }

@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:metadata_god/metadata_god.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:provider/provider.dart';
 import '../../core/services/audio_handler.dart';
+import '../../data/datasources/app_database.dart';
+import 'equalizer_screen.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -16,106 +19,101 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   final MyAudioHandler _audioHandler = GetIt.I<MyAudioHandler>();
-  late final PlayerController _waveformController;
-  StreamSubscription<MediaItem?>? _mediaItemSubscription;
-  StreamSubscription<PlaybackState>? _playbackStateSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _waveformController = PlayerController();
-    _subscribeToPlayer();
-  }
-
-  @override
-  void dispose() {
-    _mediaItemSubscription?.cancel();
-    _playbackStateSubscription?.cancel();
-    _waveformController.dispose();
-    super.dispose();
-  }
-
-  void _subscribeToPlayer() {
-    _mediaItemSubscription = _audioHandler.mediaItem.listen((mediaItem) {
-      if (mediaItem != null) {
-        _prepareWaveform(mediaItem);
-      }
-    });
-
-    _playbackStateSubscription = _audioHandler.playbackState.listen((playbackState) {
-      if (!mounted) return;
-      final isPlaying = playbackState.playing;
-      final processingState = playbackState.processingState;
-
-      if (isPlaying) {
-        _waveformController.startPlayer(finishMode: FinishMode.pause);
-      } else if (processingState != AudioProcessingState.completed) {
-        _waveformController.pausePlayer();
-      }
-    });
-  }
-
-  Future<void> _prepareWaveform(MediaItem mediaItem) async {
-    // This can throw an exception if the file is not found, which is ok.
-    try {
-      await _waveformController.preparePlayer(
-        path: mediaItem.id,
-        shouldExtractWaveform: true,
-        noOfSamples: 100,
-        volume: 1.0,
-      );
-      final currentPosition = _audioHandler.playbackState.value.updatePosition;
-      _waveformController.seekTo(currentPosition.inMilliseconds);
-    } catch (e) {
-      debugPrint("Error preparing waveform: $e");
-    }
-  }
+  double? _dragValue;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final db = Provider.of<AppDatabase>(context, listen: false);
+    
     return Scaffold(
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Now Playing'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down, size: 32, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onPressed: () {
+              _showOptionsSheet(context);
+            },
+          ),
+        ],
       ),
-      extendBodyBehindAppBar: true,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.5),
-              Colors.black,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: StreamBuilder<MediaItem?>(
-              stream: _audioHandler.mediaItem,
-              builder: (context, snapshot) {
-                final mediaItem = snapshot.data;
-                if (mediaItem == null) return const SizedBox.shrink();
+      body: StreamBuilder<MediaItem?>(
+        stream: _audioHandler.mediaItem,
+        builder: (context, snapshot) {
+          final mediaItem = snapshot.data;
+          if (mediaItem == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                return Column(
-                  children: [
-                    const Spacer(),
-                    _buildArtwork(mediaItem),
-                    const Spacer(),
-                    _buildTrackInfo(context, mediaItem),
-                    const SizedBox(height: 20),
-                    _buildWaveformSeekbar(),
-                    _buildControls(context),
-                    const SizedBox(height: 20),
-                  ],
-                );
-              },
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  colorScheme.primary.withValues(alpha: 0.4),
+                  Colors.black.withValues(alpha: 0.8),
+                  Colors.black,
+                ],
+                stops: const [0.0, 0.6, 1.0],
+              ),
             ),
-          ),
-        ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  // Album Art
+                  Expanded(
+                    flex: 6,
+                    child: _buildArtwork(mediaItem),
+                  ),
+                  const SizedBox(height: 30),
+                  // Track Info
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      children: [
+                        Expanded(child: _buildTrackInfo(mediaItem)),
+                        StreamBuilder<bool>(
+                          stream: db.watchIsFavorite(mediaItem.id),
+                          builder: (context, favSnapshot) {
+                            final isFavorite = favSnapshot.data ?? false;
+                            return IconButton(
+                              icon: Icon(
+                                isFavorite ? Icons.favorite : Icons.favorite_border,
+                                color: isFavorite ? Colors.red : Colors.white70,
+                                size: 28,
+                              ),
+                              onPressed: () => db.toggleFavorite(mediaItem.id),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  // Seekbar
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: _buildSeekbar(mediaItem),
+                  ),
+                  const SizedBox(height: 30),
+                  // Controls
+                  _buildControls(colorScheme),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -123,97 +121,136 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildArtwork(MediaItem mediaItem) {
     return GestureDetector(
       onHorizontalDragEnd: (details) {
-        if (details.primaryVelocity! > 100) {
-          _audioHandler.skipToPrevious();
-        } else if (details.primaryVelocity! < -100) {
-          _audioHandler.skipToNext();
+        if (details.primaryVelocity != null) {
+          if (details.primaryVelocity! > 200) _audioHandler.skipToPrevious();
+          if (details.primaryVelocity! < -200) _audioHandler.skipToNext();
         }
       },
       child: Hero(
         tag: widget.heroTag,
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: FutureBuilder<Metadata?>(
-            future: MetadataGod.readMetadata(file: mediaItem.id),
-            builder: (context, snapshot) {
-              final artwork = snapshot.data?.picture?.data;
-              return Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(12.0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12.0),
-                  child: artwork != null
-                      ? Image.memory(artwork, fit: BoxFit.cover, gaplessPlayback: true)
-                      : Container(
-                          color: Colors.grey.withOpacity(0.2),
-                          child: const Icon(Icons.music_note, size: 100),
-                        ),
-                ),
-              );
-            },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 40),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.6),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: FutureBuilder<Metadata?>(
+                future: MetadataGod.readMetadata(file: mediaItem.id),
+                builder: (context, snapshot) {
+                  final artwork = snapshot.data?.picture?.data;
+                  if (artwork != null) {
+                    return Image.memory(artwork, fit: BoxFit.cover, gaplessPlayback: true);
+                  }
+                  return Container(
+                    color: Colors.grey[900],
+                    child: Icon(Icons.music_note, size: 100, color: Colors.grey[700]),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTrackInfo(BuildContext context, MediaItem mediaItem) {
+  Widget _buildTrackInfo(MediaItem mediaItem) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           mediaItem.title,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white),
-          textAlign: TextAlign.center,
-          maxLines: 2,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+          textAlign: TextAlign.start,
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Text(
           mediaItem.artist ?? 'Unknown Artist',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
-          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 18, color: Colors.white.withValues(alpha: 0.7)),
+          textAlign: TextAlign.start,
+          maxLines: 1,
         ),
       ],
     );
   }
 
-  Widget _buildWaveformSeekbar() {
-    return Column(
-      children: [
-        AudioFileWaveforms(
-          size: Size(MediaQuery.of(context).size.width, 100.0),
-          playerController: _waveformController,
-          enableSeekGesture: true,
-          waveformType: WaveformType.long,
-          playerWaveStyle: const PlayerWaveStyle(
-            fixedWaveColor: Colors.white30,
-            liveWaveColor: Colors.white,
-            spacing: 6.0,
-          ),
-          onSeekChange: (duration) {
-            _audioHandler.seek(duration);
-          },
-        ),
-        const SizedBox(height: 16),
-        StreamBuilder<Duration>(
+  Widget _buildSeekbar(MediaItem mediaItem) {
+    return StreamBuilder<Duration>(
+      stream: Rx.combineLatest2<Duration, Duration?, Duration>(
+        _audioHandler.player.positionStream,
+        _audioHandler.player.durationStream,
+        (pos, dur) => dur ?? mediaItem.duration ?? Duration.zero,
+      ),
+      builder: (context, snapshot) {
+        final duration = snapshot.data ?? mediaItem.duration ?? Duration.zero;
+        return StreamBuilder<Duration>(
           stream: _audioHandler.player.positionStream,
-          builder: (context, snapshot) {
-            final position = snapshot.data ?? Duration.zero;
-            final duration = _audioHandler.mediaItem.value?.duration ?? Duration.zero;
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          builder: (context, posSnapshot) {
+            final position = posSnapshot.data ?? Duration.zero;
+            double sliderValue = _dragValue ?? position.inMilliseconds.toDouble();
+            double maxSliderValue = duration.inMilliseconds.toDouble();
+            
+            if (maxSliderValue <= 0) maxSliderValue = 1.0;
+            sliderValue = sliderValue.clamp(0.0, maxSliderValue);
+
+            return Column(
               children: [
-                Text(_formatDuration(position), style: const TextStyle(color: Colors.white70)),
-                Text(_formatDuration(duration), style: const TextStyle(color: Colors.white70)),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                    activeTrackColor: Theme.of(context).colorScheme.primary,
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.white,
+                  ),
+                  child: Slider(
+                    min: 0.0,
+                    max: maxSliderValue,
+                    value: sliderValue,
+                    onChanged: (value) => setState(() => _dragValue = value),
+                    onChangeEnd: (value) {
+                      _audioHandler.seek(Duration(milliseconds: value.round()));
+                      _dragValue = null;
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(Duration(milliseconds: sliderValue.round())),
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                      Text(
+                        _formatDuration(duration),
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             );
           },
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _buildControls(BuildContext context) {
+  Widget _buildControls(ColorScheme colorScheme) {
     return StreamBuilder<PlaybackState>(
       stream: _audioHandler.playbackState,
       builder: (context, snapshot) {
@@ -222,61 +259,60 @@ class _PlayerScreenState extends State<PlayerScreen> {
         final repeatMode = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
         final shuffleMode = playbackState?.shuffleMode ?? AudioServiceShuffleMode.none;
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+        return Column(
           children: [
-            IconButton(
-              icon: const Icon(Icons.equalizer, color: Colors.white),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const EqualizerScreen()),
-                );
-              },
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.shuffle, color: shuffleMode != AudioServiceShuffleMode.none ? colorScheme.primary : Colors.white70),
+                  onPressed: () => _audioHandler.setShuffleMode(shuffleMode == AudioServiceShuffleMode.none ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.skip_previous, color: Colors.white, size: 45),
+                  onPressed: _audioHandler.skipToPrevious,
+                ),
+                GestureDetector(
+                  onTap: isPlaying ? _audioHandler.pause : _audioHandler.play,
+                  child: Container(
+                    height: 80,
+                    width: 80,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.primary),
+                    child: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 50),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.skip_next, color: Colors.white, size: 45),
+                  onPressed: _audioHandler.skipToNext,
+                ),
+                IconButton(
+                  icon: Icon(repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat, color: repeatMode != AudioServiceRepeatMode.none ? colorScheme.primary : Colors.white70),
+                  onPressed: () {
+                    final modes = [AudioServiceRepeatMode.none, AudioServiceRepeatMode.all, AudioServiceRepeatMode.one];
+                    _audioHandler.setRepeatMode(modes[(modes.indexOf(repeatMode) + 1) % modes.length]);
+                  },
+                ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.shuffle, color: Colors.white),
-              color: shuffleMode == AudioServiceShuffleMode.all
-                  ? Theme.of(context).colorScheme.secondary
-                  : Colors.white,
-              onPressed: () {
-                final nextMode = shuffleMode == AudioServiceShuffleMode.all
-                    ? AudioServiceShuffleMode.none
-                    : AudioServiceShuffleMode.all;
-                _audioHandler.setShuffleMode(nextMode);
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.skip_previous, color: Colors.white),
-              iconSize: 48,
-              onPressed: _audioHandler.skipToPrevious,
-            ),
-            IconButton(
-              icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.white),
-              iconSize: 64,
-              onPressed: isPlaying ? _audioHandler.pause : _audioHandler.play,
-            ),
-            IconButton(
-              icon: const Icon(Icons.skip_next, color: Colors.white),
-              iconSize: 48,
-              onPressed: _audioHandler.skipToNext,
-            ),
-            IconButton(
-              icon: _getRepeatIcon(repeatMode),
-              color: repeatMode != AudioServiceRepeatMode.none
-                  ? Theme.of(context).colorScheme.secondary
-                  : Colors.white,
-              onPressed: () {
-                AudioServiceRepeatMode nextMode;
-                if (repeatMode == AudioServiceRepeatMode.none) {
-                  nextMode = AudioServiceRepeatMode.all;
-                } else if (repeatMode == AudioServiceRepeatMode.all) {
-                  nextMode = AudioServiceRepeatMode.one;
-                } else {
-                  nextMode = AudioServiceRepeatMode.none;
-                }
-                _audioHandler.setRepeatMode(nextMode);
-              },
+            const SizedBox(height: 30),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.equalizer, color: Colors.white54), 
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EqualizerScreen()))
+                ),
+                IconButton(
+                  icon: const Icon(Icons.playlist_play, color: Colors.white54), 
+                  onPressed: () => _showQueue(context)
+                ),
+                IconButton(
+                  icon: const Icon(Icons.info_outline, color: Colors.white54),
+                  onPressed: () {
+                    _showDetailsSheet(context, _audioHandler.mediaItem.value);
+                  }
+                ),
+              ],
             ),
           ],
         );
@@ -284,20 +320,127 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Icon _getRepeatIcon(AudioServiceRepeatMode repeatMode) {
-    switch (repeatMode) {
-      case AudioServiceRepeatMode.none:
-        return const Icon(Icons.repeat, color: Colors.white);
-      case AudioServiceRepeatMode.one:
-        return const Icon(Icons.repeat_one, color: Colors.white);
-      case AudioServiceRepeatMode.all:
-      case AudioServiceRepeatMode.group:
-        return const Icon(Icons.repeat, color: Colors.white);
-    }
+  void _showQueue(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return StreamBuilder<List<MediaItem>>(
+          stream: _audioHandler.queue,
+          builder: (context, snapshot) {
+            final currentQueue = snapshot.data ?? [];
+            return Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('Current Queue', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: currentQueue.length,
+                    itemBuilder: (context, index) {
+                      final item = currentQueue[index];
+                      final isCurrent = _audioHandler.mediaItem.value?.id == item.id;
+                      return ListTile(
+                        leading: _buildQueueArtwork(item.id),
+                        title: Text(item.title, style: TextStyle(color: isCurrent ? Theme.of(context).colorScheme.primary : Colors.white)),
+                        subtitle: Text(item.artist ?? '', style: const TextStyle(color: Colors.white70)),
+                        onTap: () {
+                          _audioHandler.skipToQueueItem(index);
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildQueueArtwork(String path) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: FutureBuilder<Metadata?>(
+          future: MetadataGod.readMetadata(file: path),
+          builder: (context, snapshot) {
+            final artwork = snapshot.data?.picture?.data;
+            if (artwork != null) return Image.memory(artwork, fit: BoxFit.cover);
+            return Container(color: Colors.grey[800], child: const Icon(Icons.music_note, color: Colors.white54, size: 20));
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showOptionsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.timer, color: Colors.white),
+            title: const Text('Sleep Timer', style: TextStyle(color: Colors.white)),
+            onTap: () => Navigator.pop(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.share, color: Colors.white),
+            title: const Text('Share Track', style: TextStyle(color: Colors.white)),
+            onTap: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDetailsSheet(BuildContext context, MediaItem? item) {
+    if (item == null) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Track Details', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailRow('Title', item.title),
+            _detailRow('Artist', item.artist ?? 'Unknown'),
+            _detailRow('Album', item.album ?? 'Unknown'),
+            _detailRow('Path', item.id),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
+        ],
+      ),
+    );
   }
 
   String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final minutes = d.inMinutes.toString().padLeft(2, '0');
     final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }

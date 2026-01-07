@@ -61,7 +61,7 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
     if (!allGranted) {
       for (int i = 0; i < permissions.length; i++) {
         if (!statuses[i].isGranted) {
-          print("Missing permission: ${permissions[i]} (Status: ${statuses[i]})");
+          debugPrint("Missing permission: ${permissions[i]} (Status: ${statuses[i]})");
         }
       }
     }

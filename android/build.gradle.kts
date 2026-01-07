@@ -22,17 +22,20 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// FIX: Безпечне налаштування on_audio_query_android
+// FIX: Безпечне налаштування для застарілих плагінів
 subprojects {
     val targetProject = this
 
-    // Функція, яка застосовує фікси
     fun applyFixes() {
-        if (targetProject.name == "on_audio_query_android") {
-            // Виправляємо версію Java в Android розширенні
+        if (targetProject.name == "on_audio_query_android" || targetProject.name == "equalizer_flutter") {
+            val ns = if (targetProject.name == "on_audio_query_android") 
+                "com.lucasferreira.on_audio_query_android" 
+            else 
+                "com.equalizer.flutter.equalizer_flutter"
+
             targetProject.pluginManager.withPlugin("com.android.library") {
                 targetProject.extensions.configure<LibraryExtension> {
-                    namespace = "com.lucasferreira.on_audio_query_android"
+                    namespace = ns
                     compileOptions {
                         sourceCompatibility = JavaVersion.VERSION_17
                         targetCompatibility = JavaVersion.VERSION_17
@@ -46,15 +49,26 @@ subprojects {
                     jvmTarget.set(JvmTarget.JVM_17)
                 }
             }
+
+            // ПАТЧ: Видаляємо 'package' з AndroidManifest.xml, бо AGP 8.0+ свариться
+            targetProject.afterEvaluate {
+                val manifestFile = file("src/main/AndroidManifest.xml")
+                if (manifestFile.exists()) {
+                    val content = manifestFile.readText()
+                    if (content.contains("package=")) {
+                        val newContent = content.replace(Regex("package=\"[^\"]*\""), "")
+                        manifestFile.writeText(newContent)
+                    }
+                }
+            }
         }
     }
 
-    // ГОЛОВНЕ: Перевіряємо стан проекту перед тим, як лізти
     if (targetProject.state.executed) {
-        applyFixes() // Проект вже готовий, застосовуємо одразу
+        applyFixes()
     } else {
         targetProject.afterEvaluate {
-            applyFixes() // Проект ще не готовий, чекаємо
+            applyFixes()
         }
     }
 }

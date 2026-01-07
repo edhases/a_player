@@ -5,45 +5,131 @@ import 'package:metadata_god/metadata_god.dart';
 import '../pages/player_screen.dart';
 import '../../core/services/audio_handler.dart';
 
+/// Mini player widget displayed at the bottom of the app.
+/// Poweramp-inspired design with smooth animations.
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
 
   @override
   Widget build(BuildContext context) {
     final audioHandler = GetIt.I<MyAudioHandler>();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return StreamBuilder<MediaItem?>(
       stream: audioHandler.mediaItem,
       builder: (context, mediaItemSnapshot) {
-        if (!mediaItemSnapshot.hasData || mediaItemSnapshot.data == null) {
+        final mediaItem = mediaItemSnapshot.data;
+        if (mediaItem == null) {
           return const SizedBox.shrink();
         }
 
-        final mediaItem = mediaItemSnapshot.data!;
         final heroTag = 'player_art_${mediaItem.id}';
 
         return GestureDetector(
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => PlayerScreen(heroTag: heroTag)),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => 
+                    PlayerScreen(heroTag: heroTag),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 1),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  );
+                },
+              ),
             );
           },
           child: Container(
-            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ListTile(
-                  leading: Hero(
-                    tag: heroTag,
-                    child: _buildArtwork(mediaItem),
-                  ),
-                  title: Text(mediaItem.title, maxLines: 1),
-                  subtitle: Text(mediaItem.artist ?? 'Unknown', maxLines: 1),
-                  trailing: _buildControls(audioHandler),
+                // Progress bar at top
+                StreamBuilder<Duration>(
+                  stream: audioHandler.player.positionStream,
+                  builder: (context, snapshot) {
+                    final position = snapshot.data ?? Duration.zero;
+                    final duration = mediaItem.duration ?? Duration.zero;
+                    final progress = duration.inMilliseconds > 0
+                        ? position.inMilliseconds / duration.inMilliseconds
+                        : 0.0;
+                    
+                    return LinearProgressIndicator(
+                      value: progress.clamp(0.0, 1.0),
+                      minHeight: 2,
+                      backgroundColor: Colors.grey[800],
+                      valueColor: AlwaysStoppedAnimation(colorScheme.primary),
+                    );
+                  },
                 ),
-                _buildProgressBar(audioHandler),
+                // Main content
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      // Album art
+                      Hero(
+                        tag: heroTag,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: _buildArtwork(mediaItem),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Track info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              mediaItem.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              mediaItem.artist ?? 'Unknown Artist',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Controls
+                      _buildControls(audioHandler, colorScheme),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -57,54 +143,48 @@ class MiniPlayer extends StatelessWidget {
       future: MetadataGod.readMetadata(file: mediaItem.id),
       builder: (context, snapshot) {
         final artwork = snapshot.data?.picture?.data;
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(4.0),
-          child: SizedBox(
-            width: 50,
-            height: 50,
-            child: artwork != null
-                ? Image.memory(artwork, fit: BoxFit.cover, gaplessPlayback: true)
-                : const Icon(Icons.music_note),
-          ),
+        
+        if (artwork != null) {
+          return Image.memory(
+            artwork,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          );
+        }
+        
+        return Container(
+          color: Colors.grey[850],
+          child: Icon(Icons.music_note, color: Colors.grey[600], size: 24),
         );
       },
     );
   }
 
-  Widget _buildControls(MyAudioHandler audioHandler) {
+  Widget _buildControls(MyAudioHandler audioHandler, ColorScheme colorScheme) {
     return StreamBuilder<PlaybackState>(
       stream: audioHandler.playbackState,
       builder: (context, playbackStateSnapshot) {
         final isPlaying = playbackStateSnapshot.data?.playing ?? false;
+        
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+              icon: Icon(
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 32,
+              ),
               onPressed: isPlaying ? audioHandler.pause : audioHandler.play,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             ),
             IconButton(
-              icon: const Icon(Icons.skip_next),
+              icon: const Icon(Icons.skip_next_rounded, size: 28),
               onPressed: audioHandler.skipToNext,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  Widget _buildProgressBar(MyAudioHandler audioHandler) {
-    return StreamBuilder<PlaybackState>(
-      stream: audioHandler.playbackState,
-      builder: (context, snapshot) {
-        final position = snapshot.data?.updatePosition ?? Duration.zero;
-        final duration = audioHandler.mediaItem.value?.duration ?? Duration.zero;
-        final progress = (duration.inMilliseconds > 0)
-            ? position.inMilliseconds / duration.inMilliseconds
-            : 0.0;
-        return LinearProgressIndicator(
-          value: progress.clamp(0.0, 1.0),
-          minHeight: 2,
         );
       },
     );
