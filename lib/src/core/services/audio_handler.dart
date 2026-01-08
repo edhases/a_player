@@ -11,7 +11,7 @@ import 'settings_service.dart';
 import 'equalizer_service.dart';
 // Add import for YouTubeHelper
 import 'youtube_helper.dart';
-import 'youtube_audio_source.dart';
+import 'youtube_streaming_audio_source.dart';
 
 /// The main audio handler that bridges just_audio with audio_service.
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -58,7 +58,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     player.playbackEventStream.listen((event) {
       _broadcastState(event);
     }, onError: (Object e, StackTrace st) {
-      debugPrint('[AudioHandler] PLAYER ERROR: $e');
+      debugPrint('[AudioHandler] PLAYER ERROR: $e. Skipping to the next item.');
+      // If an error occurs (e.g., 403 Forbidden on a YouTube link),
+      // automatically skip to the next track in the queue.
+      if (player.hasNext) {
+        skipToNext();
+      } else {
+        // If there's no next track, stop playback.
+        stop();
+      }
     });
     
     player.shuffleModeEnabledStream.listen((_) => _broadcastState(player.playbackEvent));
@@ -260,19 +268,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   AudioSource _createAudioSource(MediaItem item) {
     debugPrint('[AudioHandler] Creating AudioSource for ${item.title}');
-    
-    // Перевірка на YouTube трек для офлайн програвання
-    if (item.extras != null && item.extras!.containsKey('videoId')) {
+
+    // Check if it's an online YouTube track that needs JIT fetching.
+    if (item.extras?['isOnline'] == true) {
       final videoId = item.extras!['videoId'] as String;
-      // Note: getLocalFilePath is async, skip for now since we can't await here
-      debugPrint('[AudioHandler] YouTube track: $videoId');
+      debugPrint('[AudioHandler] Creating YoutubeAudioSource for videoId: $videoId');
+      return YoutubeAudioSource(videoId, _ytHelper);
     }
     
+    // Handle content URIs from sources like Android MediaStore.
     if (item.id.startsWith('content://')) {
       debugPrint('[AudioHandler] Source: Content URI: ${item.id}');
       return AudioSource.uri(Uri.parse(item.id), tag: item);
     }
     
+    // Handle direct HTTP URLs (e.g., from a previous implementation, not used for YT anymore).
     if (item.id.startsWith('http')) {
       final headers = <String, String>{};
       
@@ -280,17 +290,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         headers['User-Agent'] = item.extras!['user_agent'];
       }
       
-      if (item.id.contains('googlevideo.com')) {
-         // Force mobile UA if not provided. Decrypted streams usually don't need Origin/Referer
-         // and adding them can sometimes trigger 403s if they don't match the signature context.
-         headers['User-Agent'] ??= 'com.google.android.apps.youtube.music/6.33.51 (Linux; U; Android 11; US) gzip';
-      }
-      
       debugPrint('[AudioHandler] Source: HTTP URL: ${item.id.substring(0, item.id.length > 100 ? 100 : item.id.length)}...');
       
       return AudioSource.uri(Uri.parse(item.id), tag: item, headers: headers.isEmpty ? null : headers);
     }
     
+    // Default to assuming the ID is a local file path.
+    // This handles both regular local files and downloaded YouTube tracks.
     debugPrint('[AudioHandler] Source: File path: ${item.id}');
     return AudioSource.uri(Uri.file(item.id), tag: item);
   }

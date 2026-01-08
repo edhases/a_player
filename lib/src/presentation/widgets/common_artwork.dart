@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:metadata_god/metadata_god.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 /// A unified widget for displaying audio artwork.
 /// Prioritizes on_audio_query (fast) using mediaStoreId, falls back to direct file reading.
@@ -29,12 +31,20 @@ class CommonArtwork extends StatelessWidget {
     if (url != null && url!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: Image.network(
-          url!,
+        child: CachedNetworkImage(
+          imageUrl: url!,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(context),
+          cacheManager: CacheManager(
+            Config(
+              'youtubeCache',
+              stalePeriod: const Duration(days: 30),
+              maxNrOfCacheObjects: 1000,
+            ),
+          ),
+          placeholder: (context, url) => _buildPlaceholder(context),
+          errorWidget: (context, url, error) => _buildPlaceholder(context),
         ),
       );
     }

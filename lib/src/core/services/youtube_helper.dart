@@ -7,6 +7,7 @@ import '../../data/datasources/app_database.dart';
 import 'package:drift/drift.dart';
 import 'google_auth_service.dart'; // Import the GoogleAuthService
 import 'package:get_it/get_it.dart';
+import 'rate_limiter.dart';
 
 /// YouTube Helper — wrapper навколо YoutubeExplode для управління
 /// URL потоків, кешування й отримання метаданих видео
@@ -14,6 +15,7 @@ class YouTubeHelper {
   final YoutubeExplode _yt = YoutubeExplode();
   final AppDatabase _db;
   final GoogleAuthService? _authService; // Optional reference to GoogleAuthService
+  final RateLimiter _rateLimiter = RateLimiter();
 
   YouTubeHelper(this._db, {GoogleAuthService? authService}) 
       : _authService = authService ?? GetIt.I<GoogleAuthService>();
@@ -21,6 +23,7 @@ class YouTubeHelper {
   /// Отримати URL для потокування аудіо
   Future<String?> getAudioUrl(String videoId) async {
     try {
+      await _rateLimiter.throttle();
       debugPrint('[YouTubeHelper] Getting audio URL for: $videoId');
 
       // Отримати маніфест потоків з multi-client strategy
@@ -51,6 +54,7 @@ class YouTubeHelper {
   /// Отримати деталі видео (тривалість, назва тощо)
   Future<Video?> getVideoDetails(String videoId) async {
     try {
+      await _rateLimiter.throttle();
       debugPrint('[YouTubeHelper] Getting video details for: $videoId');
 
       // Спочатку перевірити кеш
@@ -86,6 +90,7 @@ class YouTubeHelper {
   /// Отримати відео з YouTube плейлиста
   Future<List<Video>> getPlaylistVideos(String playlistId) async {
     try {
+      await _rateLimiter.throttle();
       debugPrint('[YouTubeHelper] Getting playlist videos for: $playlistId');
       final playlist = await _yt.playlists.get(playlistId);
       final videos = await _yt.playlists.getVideos(playlistId).toList();
@@ -116,6 +121,7 @@ class YouTubeHelper {
   /// Завантажити аудіо файл локально для офлайн відтворення
   Future<String?> downloadAudio(String videoId, {Function(double)? onProgress}) async {
     try {
+      await _rateLimiter.throttle();
       debugPrint('[YouTubeHelper] Downloading audio for: $videoId');
 
       final cached = await getCachedMetadata(videoId);
@@ -270,11 +276,12 @@ class YouTubeHelper {
       debugPrint('[YouTubeHelper] Creating playlist queue for: $playlistId');
       final videos = await getPlaylistVideos(playlistId);
 
-      final mediaItems = <MediaItem>[];
-      for (final video in videos) {
-        final mediaItem = await createMediaItem(video.id.value, customTitle: video.title, customArtist: video.author);
-        mediaItems.add(mediaItem);
-      }
+      // Create all MediaItems in parallel to avoid blocking the UI.
+      final mediaItemFutures = videos.map((video) =>
+        createMediaItem(video.id.value, customTitle: video.title, customArtist: video.author)
+      ).toList();
+
+      final mediaItems = await Future.wait(mediaItemFutures);
 
       debugPrint('[YouTubeHelper] Created ${mediaItems.length} media items from playlist');
       return mediaItems;
@@ -310,9 +317,9 @@ class YouTubeHelper {
       if (cached != null) {
         // Перевірити чи є локальний файл для офлайн відтворення
         final localPath = await getLocalFilePath(videoId);
-        final mediaId = localPath ?? await getAudioUrl(videoId);
-
-        if (mediaId == null) return MediaItem(id: videoId, title: 'Error loading');
+        // Для JIT-фетчингу, ID медіа-елемента - це videoId для онлайн-треків
+        // або шлях до файлу для офлайн-треків.
+        final mediaId = localPath ?? videoId;
 
         final desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
 
@@ -323,7 +330,7 @@ class YouTubeHelper {
           duration: Duration(seconds: cached.duration),
           artUri: Uri.parse(cached.thumbnailUrl),
           extras: {
-            'isOnline': localPath == null, // true якщо онлайн, false якщо офлайн
+            'isOnline': localPath == null,
             'videoId': videoId,
             'user_agent': desktopUA,
           },

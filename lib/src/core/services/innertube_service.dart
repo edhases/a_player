@@ -3,14 +3,20 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
 import '../../domain/entities/youtube_song.dart';
-import 'google_auth_service.dart'; // Import the GoogleAuthService
+import 'google_auth_service.dart';
+import 'rate_limiter.dart';
+
+import '../../data/datasources/app_database.dart';
 
 class InnerTubeService {
   final Dio _dio;
-  final GoogleAuthService _googleAuthService; // Reference to the GoogleAuthService
+  final GoogleAuthService _googleAuthService;
+  final RateLimiter _rateLimiter = RateLimiter();
+  final AppDatabase _db;
 
-  InnerTubeService({GoogleAuthService? googleAuthService})
+  InnerTubeService({GoogleAuthService? googleAuthService, AppDatabase? db})
       : _googleAuthService = googleAuthService ?? GetIt.I<GoogleAuthService>(),
+        _db = db ?? GetIt.I<AppDatabase>(),
         _dio = Dio(BaseOptions(
           baseUrl: 'https://music.youtube.com/youtubei/v1',
           connectTimeout: const Duration(seconds: 10),
@@ -81,6 +87,7 @@ class InnerTubeService {
   }
 
   Future<List<YouTubeSong>> search(String query) async {
+    await _rateLimiter.throttle();
     await _addAuthHeaders();
 
     final body = _webContextBody();
@@ -98,6 +105,7 @@ class InnerTubeService {
 
   /// Returns {'url': string, 'agent': string} on success, null on failure.
   Future<Map<String, String>?> getSongUrl(String videoId) async {
+    await _rateLimiter.throttle();
     await _addAuthHeaders(); 
     
     // Multi-client strategy for maximum reliability
@@ -342,13 +350,31 @@ class InnerTubeService {
   }
 
   Future<List<Map<String, dynamic>>> getHomeData() async {
+    // Check the cache first
+    final cached = await _db.getCachedHomeData();
+    if (cached != null &&
+        DateTime.now().difference(cached.timestamp) < const Duration(hours: 6)) {
+      debugPrint('[InnerTubeService] Using cached home data.');
+      return cached.data;
+    }
+
+    // If cache is old or doesn't exist, fetch from network
+    await _rateLimiter.throttle();
     await _addAuthHeaders();
     final body = _webContextBody();
     body['browseId'] = "FEmusic_home";
 
     try {
       final response = await _dio.post('/browse', data: body);
-      return _parseHomeData(response.data);
+      final freshData = _parseHomeData(response.data);
+
+      // Cache the new data
+      if (freshData.isNotEmpty) {
+        await _db.cacheHomeData(freshData);
+        debugPrint('[InnerTubeService] Cached fresh home data.');
+      }
+
+      return freshData;
     } catch (e) {
       debugPrint('InnerTube getHomeData Error: $e');
       return [];
@@ -403,6 +429,7 @@ class InnerTubeService {
   }
 
   Future<List<Map<String, dynamic>>> getLibraryPlaylists() async {
+    await _rateLimiter.throttle();
     await _addAuthHeaders();
     final body = _webContextBody();
     body['browseId'] = "FEmusic_library_landing";
@@ -456,6 +483,7 @@ class InnerTubeService {
   }
 
   Future<List<YouTubeSong>> getPlaylistTracks(String playlistId) async {
+    await _rateLimiter.throttle();
     await _addAuthHeaders();
     final body = _webContextBody();
     body['browseId'] = playlistId;

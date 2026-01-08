@@ -1,13 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class GoogleAuthService {
   final FlutterSecureStorage _storage;
+  final GoogleSignIn _googleSignIn;
   static const String _cookieKey = 'auth_cookie';
   static const String _userEmailKey = 'user_email';
 
-  GoogleAuthService({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+  GoogleAuthService({FlutterSecureStorage? storage, GoogleSignIn? googleSignIn})
+      : _storage = storage ?? const FlutterSecureStorage(),
+        _googleSignIn = googleSignIn ??
+            GoogleSignIn(
+              scopes: [
+                'email',
+                'https://www.googleapis.com/auth/youtube.readonly',
+              ],
+            );
 
   /// Зберегти cookies після WebView логіну
   Future<void> saveCookies(String cookieHeader) async {
@@ -53,10 +62,23 @@ class GoogleAuthService {
     debugPrint('[GoogleAuthService] User signed out');
   }
 
-  /// Заглушка для сумісності зі старим кодом
-  Future<dynamic> signIn() async {
-    // Тепер логін відбувається через WebView
-    // Цей метод можна залишити для сумісності або видалити
-    throw UnimplementedError('Use WebViewLoginScreen instead');
+  /// Perform native Google Sign-In and cache the user's email.
+  Future<GoogleSignInAccount?> signIn() async {
+    try {
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+      if (account != null) {
+        await saveUserEmail(account.email);
+        debugPrint('[GoogleAuthService] Native sign-in successful for ${account.email}');
+        // You might want to get tokens and use them with your backend or other services.
+        // final GoogleSignInAuthentication auth = await account.authentication;
+        // final String? idToken = auth.idToken;
+        // final String? accessToken = auth.accessToken;
+      }
+      return account;
+    } catch (e) {
+      debugPrint('[GoogleAuthService] Error during native sign-in: $e');
+      // Return null or rethrow a custom exception to be handled by the UI.
+      return null;
+    }
   }
 }

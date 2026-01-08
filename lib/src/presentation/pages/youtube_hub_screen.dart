@@ -19,7 +19,7 @@ class YouTubeHubScreen extends StatefulWidget {
 }
 
 class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
-  final _innerTube = InnerTubeService();
+  final _innerTube = GetIt.I<InnerTubeService>();
   final _authService = GetIt.I<GoogleAuthService>();
   final _ytHelper = GetIt.I<YouTubeHelper>();
   final _audioHandler = GetIt.I<MyAudioHandler>();
