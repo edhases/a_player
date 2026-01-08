@@ -20,6 +20,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  bool _isScanning = false;
+  final MusicFinder _musicFinder = GetIt.I<MusicFinder>();
 
   final List<Widget> _pages = [
     const AllTracksScreen(),
@@ -28,6 +30,27 @@ class _HomeScreenState extends State<HomeScreen> {
     const ArtistsScreen(),
     const SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _isScanning = _musicFinder.isScanning.value;
+    _musicFinder.isScanning.addListener(_onScanStateChanged);
+  }
+
+  @override
+  void dispose() {
+    _musicFinder.isScanning.removeListener(_onScanStateChanged);
+    super.dispose();
+  }
+
+  void _onScanStateChanged() {
+    if (mounted) {
+      setState(() {
+        _isScanning = _musicFinder.isScanning.value;
+      });
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -38,7 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final db = GetIt.I<AppDatabase>();
-    final musicFinder = GetIt.I<MusicFinder>();
 
     return Scaffold(
       appBar: AppBar(
@@ -65,44 +87,40 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
         ],
-        bottom: ValueListenableBuilder<bool>(
-          valueListenable: musicFinder.isScanning,
-          builder: (context, isScanning, child) {
-            return PreferredSize(
-              preferredSize: Size.fromHeight(isScanning ? 36.0 : 0.0),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                height: isScanning ? 36.0 : 0.0,
-                child: isScanning
-                    ? OverflowBox(
-                        minHeight: 0,
-                        maxHeight: double.infinity,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const LinearProgressIndicator(minHeight: 4),
-                            const SizedBox(height: 4),
-                            ValueListenableBuilder<String>(
-                              valueListenable: musicFinder.scanStatus,
-                              builder: (context, status, _) {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                  child: Text(
-                                    status,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(_isScanning ? 36.0 : 0.0),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            height: _isScanning ? 36.0 : 0.0,
+            child: _isScanning
+                ? OverflowBox(
+                    minHeight: 0,
+                    maxHeight: double.infinity,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const LinearProgressIndicator(minHeight: 4),
+                        const SizedBox(height: 4),
+                        ValueListenableBuilder<String>(
+                          valueListenable: _musicFinder.scanStatus,
+                          builder: (context, status, _) {
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8.0),
+                              child: Text(
+                                status,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            );
+                          },
                         ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            );
-          },
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ),
       ),
       body: IndexedStack(
