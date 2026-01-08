@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/google_auth_service.dart';
+import 'webview_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,34 +16,17 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   Future<void> _handleSignIn() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    // Відкриваємо WebView для логіну
+    final success = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const WebViewLoginScreen(),
+      ),
+    );
 
-    try {
-      debugPrint('[LoginScreen] Initiating Google Sign-In...');
-      final user = await _authService.signIn();
-      
-      if (user != null) {
-        debugPrint('[LoginScreen] Sign-in successful: ${user.email}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Signed in as ${user.email}')),
-          );
-          Navigator.pop(context, true);
-        }
-      } else {
-        setState(() => _error = 'Sign-in cancelled or failed');
-        debugPrint('[LoginScreen] Sign-in returned null');
-      }
-    } catch (e) {
-      debugPrint('[LoginScreen] Sign-in error: $e');
-      setState(() => _error = 'Error: ${e.toString()}');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    if (success == true && mounted) {
+      debugPrint('[LoginScreen] Login successful');
+      Navigator.pop(context, true);
     }
   }
 
@@ -153,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      '• Read access to your YouTube Music library',
+                      '• Access to your YouTube Music account via secure browser',
                       style: TextStyle(fontSize: 13),
                     ),
                     Text(
@@ -161,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(fontSize: 13),
                     ),
                     Text(
-                      '• Secure token storage for offline access',
+                      '• Secure cookie storage for offline access',
                       style: TextStyle(fontSize: 13),
                     ),
                   ],

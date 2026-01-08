@@ -8,14 +8,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:oxide_player/main.dart';
+import 'package:oxide_player/app.dart';
 
 void main() {
   testWidgets('App starts without crashing', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our app shows the home page.
-    expect(find.byType(HomePage), findsOneWidget);
+    await tester.pumpWidget(const App());
+    
+    // Verify that our app shows the main screen.
+    expect(find.byType(MainScreen), findsOneWidget);
   });
 }

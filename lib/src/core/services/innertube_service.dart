@@ -1,20 +1,16 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:get_it/get_it.dart';
 import '../../domain/entities/youtube_song.dart';
 import 'google_auth_service.dart'; // Import the GoogleAuthService
 
 class InnerTubeService {
   final Dio _dio;
-  final FlutterSecureStorage _storage;
   final GoogleAuthService _googleAuthService; // Reference to the GoogleAuthService
 
   InnerTubeService({GoogleAuthService? googleAuthService})
       : _googleAuthService = googleAuthService ?? GetIt.I<GoogleAuthService>(),
-        _storage = const FlutterSecureStorage(),
         _dio = Dio(BaseOptions(
           baseUrl: 'https://music.youtube.com/youtubei/v1',
           connectTimeout: const Duration(seconds: 10),
@@ -216,29 +212,20 @@ class InnerTubeService {
   }
 
   Future<void> _addAuthHeaders() async {
-    final cookies = await _storage.read(key: 'user_cookies');
+    final cookies = await _googleAuthService.getCookies();
     if (cookies != null && cookies.isNotEmpty) {
       debugPrint('[InnerTube] Auth: Active session found (${cookies.length} chars)');
       _dio.options.headers['Cookie'] = cookies;
     } else {
-      // Try to get access token from GoogleAuthService
-      final accessToken = await _googleAuthService.getAccessToken();
-      if (accessToken != null) {
-        debugPrint('[InnerTube] Using access token from GoogleAuthService');
-        _dio.options.headers['Authorization'] = 'Bearer $accessToken';
-      } else {
-        debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
-        _dio.options.headers.remove('Cookie');
-        _dio.options.headers.remove('Authorization');
-      }
+      debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
+      _dio.options.headers.remove('Cookie');
     }
   }
 
   Future<void> logout() async {
     debugPrint('[InnerTube] Performing logout (clearing cookies)');
-    await _storage.delete(key: 'user_cookies');
+    await _googleAuthService.signOut();
     _dio.options.headers.remove('Cookie');
-    _dio.options.headers.remove('Authorization');
   }
 
   List<YouTubeSong> _parseSearchResults(Map<String, dynamic> data) {
@@ -339,7 +326,7 @@ class InnerTubeService {
   }
 
   Future<bool> isLoggedIn() async {
-    final cookies = await _storage.read(key: 'user_cookies');
+    final cookies = await _googleAuthService.getCookies();
     if (cookies != null && cookies.isNotEmpty) {
       return true;
     }
