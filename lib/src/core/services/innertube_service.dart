@@ -2,14 +2,19 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:get_it/get_it.dart';
 import '../../domain/entities/youtube_song.dart';
+import 'google_auth_service.dart'; // Import the GoogleAuthService
 
 class InnerTubeService {
   final Dio _dio;
   final FlutterSecureStorage _storage;
+  final GoogleAuthService _googleAuthService; // Reference to the GoogleAuthService
 
-  InnerTubeService()
-      : _storage = const FlutterSecureStorage(),
+  InnerTubeService({GoogleAuthService? googleAuthService})
+      : _googleAuthService = googleAuthService ?? GetIt.I<GoogleAuthService>(),
+        _storage = const FlutterSecureStorage(),
         _dio = Dio(BaseOptions(
           baseUrl: 'https://music.youtube.com/youtubei/v1',
           connectTimeout: const Duration(seconds: 10),
@@ -30,8 +35,8 @@ class InnerTubeService {
         "client": {
           "clientName": "WEB_REMIX",
           "clientVersion": "1.20230102.01.00", 
-          "hl": "uk", 
-          "gl": "UA",
+          "hl": "en", // Changed from uk to en according to spec
+          "gl": "US", // Changed from UA to US according to spec
         }
       }
     };
@@ -216,8 +221,16 @@ class InnerTubeService {
       debugPrint('[InnerTube] Auth: Active session found (${cookies.length} chars)');
       _dio.options.headers['Cookie'] = cookies;
     } else {
-      debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
-      _dio.options.headers.remove('Cookie');
+      // Try to get access token from GoogleAuthService
+      final accessToken = await _googleAuthService.getAccessToken();
+      if (accessToken != null) {
+        debugPrint('[InnerTube] Using access token from GoogleAuthService');
+        _dio.options.headers['Authorization'] = 'Bearer $accessToken';
+      } else {
+        debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
+        _dio.options.headers.remove('Cookie');
+        _dio.options.headers.remove('Authorization');
+      }
     }
   }
 
@@ -225,6 +238,7 @@ class InnerTubeService {
     debugPrint('[InnerTube] Performing logout (clearing cookies)');
     await _storage.delete(key: 'user_cookies');
     _dio.options.headers.remove('Cookie');
+    _dio.options.headers.remove('Authorization');
   }
 
   List<YouTubeSong> _parseSearchResults(Map<String, dynamic> data) {
@@ -326,7 +340,11 @@ class InnerTubeService {
 
   Future<bool> isLoggedIn() async {
     final cookies = await _storage.read(key: 'user_cookies');
-    return cookies != null && cookies.isNotEmpty;
+    if (cookies != null && cookies.isNotEmpty) {
+      return true;
+    }
+    // Also check if user is logged in via GoogleAuthService
+    return _googleAuthService.isSignedIn();
   }
 
   Future<List<Map<String, dynamic>>> getHomeData() async {
@@ -487,7 +505,7 @@ class InnerTubeService {
       if (title == null) return null;
 
       String artist = "Unknown";
-      final flexCol1 = mrlir['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer'];
+      final flexCol1 = mrlir['flexColumns']?[1]['musicResponsiveListItemFlexColumnRenderer'];
       if (flexCol1 != null) {
         final runs = flexCol1['text']?['runs'] as List?;
         if (runs != null && runs.isNotEmpty) artist = runs[0]['text'];

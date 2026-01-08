@@ -5,7 +5,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class GoogleAuthService {
   static const String _tokenKey = 'google_access_token';
   static const String _refreshTokenKey = 'google_refresh_token';
+  // Updated to use separate client IDs for Android and iOS
   static const String _clientIdAndroid = '801317878829-oql1pd3k5rv722ka6nqjdkug6pafkrre.apps.googleusercontent.com';
+  static const String _clientIdIOS = '801317878829-j12qnjg7nqg5mqvnr6uqgv5jethvsjqh.apps.googleusercontent.com';
   
   late final GoogleSignIn _googleSignIn;
   final FlutterSecureStorage _storage;
@@ -14,16 +16,35 @@ class GoogleAuthService {
 
   GoogleAuthService({FlutterSecureStorage? storage})
       : _storage = storage ?? const FlutterSecureStorage() {
+    // Determine which client ID to use based on the platform
+    String clientId = _clientIdAndroid;
+    if (kIsWeb) {
+      // For web, we need to get the client ID from strings.xml or use web client ID
+      clientId = _clientIdAndroid; // fallback to Android ID for now
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      clientId = _clientIdIOS;
+    }
+
+    debugPrint('[GoogleAuthService] Initializing with client ID: $clientId for platform: $defaultTargetPlatform');
+
     _googleSignIn = GoogleSignIn(
-      clientId: _clientIdAndroid,
-      scopes: ['https://www.googleapis.com/auth/youtube.readonly'],
+      clientId: clientId,
+      scopes: [
+        'https://www.googleapis.com/auth/youtube.readonly',
+        'https://www.googleapis.com/auth/youtube.force-ssl',
+      ],
     );
   }
 
   /// Get current signed-in user
   Future<GoogleSignInAccount?> get currentUser async {
-    _currentUser ??= await _googleSignIn.signInSilently();
-    return _currentUser;
+    try {
+      _currentUser ??= await _googleSignIn.signInSilently();
+      return _currentUser;
+    } catch (e) {
+      debugPrint('[GoogleAuthService] Error getting current user: $e');
+      return null;
+    }
   }
 
   /// Check if user is currently signed in
@@ -36,15 +57,48 @@ class GoogleAuthService {
   Future<GoogleSignInAccount?> signIn() async {
     try {
       debugPrint('[GoogleAuthService] Starting sign-in flow...');
+      debugPrint('[GoogleAuthService] Current user before sign-in: ${_currentUser?.email}');
+      
+      // First try silent sign-in to check if we're already authenticated
+      _currentUser = await _googleSignIn.signInSilently();
+      if (_currentUser != null) {
+        debugPrint('[GoogleAuthService] Already signed in: ${_currentUser!.email}');
+        await _cacheTokens(_currentUser!);
+        return _currentUser;
+      }
+      
+      // If silent sign-in failed, proceed with interactive sign-in
+      debugPrint('[GoogleAuthService] Proceeding with interactive sign-in');
       _currentUser = await _googleSignIn.signIn();
       
       if (_currentUser != null) {
         await _cacheTokens(_currentUser!);
         debugPrint('[GoogleAuthService] Sign-in successful for: ${_currentUser!.email}');
+      } else {
+        debugPrint('[GoogleAuthService] Sign-in was cancelled by user');
       }
       return _currentUser;
     } catch (e) {
       debugPrint('[GoogleAuthService] Sign-in error: $e');
+      String errorMessage = e.toString().toLowerCase();
+      
+      if (errorMessage.contains('canceled')) {
+        debugPrint('[GoogleAuthService] User cancelled the sign-in process');
+      } else if (errorMessage.contains('network') || errorMessage.contains('connection')) {
+        debugPrint('[GoogleAuthService] Network error occurred during sign-in');
+      } else if (errorMessage.contains('apiexception: 10')) {
+        debugPrint('[GoogleAuthService] ERROR: Invalid SHA-1 certificate fingerprint!');
+        debugPrint('[GoogleAuthService] SOLUTION: Add your SHA-1 to Google Cloud Console');
+        debugPrint('[GoogleAuthService] To get SHA-1: Run in terminal:');
+        debugPrint('[GoogleAuthService] Windows: keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android');
+        debugPrint('[GoogleAuthService] Mac/Linux: keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android');
+        debugPrint('[GoogleAuthService] Then add the SHA-1 to your OAuth 2.0 Client in Google Cloud Console');
+      } else if (errorMessage.contains('access_denied')) {
+        debugPrint('[GoogleAuthService] Access denied by user or policy');
+      } else {
+        debugPrint('[GoogleAuthService] Other error occurred: $e');
+      }
+      
       return null;
     }
   }
@@ -100,6 +154,16 @@ class GoogleAuthService {
       return _lastAuth!.accessToken;
     } catch (e) {
       debugPrint('[GoogleAuthService] Error getting access token: $e');
+      // Attempt to re-authenticate if token retrieval fails
+      try {
+        _currentUser = await _googleSignIn.signInSilently();
+        if (_currentUser != null) {
+          _lastAuth = await _currentUser!.authentication;
+          return _lastAuth?.accessToken;
+        }
+      } catch (silentSignInError) {
+        debugPrint('[GoogleAuthService] Silent sign-in also failed: $silentSignInError');
+      }
       return null;
     }
   }

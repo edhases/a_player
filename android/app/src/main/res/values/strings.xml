@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="default_web_client_id">801317878829-oql1pd3k5rv722ka6nqjdkug6pafkrre.apps.googleusercontent.com</string>
+    <string name="default_ios_client_id">801317878829-j12qnjg7nqg5mqvnr6uqgv5jethvsjqh.apps.googleusercontent.com</string>
 </resources>

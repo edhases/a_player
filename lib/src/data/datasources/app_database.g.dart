@@ -488,15 +488,459 @@ class TracksCompanion extends UpdateCompanion<Track> {
   }
 }
 
+class $YouTubeTracksTable extends YouTubeTracks
+    with TableInfo<$YouTubeTracksTable, YouTubeTrack> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $YouTubeTracksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _videoIdMeta =
+      const VerificationMeta('videoId');
+  @override
+  late final GeneratedColumn<String> videoId = GeneratedColumn<String>(
+      'video_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+      'title', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _artistMeta = const VerificationMeta('artist');
+  @override
+  late final GeneratedColumn<String> artist = GeneratedColumn<String>(
+      'artist', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _thumbnailUrlMeta =
+      const VerificationMeta('thumbnailUrl');
+  @override
+  late final GeneratedColumn<String> thumbnailUrl = GeneratedColumn<String>(
+      'thumbnail_url', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _durationMeta =
+      const VerificationMeta('duration');
+  @override
+  late final GeneratedColumn<int> duration = GeneratedColumn<int>(
+      'duration', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _downloadPathMeta =
+      const VerificationMeta('downloadPath');
+  @override
+  late final GeneratedColumn<String> downloadPath = GeneratedColumn<String>(
+      'download_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _lastPlayedMeta =
+      const VerificationMeta('lastPlayed');
+  @override
+  late final GeneratedColumn<DateTime> lastPlayed = GeneratedColumn<DateTime>(
+      'last_played', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _cachedAtMeta =
+      const VerificationMeta('cachedAt');
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+      'cached_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        videoId,
+        title,
+        artist,
+        thumbnailUrl,
+        duration,
+        downloadPath,
+        lastPlayed,
+        cachedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'you_tube_tracks';
+  @override
+  VerificationContext validateIntegrity(Insertable<YouTubeTrack> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('video_id')) {
+      context.handle(_videoIdMeta,
+          videoId.isAcceptableOrUnknown(data['video_id']!, _videoIdMeta));
+    } else if (isInserting) {
+      context.missing(_videoIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('artist')) {
+      context.handle(_artistMeta,
+          artist.isAcceptableOrUnknown(data['artist']!, _artistMeta));
+    } else if (isInserting) {
+      context.missing(_artistMeta);
+    }
+    if (data.containsKey('thumbnail_url')) {
+      context.handle(
+          _thumbnailUrlMeta,
+          thumbnailUrl.isAcceptableOrUnknown(
+              data['thumbnail_url']!, _thumbnailUrlMeta));
+    } else if (isInserting) {
+      context.missing(_thumbnailUrlMeta);
+    }
+    if (data.containsKey('duration')) {
+      context.handle(_durationMeta,
+          duration.isAcceptableOrUnknown(data['duration']!, _durationMeta));
+    } else if (isInserting) {
+      context.missing(_durationMeta);
+    }
+    if (data.containsKey('download_path')) {
+      context.handle(
+          _downloadPathMeta,
+          downloadPath.isAcceptableOrUnknown(
+              data['download_path']!, _downloadPathMeta));
+    }
+    if (data.containsKey('last_played')) {
+      context.handle(
+          _lastPlayedMeta,
+          lastPlayed.isAcceptableOrUnknown(
+              data['last_played']!, _lastPlayedMeta));
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(_cachedAtMeta,
+          cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta));
+    } else if (isInserting) {
+      context.missing(_cachedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {videoId};
+  @override
+  YouTubeTrack map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return YouTubeTrack(
+      videoId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}video_id'])!,
+      title: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
+      artist: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}artist'])!,
+      thumbnailUrl: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}thumbnail_url'])!,
+      duration: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}duration'])!,
+      downloadPath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}download_path']),
+      lastPlayed: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}last_played']),
+      cachedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}cached_at'])!,
+    );
+  }
+
+  @override
+  $YouTubeTracksTable createAlias(String alias) {
+    return $YouTubeTracksTable(attachedDatabase, alias);
+  }
+}
+
+class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
+  final String videoId;
+  final String title;
+  final String artist;
+  final String thumbnailUrl;
+  final int duration;
+  final String? downloadPath;
+  final DateTime? lastPlayed;
+  final DateTime cachedAt;
+  const YouTubeTrack(
+      {required this.videoId,
+      required this.title,
+      required this.artist,
+      required this.thumbnailUrl,
+      required this.duration,
+      this.downloadPath,
+      this.lastPlayed,
+      required this.cachedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['video_id'] = Variable<String>(videoId);
+    map['title'] = Variable<String>(title);
+    map['artist'] = Variable<String>(artist);
+    map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    map['duration'] = Variable<int>(duration);
+    if (!nullToAbsent || downloadPath != null) {
+      map['download_path'] = Variable<String>(downloadPath);
+    }
+    if (!nullToAbsent || lastPlayed != null) {
+      map['last_played'] = Variable<DateTime>(lastPlayed);
+    }
+    map['cached_at'] = Variable<DateTime>(cachedAt);
+    return map;
+  }
+
+  YouTubeTracksCompanion toCompanion(bool nullToAbsent) {
+    return YouTubeTracksCompanion(
+      videoId: Value(videoId),
+      title: Value(title),
+      artist: Value(artist),
+      thumbnailUrl: Value(thumbnailUrl),
+      duration: Value(duration),
+      downloadPath: downloadPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(downloadPath),
+      lastPlayed: lastPlayed == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPlayed),
+      cachedAt: Value(cachedAt),
+    );
+  }
+
+  factory YouTubeTrack.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return YouTubeTrack(
+      videoId: serializer.fromJson<String>(json['videoId']),
+      title: serializer.fromJson<String>(json['title']),
+      artist: serializer.fromJson<String>(json['artist']),
+      thumbnailUrl: serializer.fromJson<String>(json['thumbnailUrl']),
+      duration: serializer.fromJson<int>(json['duration']),
+      downloadPath: serializer.fromJson<String?>(json['downloadPath']),
+      lastPlayed: serializer.fromJson<DateTime?>(json['lastPlayed']),
+      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'videoId': serializer.toJson<String>(videoId),
+      'title': serializer.toJson<String>(title),
+      'artist': serializer.toJson<String>(artist),
+      'thumbnailUrl': serializer.toJson<String>(thumbnailUrl),
+      'duration': serializer.toJson<int>(duration),
+      'downloadPath': serializer.toJson<String?>(downloadPath),
+      'lastPlayed': serializer.toJson<DateTime?>(lastPlayed),
+      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+    };
+  }
+
+  YouTubeTrack copyWith(
+          {String? videoId,
+          String? title,
+          String? artist,
+          String? thumbnailUrl,
+          int? duration,
+          Value<String?> downloadPath = const Value.absent(),
+          Value<DateTime?> lastPlayed = const Value.absent(),
+          DateTime? cachedAt}) =>
+      YouTubeTrack(
+        videoId: videoId ?? this.videoId,
+        title: title ?? this.title,
+        artist: artist ?? this.artist,
+        thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+        duration: duration ?? this.duration,
+        downloadPath:
+            downloadPath.present ? downloadPath.value : this.downloadPath,
+        lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
+        cachedAt: cachedAt ?? this.cachedAt,
+      );
+  YouTubeTrack copyWithCompanion(YouTubeTracksCompanion data) {
+    return YouTubeTrack(
+      videoId: data.videoId.present ? data.videoId.value : this.videoId,
+      title: data.title.present ? data.title.value : this.title,
+      artist: data.artist.present ? data.artist.value : this.artist,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
+      duration: data.duration.present ? data.duration.value : this.duration,
+      downloadPath: data.downloadPath.present
+          ? data.downloadPath.value
+          : this.downloadPath,
+      lastPlayed:
+          data.lastPlayed.present ? data.lastPlayed.value : this.lastPlayed,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('YouTubeTrack(')
+          ..write('videoId: $videoId, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('duration: $duration, ')
+          ..write('downloadPath: $downloadPath, ')
+          ..write('lastPlayed: $lastPlayed, ')
+          ..write('cachedAt: $cachedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(videoId, title, artist, thumbnailUrl,
+      duration, downloadPath, lastPlayed, cachedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is YouTubeTrack &&
+          other.videoId == this.videoId &&
+          other.title == this.title &&
+          other.artist == this.artist &&
+          other.thumbnailUrl == this.thumbnailUrl &&
+          other.duration == this.duration &&
+          other.downloadPath == this.downloadPath &&
+          other.lastPlayed == this.lastPlayed &&
+          other.cachedAt == this.cachedAt);
+}
+
+class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
+  final Value<String> videoId;
+  final Value<String> title;
+  final Value<String> artist;
+  final Value<String> thumbnailUrl;
+  final Value<int> duration;
+  final Value<String?> downloadPath;
+  final Value<DateTime?> lastPlayed;
+  final Value<DateTime> cachedAt;
+  final Value<int> rowid;
+  const YouTubeTracksCompanion({
+    this.videoId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.artist = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.duration = const Value.absent(),
+    this.downloadPath = const Value.absent(),
+    this.lastPlayed = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  YouTubeTracksCompanion.insert({
+    required String videoId,
+    required String title,
+    required String artist,
+    required String thumbnailUrl,
+    required int duration,
+    this.downloadPath = const Value.absent(),
+    this.lastPlayed = const Value.absent(),
+    required DateTime cachedAt,
+    this.rowid = const Value.absent(),
+  })  : videoId = Value(videoId),
+        title = Value(title),
+        artist = Value(artist),
+        thumbnailUrl = Value(thumbnailUrl),
+        duration = Value(duration),
+        cachedAt = Value(cachedAt);
+  static Insertable<YouTubeTrack> custom({
+    Expression<String>? videoId,
+    Expression<String>? title,
+    Expression<String>? artist,
+    Expression<String>? thumbnailUrl,
+    Expression<int>? duration,
+    Expression<String>? downloadPath,
+    Expression<DateTime>? lastPlayed,
+    Expression<DateTime>? cachedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (videoId != null) 'video_id': videoId,
+      if (title != null) 'title': title,
+      if (artist != null) 'artist': artist,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (duration != null) 'duration': duration,
+      if (downloadPath != null) 'download_path': downloadPath,
+      if (lastPlayed != null) 'last_played': lastPlayed,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  YouTubeTracksCompanion copyWith(
+      {Value<String>? videoId,
+      Value<String>? title,
+      Value<String>? artist,
+      Value<String>? thumbnailUrl,
+      Value<int>? duration,
+      Value<String?>? downloadPath,
+      Value<DateTime?>? lastPlayed,
+      Value<DateTime>? cachedAt,
+      Value<int>? rowid}) {
+    return YouTubeTracksCompanion(
+      videoId: videoId ?? this.videoId,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      duration: duration ?? this.duration,
+      downloadPath: downloadPath ?? this.downloadPath,
+      lastPlayed: lastPlayed ?? this.lastPlayed,
+      cachedAt: cachedAt ?? this.cachedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (videoId.present) {
+      map['video_id'] = Variable<String>(videoId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (artist.present) {
+      map['artist'] = Variable<String>(artist.value);
+    }
+    if (thumbnailUrl.present) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
+    }
+    if (duration.present) {
+      map['duration'] = Variable<int>(duration.value);
+    }
+    if (downloadPath.present) {
+      map['download_path'] = Variable<String>(downloadPath.value);
+    }
+    if (lastPlayed.present) {
+      map['last_played'] = Variable<DateTime>(lastPlayed.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('YouTubeTracksCompanion(')
+          ..write('videoId: $videoId, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('duration: $duration, ')
+          ..write('downloadPath: $downloadPath, ')
+          ..write('lastPlayed: $lastPlayed, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $TracksTable tracks = $TracksTable(this);
+  late final $YouTubeTracksTable youTubeTracks = $YouTubeTracksTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [tracks];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [tracks, youTubeTracks];
 }
 
 typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
@@ -725,10 +1169,232 @@ typedef $$TracksTableProcessedTableManager = ProcessedTableManager<
     (Track, BaseReferences<_$AppDatabase, $TracksTable, Track>),
     Track,
     PrefetchHooks Function()>;
+typedef $$YouTubeTracksTableCreateCompanionBuilder = YouTubeTracksCompanion
+    Function({
+  required String videoId,
+  required String title,
+  required String artist,
+  required String thumbnailUrl,
+  required int duration,
+  Value<String?> downloadPath,
+  Value<DateTime?> lastPlayed,
+  required DateTime cachedAt,
+  Value<int> rowid,
+});
+typedef $$YouTubeTracksTableUpdateCompanionBuilder = YouTubeTracksCompanion
+    Function({
+  Value<String> videoId,
+  Value<String> title,
+  Value<String> artist,
+  Value<String> thumbnailUrl,
+  Value<int> duration,
+  Value<String?> downloadPath,
+  Value<DateTime?> lastPlayed,
+  Value<DateTime> cachedAt,
+  Value<int> rowid,
+});
+
+class $$YouTubeTracksTableFilterComposer
+    extends Composer<_$AppDatabase, $YouTubeTracksTable> {
+  $$YouTubeTracksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get videoId => $composableBuilder(
+      column: $table.videoId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get artist => $composableBuilder(
+      column: $table.artist, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get thumbnailUrl => $composableBuilder(
+      column: $table.thumbnailUrl, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get duration => $composableBuilder(
+      column: $table.duration, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get downloadPath => $composableBuilder(
+      column: $table.downloadPath, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastPlayed => $composableBuilder(
+      column: $table.lastPlayed, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$YouTubeTracksTableOrderingComposer
+    extends Composer<_$AppDatabase, $YouTubeTracksTable> {
+  $$YouTubeTracksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get videoId => $composableBuilder(
+      column: $table.videoId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get artist => $composableBuilder(
+      column: $table.artist, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get thumbnailUrl => $composableBuilder(
+      column: $table.thumbnailUrl,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get duration => $composableBuilder(
+      column: $table.duration, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get downloadPath => $composableBuilder(
+      column: $table.downloadPath,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastPlayed => $composableBuilder(
+      column: $table.lastPlayed, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+      column: $table.cachedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$YouTubeTracksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $YouTubeTracksTable> {
+  $$YouTubeTracksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get videoId =>
+      $composableBuilder(column: $table.videoId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get artist =>
+      $composableBuilder(column: $table.artist, builder: (column) => column);
+
+  GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
+      column: $table.thumbnailUrl, builder: (column) => column);
+
+  GeneratedColumn<int> get duration =>
+      $composableBuilder(column: $table.duration, builder: (column) => column);
+
+  GeneratedColumn<String> get downloadPath => $composableBuilder(
+      column: $table.downloadPath, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastPlayed => $composableBuilder(
+      column: $table.lastPlayed, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+}
+
+class $$YouTubeTracksTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $YouTubeTracksTable,
+    YouTubeTrack,
+    $$YouTubeTracksTableFilterComposer,
+    $$YouTubeTracksTableOrderingComposer,
+    $$YouTubeTracksTableAnnotationComposer,
+    $$YouTubeTracksTableCreateCompanionBuilder,
+    $$YouTubeTracksTableUpdateCompanionBuilder,
+    (
+      YouTubeTrack,
+      BaseReferences<_$AppDatabase, $YouTubeTracksTable, YouTubeTrack>
+    ),
+    YouTubeTrack,
+    PrefetchHooks Function()> {
+  $$YouTubeTracksTableTableManager(_$AppDatabase db, $YouTubeTracksTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$YouTubeTracksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$YouTubeTracksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$YouTubeTracksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> videoId = const Value.absent(),
+            Value<String> title = const Value.absent(),
+            Value<String> artist = const Value.absent(),
+            Value<String> thumbnailUrl = const Value.absent(),
+            Value<int> duration = const Value.absent(),
+            Value<String?> downloadPath = const Value.absent(),
+            Value<DateTime?> lastPlayed = const Value.absent(),
+            Value<DateTime> cachedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              YouTubeTracksCompanion(
+            videoId: videoId,
+            title: title,
+            artist: artist,
+            thumbnailUrl: thumbnailUrl,
+            duration: duration,
+            downloadPath: downloadPath,
+            lastPlayed: lastPlayed,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String videoId,
+            required String title,
+            required String artist,
+            required String thumbnailUrl,
+            required int duration,
+            Value<String?> downloadPath = const Value.absent(),
+            Value<DateTime?> lastPlayed = const Value.absent(),
+            required DateTime cachedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              YouTubeTracksCompanion.insert(
+            videoId: videoId,
+            title: title,
+            artist: artist,
+            thumbnailUrl: thumbnailUrl,
+            duration: duration,
+            downloadPath: downloadPath,
+            lastPlayed: lastPlayed,
+            cachedAt: cachedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$YouTubeTracksTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $YouTubeTracksTable,
+    YouTubeTrack,
+    $$YouTubeTracksTableFilterComposer,
+    $$YouTubeTracksTableOrderingComposer,
+    $$YouTubeTracksTableAnnotationComposer,
+    $$YouTubeTracksTableCreateCompanionBuilder,
+    $$YouTubeTracksTableUpdateCompanionBuilder,
+    (
+      YouTubeTrack,
+      BaseReferences<_$AppDatabase, $YouTubeTracksTable, YouTubeTrack>
+    ),
+    YouTubeTrack,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
   $$TracksTableTableManager get tracks =>
       $$TracksTableTableManager(_db, _db.tracks);
+  $$YouTubeTracksTableTableManager get youTubeTracks =>
+      $$YouTubeTracksTableTableManager(_db, _db.youTubeTracks);
 }

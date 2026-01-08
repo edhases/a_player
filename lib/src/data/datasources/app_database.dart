@@ -72,7 +72,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5; // Incremented from 4
+  int get schemaVersion => 6; // Incremented from 5
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -88,12 +88,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 4) {
         await m.addColumn(tracks, tracks.mediaStoreId);
       }
-      // YouTube tracks table disabled for now
-      /*
       if (from < 5) {
+        // Add YouTube tracks table
         await m.createTable(youTubeTracks);
       }
-      */
     },
   );
 
@@ -158,15 +156,10 @@ class AppDatabase extends _$AppDatabase {
   }
 
   // --- YOUTUBE TRACK METHODS ---
-  // These methods are disabled for now due to Drift database structure changes
-  /*
-  
+  // These methods are enabled for YouTube metadata caching
   // Insert or update a YouTube track
   Future<void> upsertYouTubeTrack(YouTubeTrack track) async {
-    await into(youTubeTracks).insert(
-      track,
-      onConflict: DoUpdate((old) => track),
-    );
+    await into(youTubeTracks).insertOnConflictUpdate(track);
   }
   
   // Get a YouTube track by video ID
@@ -192,7 +185,6 @@ class AppDatabase extends _$AppDatabase {
       YouTubeTracksCompanion(lastPlayed: Value(DateTime.now())),
     );
   }
-  */
 }
 
 LazyDatabase _openConnection() {

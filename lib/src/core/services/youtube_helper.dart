@@ -4,14 +4,19 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
+import 'package:drift/drift.dart';
+import 'google_auth_service.dart'; // Import the GoogleAuthService
+import 'package:get_it/get_it.dart';
 
 /// YouTube Helper — wrapper навколо YoutubeExplode для управління
 /// URL потоків, кешування й отримання метаданих видео
 class YouTubeHelper {
   final YoutubeExplode _yt = YoutubeExplode();
   final AppDatabase _db;
+  final GoogleAuthService? _authService; // Optional reference to GoogleAuthService
 
-  YouTubeHelper(this._db);
+  YouTubeHelper(this._db, {GoogleAuthService? authService}) 
+      : _authService = authService ?? GetIt.I<GoogleAuthService>();
 
   /// Отримати URL для потокування аудіо
   Future<String?> getAudioUrl(String videoId) async {
@@ -146,9 +151,7 @@ class YouTubeHelper {
       debugPrint('[YouTubeHelper] Downloaded to: $filePath');
 
       // Оновити кеш з шляхом до файлу
-      await _db.update(_db.youTubeTracks)
-        ..where((tbl) => tbl.videoId.equals(videoId))
-        ..write(YouTubeTracksCompanion(downloadPath: Value(filePath)));
+      await _db.updateDownloadPath(videoId, filePath);
 
       return filePath;
     } catch (e) {
@@ -166,9 +169,7 @@ class YouTubeHelper {
         if (await file.exists()) {
           await file.delete();
           // Оновити кеш
-          await _db.update(_db.youTubeTracks)
-            ..where((tbl) => tbl.videoId.equals(videoId))
-            ..write(YouTubeTracksCompanion(downloadPath: const Value(null)));
+          await _db.updateDownloadPath(videoId, null);
           return true;
         }
       }
@@ -201,16 +202,19 @@ class YouTubeHelper {
     try {
       debugPrint('[YouTubeHelper] Caching metadata for: $videoId');
 
-      final companion = YouTubeTracksCompanion(
-        videoId: Value(videoId),
-        title: Value(title),
-        artist: Value(artist),
-        thumbnailUrl: Value(thumbnailUrl),
-        duration: Value(duration ?? 0),
-        cachedAt: Value(DateTime.now()),
+      await _db.upsertYouTubeTrack(
+        YouTubeTrack(
+          videoId: videoId,
+          title: title,
+          artist: artist,
+          thumbnailUrl: thumbnailUrl,
+          duration: duration ?? 0,
+          downloadPath: null,
+          lastPlayed: null,
+          cachedAt: DateTime.now(),
+        )
       );
 
-      await _db.into(_db.youTubeTracks).insertOnConflictUpdate(companion);
       debugPrint('[YouTubeHelper] Metadata cached successfully');
     } catch (e) {
       debugPrint('[YouTubeHelper] Error caching metadata: $e');
@@ -220,10 +224,7 @@ class YouTubeHelper {
   /// Отримати кешовані метадані
   Future<YouTubeTrack?> getCachedMetadata(String videoId) async {
     try {
-      final query = _db.select(_db.youTubeTracks)
-        ..where((tbl) => tbl.videoId.equals(videoId));
-
-      final result = await query.getSingleOrNull();
+      final result = await _db.getYouTubeTrack(videoId);
       return result;
     } catch (e) {
       debugPrint('[YouTubeHelper] Error getting cached metadata: $e');
@@ -282,6 +283,9 @@ class YouTubeHelper {
       return [];
     }
   }
+
+  /// Create a MediaItem from a YouTube video ID
+  Future<MediaItem> createMediaItem(String videoId, {String? customTitle, String? customArtist}) async {
     try {
       // Спочатку перевірити кеш
       var cached = await getCachedMetadata(videoId);
