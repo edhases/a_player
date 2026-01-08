@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
 
 /// YouTube Helper — wrapper навколо YoutubeExplode для управління
@@ -44,8 +47,30 @@ class YouTubeHelper {
   Future<Video?> getVideoDetails(String videoId) async {
     try {
       debugPrint('[YouTubeHelper] Getting video details for: $videoId');
+
+      // Спочатку перевірити кеш
+      final cached = await getCachedMetadata(videoId);
+      if (cached != null) {
+        debugPrint('[YouTubeHelper] Using cached data: ${cached.title}');
+        // Повернути базову інформацію з кеша (можна створити простий Video об'єкт або повернути дані окремо)
+        return await _yt.videos.get(videoId); // Тимчасово все ще отримуємо з YouTube для повних даних
+      }
+
       final video = await _yt.videos.get(videoId);
       debugPrint('[YouTubeHelper] Video: ${video.title} (${video.duration})');
+
+      // Кешувати метадані
+      final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+      if (thumbnailUrl != null) {
+        await cacheVideoMetadata(
+          videoId,
+          video.title,
+          video.author,
+          thumbnailUrl.toString(),
+          video.duration?.inSeconds,
+        );
+      }
+
       return video;
     } catch (e) {
       debugPrint('[YouTubeHelper] Error getting video details: $e');
@@ -53,10 +78,117 @@ class YouTubeHelper {
     }
   }
 
-  /// Отримати локальний шлях до файлу, якщо доступно
+  /// Отримати відео з YouTube плейлиста
+  Future<List<Video>> getPlaylistVideos(String playlistId) async {
+    try {
+      debugPrint('[YouTubeHelper] Getting playlist videos for: $playlistId');
+      final playlist = await _yt.playlists.get(playlistId);
+      final videos = await _yt.playlists.getVideos(playlistId).toList();
+
+      debugPrint('[YouTubeHelper] Playlist: ${playlist.title}, videos: ${videos.length}');
+
+      // Кешувати метадані для кожного відео
+      for (final video in videos) {
+        final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+        if (thumbnailUrl != null) {
+          await cacheVideoMetadata(
+            video.id.value,
+            video.title,
+            video.author,
+            thumbnailUrl.toString(),
+            video.duration?.inSeconds,
+          );
+        }
+      }
+
+      return videos;
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error getting playlist videos: $e');
+      return [];
+    }
+  }
+
+  /// Завантажити аудіо файл локально для офлайн відтворення
+  Future<String?> downloadAudio(String videoId, {Function(double)? onProgress}) async {
+    try {
+      debugPrint('[YouTubeHelper] Downloading audio for: $videoId');
+
+      final cached = await getCachedMetadata(videoId);
+      if (cached == null) {
+        debugPrint('[YouTubeHelper] No cached metadata found for download');
+        return null;
+      }
+
+      final manifest = await _yt.videos.streams.getManifest(videoId);
+      final audioStream = manifest.audioOnly.withHighestBitrate();
+
+      if (audioStream == null) return null;
+
+      final stream = _yt.videos.streams.get(audioStream);
+
+      // Отримати директорію для завантажень
+      final directory = await getApplicationDocumentsDirectory();
+      final downloadDir = Directory('${directory.path}/downloads');
+      if (!await downloadDir.exists()) {
+        await downloadDir.create(recursive: true);
+      }
+
+      final fileName = '${cached.title.replaceAll(RegExp(r'[^\w\s]'), '')}_${videoId}.mp3';
+      final filePath = '${downloadDir.path}/$fileName';
+      final file = File(filePath);
+
+      // Завантажити файл з прогресом
+      final streamLength = audioStream.size.totalBytes;
+      var downloadedBytes = 0;
+
+      await stream.pipe(file.openWrite());
+
+      debugPrint('[YouTubeHelper] Downloaded to: $filePath');
+
+      // Оновити кеш з шляхом до файлу
+      await _db.update(_db.youTubeTracks)
+        ..where((tbl) => tbl.videoId.equals(videoId))
+        ..write(YouTubeTracksCompanion(downloadPath: Value(filePath)));
+
+      return filePath;
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error downloading audio: $e');
+      return null;
+    }
+  }
+
+  /// Видалити завантажений файл
+  Future<bool> deleteDownloadedAudio(String videoId) async {
+    try {
+      final cached = await getCachedMetadata(videoId);
+      if (cached != null && cached.downloadPath != null) {
+        final file = File(cached.downloadPath!);
+        if (await file.exists()) {
+          await file.delete();
+          // Оновити кеш
+          await _db.update(_db.youTubeTracks)
+            ..where((tbl) => tbl.videoId.equals(videoId))
+            ..write(YouTubeTracksCompanion(downloadPath: const Value(null)));
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error deleting downloaded audio: $e');
+      return false;
+    }
+  }
+
+  /// Перевірити чи файл доступний офлайн
   Future<String?> getLocalFilePath(String videoId) async {
     try {
-      // Просто повертаємо null тут, оскільки офлайн завантаження є окремою функцією
+      final cached = await getCachedMetadata(videoId);
+      if (cached != null && cached.downloadPath != null) {
+        final file = File(cached.downloadPath!);
+        if (await file.exists()) {
+          return cached.downloadPath;
+        }
+      }
       return null;
     } catch (e) {
       debugPrint('[YouTubeHelper] Error getting local file path: $e');
@@ -68,14 +200,145 @@ class YouTubeHelper {
   Future<void> cacheVideoMetadata(String videoId, String title, String artist, String thumbnailUrl, int? duration) async {
     try {
       debugPrint('[YouTubeHelper] Caching metadata for: $videoId');
-      // Тут можна зберегти до бази даних YouTube треків, якщо потрібно
+
+      final companion = YouTubeTracksCompanion(
+        videoId: Value(videoId),
+        title: Value(title),
+        artist: Value(artist),
+        thumbnailUrl: Value(thumbnailUrl),
+        duration: Value(duration ?? 0),
+        cachedAt: Value(DateTime.now()),
+      );
+
+      await _db.into(_db.youTubeTracks).insertOnConflictUpdate(companion);
+      debugPrint('[YouTubeHelper] Metadata cached successfully');
     } catch (e) {
       debugPrint('[YouTubeHelper] Error caching metadata: $e');
     }
   }
 
-  /// Закрити YoutubeExplode
-  void dispose() {
-    _yt.close();
+  /// Отримати кешовані метадані
+  Future<YouTubeTrack?> getCachedMetadata(String videoId) async {
+    try {
+      final query = _db.select(_db.youTubeTracks)
+        ..where((tbl) => tbl.videoId.equals(videoId));
+
+      final result = await query.getSingleOrNull();
+      return result;
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error getting cached metadata: $e');
+      return null;
+    }
+  }
+
+  /// Отримати thumbnail URL для відео
+  Future<String?> getThumbnailUrl(String videoId) async {
+    try {
+      // Спочатку перевірити кеш
+      final cached = await getCachedMetadata(videoId);
+      if (cached != null && cached.thumbnailUrl.isNotEmpty) {
+        return cached.thumbnailUrl;
+      }
+
+      // Якщо немає в кеші, отримати з YouTube
+      final video = await _yt.videos.get(videoId);
+      final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+
+      if (thumbnailUrl != null) {
+        // Кешувати метадані
+        await cacheVideoMetadata(
+          videoId,
+          video.title,
+          video.author,
+          thumbnailUrl.toString(),
+          video.duration?.inSeconds,
+        );
+        return thumbnailUrl.toString();
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error getting thumbnail: $e');
+      return null;
+    }
+  }
+
+  /// Створити чергу відтворення з YouTube плейлиста
+  Future<List<MediaItem>> createPlaylistQueue(String playlistId) async {
+    try {
+      debugPrint('[YouTubeHelper] Creating playlist queue for: $playlistId');
+      final videos = await getPlaylistVideos(playlistId);
+
+      final mediaItems = <MediaItem>[];
+      for (final video in videos) {
+        final mediaItem = await createMediaItem(video.id.value, customTitle: video.title, customArtist: video.author);
+        mediaItems.add(mediaItem);
+      }
+
+      debugPrint('[YouTubeHelper] Created ${mediaItems.length} media items from playlist');
+      return mediaItems;
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error creating playlist queue: $e');
+      return [];
+    }
+  }
+    try {
+      // Спочатку перевірити кеш
+      var cached = await getCachedMetadata(videoId);
+
+      if (cached == null) {
+        // Якщо немає в кеші, отримати дані з YouTube
+        final video = await _yt.videos.get(videoId);
+        final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+
+        if (thumbnailUrl != null) {
+          await cacheVideoMetadata(
+            videoId,
+            video.title,
+            video.author,
+            thumbnailUrl.toString(),
+            video.duration?.inSeconds,
+          );
+          cached = await getCachedMetadata(videoId);
+        }
+      }
+
+      if (cached != null) {
+        // Перевірити чи є локальний файл для офлайн відтворення
+        final localPath = await getLocalFilePath(videoId);
+        final mediaId = localPath ?? await getAudioUrl(videoId);
+
+        if (mediaId == null) return MediaItem(id: videoId, title: 'Error loading');
+
+        final desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+
+        return MediaItem(
+          id: mediaId,
+          title: customTitle ?? cached.title,
+          artist: customArtist ?? cached.artist,
+          duration: Duration(seconds: cached.duration),
+          artUri: Uri.parse(cached.thumbnailUrl),
+          extras: {
+            'isOnline': localPath == null, // true якщо онлайн, false якщо офлайн
+            'videoId': videoId,
+            'user_agent': desktopUA,
+          },
+        );
+      }
+
+      // Fallback якщо немає кеша
+      return MediaItem(
+        id: videoId,
+        title: customTitle ?? 'Unknown Title',
+        artist: customArtist ?? 'Unknown Artist',
+      );
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error creating MediaItem: $e');
+      return MediaItem(
+        id: videoId,
+        title: customTitle ?? 'Error',
+        artist: customArtist ?? 'Error',
+      );
+    }
   }
 }

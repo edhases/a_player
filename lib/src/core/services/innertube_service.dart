@@ -2,14 +2,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:get_it/get_it.dart';
 import '../../domain/entities/youtube_song.dart';
-import 'google_auth_service.dart';
 
 class InnerTubeService {
   final Dio _dio;
   final FlutterSecureStorage _storage;
-  late final GoogleAuthService _authService;
 
   InnerTubeService()
       : _storage = const FlutterSecureStorage(),
@@ -25,9 +22,7 @@ class InnerTubeService {
             'X-Goog-AuthUser': '0',
             'Origin': 'https://music.youtube.com',
           },
-        )) {
-    _authService = GetIt.I<GoogleAuthService>();
-  }
+        ));
 
   Map<String, dynamic> _webContextBody() {
     return {
@@ -35,8 +30,8 @@ class InnerTubeService {
         "client": {
           "clientName": "WEB_REMIX",
           "clientVersion": "1.20230102.01.00", 
-          "hl": "en", 
-          "gl": "US",
+          "hl": "uk", 
+          "gl": "UA",
         }
       }
     };
@@ -216,37 +211,20 @@ class InnerTubeService {
   }
 
   Future<void> _addAuthHeaders() async {
-    // First, try to use OAuth2 Bearer token
-    final accessToken = await _authService.getAccessToken();
-    if (accessToken != null && accessToken.isNotEmpty) {
-      debugPrint('[InnerTube] Auth: OAuth2 Bearer token applied (${accessToken.length} chars)');
-      _dio.options.headers['Authorization'] = 'Bearer $accessToken';
-      _dio.options.headers.remove('Cookie');
-      return;
-    }
-
-    // Fallback to legacy cookie-based authentication
     final cookies = await _storage.read(key: 'user_cookies');
     if (cookies != null && cookies.isNotEmpty) {
-      debugPrint('[InnerTube] Auth: Legacy session found (cookie-based, ${cookies.length} chars)');
+      debugPrint('[InnerTube] Auth: Active session found (${cookies.length} chars)');
       _dio.options.headers['Cookie'] = cookies;
-      _dio.options.headers.remove('Authorization');
-      return;
+    } else {
+      debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
+      _dio.options.headers.remove('Cookie');
     }
-
-    debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
-    _dio.options.headers.remove('Authorization');
-    _dio.options.headers.remove('Cookie');
   }
 
   Future<void> logout() async {
-    debugPrint('[InnerTube] Performing logout (clearing OAuth tokens and cookies)');
-    // Clear legacy cookies
+    debugPrint('[InnerTube] Performing logout (clearing cookies)');
     await _storage.delete(key: 'user_cookies');
     _dio.options.headers.remove('Cookie');
-    // Sign out from Google
-    await _authService.signOut();
-    _dio.options.headers.remove('Authorization');
   }
 
   List<YouTubeSong> _parseSearchResults(Map<String, dynamic> data) {
@@ -347,12 +325,6 @@ class InnerTubeService {
   }
 
   Future<bool> isLoggedIn() async {
-    // Check OAuth2 authentication first
-    if (await _authService.isSignedIn()) {
-      return true;
-    }
-    
-    // Fallback to legacy cookie check
     final cookies = await _storage.read(key: 'user_cookies');
     return cookies != null && cookies.isNotEmpty;
   }

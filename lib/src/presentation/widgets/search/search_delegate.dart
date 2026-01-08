@@ -309,18 +309,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
         debugPrint('[SearchDelegate] Ready to play YouTube. URL starts with: ${url.substring(0, 50)}...');
         debugPrint('[SearchDelegate] Duration: $duration, User-Agent: $userAgent');
         
-        final mediaItem = MediaItem(
-          id: url, 
-          title: song.title,
-          artist: song.artist,
-          duration: duration,
-          artUri: Uri.parse(song.thumbnailUrl),
-          extras: {
-            'isOnline': true, 
-            'videoId': song.videoId,
-            if (userAgent != null) 'user_agent': userAgent, // Critical for avoiding 403
-          },
-        );
+        final mediaItem = await _ytHelper.createMediaItem(song.videoId, customTitle: song.title, customArtist: song.artist);
 
         await widget.audioHandler.updateQueue([mediaItem]);
         // Don't await play() here as it might hang 20s on emulators

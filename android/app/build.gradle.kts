@@ -6,8 +6,8 @@ plugins {
 }
 
 android {
-    namespace = "com.oxideplayer.app"
-    compileSdk = 36
+    namespace = "com.example.vor_player"
+    compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -17,11 +17,11 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.oxideplayer.app"
+        applicationId = "com.example.vor_player"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = 36
+        targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -37,10 +37,6 @@ android {
 
 flutter {
     source = "../.."
-}
-
-dependencies {
-    implementation("com.google.android.gms:play-services-auth:20.7.0")
 }
 
 kotlin {

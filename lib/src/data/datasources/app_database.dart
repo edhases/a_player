@@ -11,36 +11,37 @@ part 'app_database.g.dart';
 
 @DataClassName('Track')
 class Tracks extends Table {
-  TextColumn get path => text().unique();
-  TextColumn get title => text();
-  TextColumn get artist => text().nullable();
-  TextColumn get album => text().nullable();
-  IntColumn get duration => integer();
-  TextColumn get folderPath => text();
-  TextColumn get artworkUri => text().nullable();
-  BoolColumn get isFavorite => boolean().withDefault(const Constant(false));
-  IntColumn get mediaStoreId => integer().nullable();
+  TextColumn get path => text()();
+  TextColumn get title => text()();
+  TextColumn get artist => text().nullable()();
+  TextColumn get album => text().nullable()();
+  IntColumn get duration => integer()();
+  TextColumn get folderPath => text()();
+  TextColumn get artworkUri => text().nullable()();
+  BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+  IntColumn get mediaStoreId => integer().nullable()();
 
   @override
-  Set<Column<Object>> get primaryKey => {path};
+  List<Set<Column>> get uniqueKeys => [
+    {path}, // path is unique
+  ];
 }
 
-// YouTube track table disabled for now due to Drift database structure changes
-/*
+// YouTube track table for caching metadata and offline support
 @DataClassName('YouTubeTrack')
 class YouTubeTracks extends Table {
-  TextColumn get videoId => text().unique();
-  TextColumn get title => text();
-  TextColumn get artist => text();
-  TextColumn get thumbnailUrl => text();
-  IntColumn get duration => integer();
-  TextColumn get downloadPath => text().nullable(); // Path to downloaded file for offline play
-  DateTimeColumn get lastPlayed => dateTime().nullable();
+  TextColumn get videoId => text()();
+  TextColumn get title => text()();
+  TextColumn get artist => text()();
+  TextColumn get thumbnailUrl => text()();
+  IntColumn get duration => integer()();
+  TextColumn get downloadPath => text().nullable()(); // Path to downloaded file for offline play
+  DateTimeColumn get lastPlayed => dateTime().nullable()();
+  DateTimeColumn get cachedAt => dateTime()(); // When metadata was cached
   
   @override
   Set<Column> get primaryKey => {videoId};
 }
-*/
 
 // --- DATA WRAPPER CLASSES ---
 
@@ -66,7 +67,7 @@ class Artist {
 
 // --- DATABASE CLASS ---
 
-@DriftDatabase(tables: [Tracks])
+@DriftDatabase(tables: [Tracks, YouTubeTracks])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 

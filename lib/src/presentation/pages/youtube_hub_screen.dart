@@ -72,21 +72,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
     final url = await _ytHelper.getAudioUrl(song.videoId);
     if (url != null) {
-      final duration = (await _ytHelper.getVideoDetails(song.videoId))?.duration;
-      final desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
-
-      final mediaItem = MediaItem(
-        id: url,
-        title: song.title,
-        artist: song.artist,
-        duration: duration,
-        artUri: Uri.parse(song.thumbnailUrl),
-        extras: {
-          'isOnline': true,
-          'videoId': song.videoId,
-          'user_agent': desktopUA,
-        },
-      );
+      final mediaItem = await _ytHelper.createMediaItem(song.videoId, customTitle: song.title, customArtist: song.artist);
 
       await _audioHandler.updateQueue([mediaItem]);
       _audioHandler.play();
