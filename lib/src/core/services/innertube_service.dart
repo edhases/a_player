@@ -30,7 +30,7 @@ class InnerTubeService {
       "context": {
         "client": {
           "clientName": "WEB_REMIX",
-          "clientVersion": "1.20230102.01.00", 
+          "clientVersion": "1.20250101.01.00", 
           "hl": "en", // Changed from uk to en according to spec
           "gl": "US", // Changed from UA to US according to spec
         }
@@ -216,6 +216,13 @@ class InnerTubeService {
     if (cookies != null && cookies.isNotEmpty) {
       debugPrint('[InnerTube] Auth: Active session found (${cookies.length} chars)');
       _dio.options.headers['Cookie'] = cookies;
+      
+      // Also add other auth headers
+      final authHeaders = await _googleAuthService.getAuthHeaders();
+      _dio.options.headers.addAll({
+        'User-Agent': authHeaders['User-Agent'] ?? _dio.options.headers['User-Agent'],
+        'Accept-Language': authHeaders['Accept-Language'] ?? _dio.options.headers['Accept-Language'],
+      });
     } else {
       debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
       _dio.options.headers.remove('Cookie');
