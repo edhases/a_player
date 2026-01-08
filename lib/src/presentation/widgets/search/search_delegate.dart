@@ -13,12 +13,18 @@ import '../../../core/services/youtube_helper.dart';
 import '../../../core/services/youtube_audio_source.dart';
 import '../../../domain/entities/youtube_song.dart';
 import '../common_artwork.dart';
+import 'package:rxdart/rxdart.dart';
 
 class MusicSearchDelegate extends SearchDelegate<Track?> {
   final AppDatabase db;
   final MyAudioHandler _audioHandler = GetIt.I<MyAudioHandler>();
+  final _searchSubject = BehaviorSubject<String>();
+  Stream<String> get _debouncedQuery =>
+      _searchSubject.stream.debounceTime(const Duration(milliseconds: 500)).distinct();
 
-  MusicSearchDelegate(this.db);
+  MusicSearchDelegate(this.db) {
+    _searchSubject.add(''); // Initial empty query
+  }
 
   @override
   ThemeData appBarTheme(BuildContext context) {
@@ -58,75 +64,99 @@ class MusicSearchDelegate extends SearchDelegate<Track?> {
 
   @override
   Widget buildResults(BuildContext context) {
-    if (query.isEmpty) {
-      return Container();
-    }
+    _searchSubject.add(query);
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 100),
-      children: [
-        // YouTube Results
-        _YouTubeSearchSection(query: query, audioHandler: _audioHandler, onClose: () => close(context, null)),
+    return StreamBuilder<String>(
+      stream: _debouncedQuery,
+      builder: (context, snapshot) {
+        final debouncedQuery = snapshot.data ?? '';
+        if (debouncedQuery.isEmpty) {
+          return Container();
+        }
 
-        const Divider(),
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 100),
+          children: [
+            // YouTube Results
+            _YouTubeSearchSection(
+                query: debouncedQuery,
+                audioHandler: _audioHandler,
+                onClose: () => close(context, null)),
 
-        // Local Library Section
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text('Local Library', style: Theme.of(context).textTheme.titleMedium),
-        ),
-        FutureBuilder<List<Track>>(
-          future: _searchLocalTracks(query),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-              ));
-            }
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-               return const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('No local results found.', style: TextStyle(color: Colors.grey)),
-              );
-            }
+            const Divider(),
 
-            final localTracks = snapshot.data!;
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: localTracks.length,
-              itemBuilder: (context, index) {
-                final track = localTracks[index];
-                return ListTile(
-                  leading: SizedBox(
-                    width: 50,
-                    height: 50,
-                    child: CommonArtwork(
-                      mediaStoreId: track.mediaStoreId,
-                      path: track.path,
-                      size: 50,
-                      radius: 4,
-                    ),
-                  ),
-                  title: Text(track.title),
-                  subtitle: Text(track.artist ?? 'Unknown'),
-                  onTap: () {
-                    _playLocalQueue(localTracks, index);
-                    close(context, track);
+            // Local Library Section
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text('Local Library',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ),
+            FutureBuilder<List<Track>>(
+              future: _searchLocalTracks(debouncedQuery),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                      child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                  ));
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text('No local results found.',
+                        style: TextStyle(color: Colors.grey)),
+                  );
+                }
+
+                final localTracks = snapshot.data!;
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: localTracks.length,
+                  itemBuilder: (context, index) {
+                    final track = localTracks[index];
+                    return ListTile(
+                      leading: SizedBox(
+                        width: 50,
+                        height: 50,
+                        child: CommonArtwork(
+                          mediaStoreId: track.mediaStoreId,
+                          path: track.path,
+                          size: 50,
+                          radius: 4,
+                        ),
+                      ),
+                      title: Text(track.title),
+                      subtitle: Text(track.artist ?? 'Unknown'),
+                      onTap: () {
+                        _playLocalQueue(localTracks, index);
+                        close(context, track);
+                      },
+                    );
                   },
                 );
               },
-            );
-          },
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
-    return Container();
+    _searchSubject.add(query);
+    return buildResults(context);
+  }
+
+  @override
+  void close(BuildContext context, Track? result) {
+    _searchSubject.close();
+    super.close(context, result);
   }
 
   Future<List<Track>> _searchLocalTracks(String query) async {
@@ -167,41 +197,7 @@ class _YouTubeSearchSection extends StatefulWidget {
 
 class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
   final InnerTubeService _innerTubeService = GetIt.I<InnerTubeService>();
-  final YouTubeHelper _ytHelper = GetIt.I<YouTubeHelper>(); // Changed from YoutubeExplode
-  Timer? _debounceTimer;
-  
-  late Future<List<YouTubeSong>> _searchFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _searchFuture = _innerTubeService.search(widget.query);
-  }
-
-  @override
-  void didUpdateWidget(covariant _YouTubeSearchSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.query != widget.query) {
-      _debounceSearch();
-    }
-  }
-
-  void _debounceSearch() {
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() {
-          _searchFuture = _innerTubeService.search(widget.query);
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _debounceTimer?.cancel();
-    super.dispose();
-  }
+  final YouTubeHelper _ytHelper = GetIt.I<YouTubeHelper>();
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +209,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
           child: Text('YouTube Music', style: Theme.of(context).textTheme.titleMedium),
         ),
         FutureBuilder<List<YouTubeSong>>(
-          future: _searchFuture,
+          future: _innerTubeService.search(widget.query),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: Padding(

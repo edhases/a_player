@@ -96,45 +96,6 @@ class OxidePlayerApp extends StatelessWidget {
                   MiniPlayer(),
                 ],
               ),
-              // Scanning overlay
-              ValueListenableBuilder<bool>(
-                valueListenable: musicFinder.isScanning,
-                builder: (context, isScanning, child) {
-                  if (!isScanning) return const SizedBox.shrink();
-                  
-                  return Container(
-                    color: Colors.black.withOpacity(0.8),
-                    child: Center(
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CircularProgressIndicator(),
-                              const SizedBox(height: 24),
-                              Text(
-                                'Scanning for music...',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              ValueListenableBuilder<String>(
-                                valueListenable: musicFinder.scanStatus,
-                                builder: (context, status, _) {
-                                  return Text(
-                                    status.isNotEmpty ? status : 'Please wait...',
-                                    style: TextStyle(color: Colors.grey[500]),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
             ],
           ),
         ),

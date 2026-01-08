@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
@@ -43,6 +44,28 @@ class YouTubeTracks extends Table {
   Set<Column> get primaryKey => {videoId};
 }
 
+@DataClassName('HomeCacheEntry')
+class HomeCache extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get data => text().map(const HomeCacheDataConverter())();
+  DateTimeColumn get timestamp => dateTime()();
+}
+
+class HomeCacheDataConverter extends TypeConverter<List<Map<String, dynamic>>, String> {
+  const HomeCacheDataConverter();
+  @override
+  List<Map<String, dynamic>> fromSql(String fromDb) {
+    if (fromDb.isEmpty) return [];
+    final decoded = json.decode(fromDb) as List;
+    return decoded.cast<Map<String, dynamic>>();
+  }
+
+  @override
+  String toSql(List<Map<String, dynamic>> value) {
+    return json.encode(value);
+  }
+}
+
 // --- DATA WRAPPER CLASSES ---
 
 class AlbumWithArtwork {
@@ -67,12 +90,12 @@ class Artist {
 
 // --- DATABASE CLASS ---
 
-@DriftDatabase(tables: [Tracks, YouTubeTracks])
+@DriftDatabase(tables: [Tracks, YouTubeTracks, HomeCache])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6; // Incremented from 5
+  int get schemaVersion => 7; // Incremented from 6
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -91,6 +114,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 5) {
         // Add YouTube tracks table
         await m.createTable(youTubeTracks);
+      }
+      if (from < 7) {
+        await m.createTable(homeCache);
       }
     },
   );
@@ -184,6 +210,21 @@ class AppDatabase extends _$AppDatabase {
     await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId))).write(
       YouTubeTracksCompanion(lastPlayed: Value(DateTime.now())),
     );
+  }
+
+  // Home Cache operations
+  Future<void> cacheHomeData(List<Map<String, dynamic>> data) async {
+    await delete(homeCache).go();
+    await into(homeCache).insert(
+      HomeCacheCompanion.insert(
+        data: data,
+        timestamp: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<HomeCacheEntry?> getCachedHomeData() {
+    return select(homeCache).getSingleOrNull();
   }
 }
 
