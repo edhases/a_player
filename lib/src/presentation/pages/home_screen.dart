@@ -8,6 +8,7 @@ import 'albums_screen.dart';
 import 'artists_screen.dart';
 import 'settings_screen.dart';
 import 'login_screen.dart';
+import 'youtube_hub_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     const AllTracksScreen(),
-    FolderScreen(path: '.'),
+    const YouTubeHubScreen(),
     const AlbumsScreen(),
     const ArtistsScreen(),
     const SettingsScreen(),
@@ -77,9 +78,9 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Tracks',
           ),
           NavigationDestination(
-            icon: Icon(Icons.folder_outlined),
-            selectedIcon: Icon(Icons.folder),
-            label: 'Folders',
+            icon: Icon(Icons.play_circle_outline),
+            selectedIcon: Icon(Icons.play_circle_filled),
+            label: 'YouTube',
           ),
           NavigationDestination(
             icon: Icon(Icons.album_outlined),

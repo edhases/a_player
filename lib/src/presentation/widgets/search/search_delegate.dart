@@ -9,6 +9,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../../data/datasources/app_database.dart';
 import '../../../core/services/audio_handler.dart';
 import '../../../core/services/innertube_service.dart';
+import '../../../core/services/youtube_helper.dart';
 import '../../../core/services/youtube_audio_source.dart';
 import '../../../domain/entities/youtube_song.dart';
 import '../common_artwork.dart';
@@ -272,38 +273,36 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
       String? url;
       String? userAgent;
 
-      // 1. Try robust clients (Android, iOS, TVHTML5) - Fast and direct
-      final songData = await _innerTubeService.getSongUrl(song.videoId);
+      // 1. Prioritize YouTubeHelper (YoutubeExplode) as it handles Signature Decryption ('n' parameter)
+      // This is slightly slower but MUCH more reliable against 403 errors.
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fetching audio stream...'), duration: Duration(seconds: 1)));
       
-      if (songData != null) {
-        url = songData['url'];
-        userAgent = songData['agent'];
+      try {
+        debugPrint('[SearchDelegate] Fetching URL via YouTubeHelper for: ${song.videoId}');
+        url = await _ytHelper.getAudioUrl(song.videoId);
+        // Use a desktop Chrome User-Agent which matches YoutubeExplode's typical context
+        userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+        debugPrint('[SearchDelegate] YouTubeHelper succeeded.');
+      } catch (e) {
+        debugPrint('[SearchDelegate] YouTubeHelper failed: $e');
+      }
+
+      // 2. Fallback to InnerTube if YouTubeHelper failed
+      if (url == null) {
+        debugPrint('[SearchDelegate] Falling back to InnerTube...');
+        final songData = await _innerTubeService.getSongUrl(song.videoId);
+        if (songData != null) {
+          url = songData['url'];
+          userAgent = songData['agent'];
+        }
       }
       
       // 3. Always try to get duration/details as it fixes "00:00" UI issue
       try {
-        debugPrint('[SearchDelegate] Fetching video details for: ${song.videoId}');
         final video = await _ytHelper.getVideoDetails(song.videoId);
         duration = video?.duration;
       } catch (e) {
         debugPrint('[SearchDelegate] Failed to fetch video details: $e');
-      }
-
-      // 2. If failed (likely Signature Cipher), try YouTubeHelper fallback - Slower but handles manifest
-      if (url == null) {
-        debugPrint('Internal Client failed. Falling back to YouTubeHelper...');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Decrypting stream...'), duration: Duration(milliseconds: 500)));
-        try {
-          debugPrint('[SearchDelegate] Fetching URL via YouTubeHelper for: ${song.videoId}');
-          url = await _ytHelper.getAudioUrl(song.videoId);
-          
-          // Use the synchronized mobile User-Agent
-          userAgent = 'com.google.android.apps.youtube.music/6.33.51 (Linux; U; Android 11; US) gzip';
-          
-          debugPrint('[SearchDelegate] YouTubeHelper succeeded.');
-        } catch (e) {
-          debugPrint('YouTubeHelper fallback failed: $e');
-        }
       }
 
       if (url != null) {

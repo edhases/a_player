@@ -1,37 +1,76 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../../data/datasources/app_database.dart';
 
-class YouTubeHelper {
+/// YouTubeAudioSource - управління завантаженням та потоковою передачею YouTube аудіо
+class YouTubeAudioSource {
+  final AppDatabase _db;
   final YoutubeExplode _yt;
 
-  YouTubeHelper() : _yt = YoutubeExplode();
+  YouTubeAudioSource(this._db) : _yt = YoutubeExplode();
 
-  /// Отримує пряме посилання на аудіопотік найкращої якості для вказаного videoId.
-  Future<String?> getAudioUrl(String videoId) async {
+  /// Скачує аудіо трек для офлайн програвання
+  Future<bool> downloadTrack(String videoId, String title) async {
     try {
-      // Отримуємо маніфест потоків
-      var manifest = await _yt.videos.streamsClient.getManifest(videoId);
+      final appDir = await getApplicationDocumentsDirectory();
+      final downloadsDir = Directory('${appDir.path}/downloads');
+      if (!await downloadsDir.exists()) {
+        await downloadsDir.create();
+      }
       
-      // Вибираємо тільки аудіо з найвищим бітрейтом (m4a/opus)
-      var audioStream = manifest.audioOnly.withHighestBitrate();
+      final fileName = '${videoId}.opus';
+      final file = File('${downloadsDir.path}/$fileName');
       
-      // Повертаємо URL. Цей URL дійсний певний час (зазвичай кілька годин).
-      return audioStream.url.toString();
-    } catch (e) {
-      print('Error fetching YouTube audio URL: $e');
-      return null;
-    }
-  }
+      // Перевірка чи файл вже існує
+      if (await file.exists()) {
+        debugPrint('[YouTubeAudioSource] File already exists: ${file.path}');
+        return true;
+      }
+      
+      debugPrint('[YouTubeAudioSource] Downloading: $title');
+      final manifest = await _yt.videos.streams.getManifest(videoId);
+      final audioStream = manifest.audioOnly.withHighestBitrate();
+      
+      if (audioStream == null) {
+        debugPrint('[YouTubeAudioSource] No audio stream found');
+        return false;
+      }
 
-  /// Отримує метадані (назву, автора, арт) відео, якщо потрібно.
-  /// (Зазвичай ми це вже маємо з пошуку, але як backup).
-  Future<Video?> getVideoDetails(String videoId) async {
-    try {
-      return await _yt.videos.get(videoId);
+      // Створити вихідний файл та записувати в нього потік
+      final fileStream = file.openWrite();
+      await _yt.videos.streams.get(audioStream).pipe(fileStream);
+      await fileStream.flush();
+      await fileStream.close();
+      
+      debugPrint('[YouTubeAudioSource] Successfully downloaded: $title -> ${file.path}');
+      return true;
     } catch (e) {
-      return null;
+      debugPrint('[YouTubeAudioSource] Error downloading track $videoId: $e');
+      return false;
     }
   }
   
+  /// Повертає шлях до локального файлу, якщо доступно, або null
+  Future<String?> getLocalFilePath(String videoId) async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = '${videoId}.opus';
+      final file = File('${appDir.path}/downloads/$fileName');
+      
+      if (await file.exists()) {
+        debugPrint('[YouTubeAudioSource] Found local file: ${file.path}');
+        return file.path;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[YouTubeAudioSource] Error getting local file path: $e');
+      return null;
+    }
+  }
+
+  /// Закрити YoutubeExplode
   void dispose() {
     _yt.close();
   }

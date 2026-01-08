@@ -9,6 +9,8 @@ import 'src/data/datasources/app_database.dart';
 import 'src/core/services/audio_handler.dart';
 import 'src/core/services/music_finder.dart';
 import 'src/core/services/settings_service.dart';
+import 'src/core/services/google_auth_service.dart';
+import 'src/core/services/youtube_helper.dart';
 import 'src/core/services/innertube_service.dart';
 import 'src/core/services/youtube_audio_source.dart';
 import 'src/core/theme/app_theme.dart';
@@ -42,8 +44,19 @@ void main() async {
   final musicFinder = MusicFinder(db);
   GetIt.I.registerSingleton<MusicFinder>(musicFinder);
 
+  // Register GoogleAuthService before InnerTubeService
+  debugPrint('[Main] GoogleAuthService initializing...');
+  final googleAuthService = GoogleAuthService();
+  GetIt.I.registerSingleton<GoogleAuthService>(googleAuthService);
+  debugPrint('[Main] GoogleAuthService initialized.');
+
   GetIt.I.registerSingleton<InnerTubeService>(InnerTubeService());
-  GetIt.I.registerSingleton<YouTubeHelper>(YouTubeHelper());
+  
+  // Register YouTubeHelper with database
+  debugPrint('[Main] YouTubeHelper initializing...');
+  final youtubeHelper = YouTubeHelper(db);
+  GetIt.I.registerSingleton<YouTubeHelper>(youtubeHelper);
+  debugPrint('[Main] YouTubeHelper initialized.');
 
   debugPrint('[Main] AudioService initializing...');
   final handler = await AudioService.init(

@@ -45,5 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.801317878829-oql1pd3k5rv722ka6nqjdkug6pafkrre</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

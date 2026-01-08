@@ -48,6 +48,12 @@
 @import flutter_secure_storage;
 #endif
 
+#if __has_include(<google_sign_in_ios/FLTGoogleSignInPlugin.h>)
+#import <google_sign_in_ios/FLTGoogleSignInPlugin.h>
+#else
+@import google_sign_in_ios;
+#endif
+
 #if __has_include(<just_audio/JustAudioPlugin.h>)
 #import <just_audio/JustAudioPlugin.h>
 #else
@@ -100,6 +106,7 @@
   [FilePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FilePickerPlugin"]];
   [InAppWebViewFlutterPlugin registerWithRegistrar:[registry registrarForPlugin:@"InAppWebViewFlutterPlugin"]];
   [FlutterSecureStoragePlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterSecureStoragePlugin"]];
+  [FLTGoogleSignInPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTGoogleSignInPlugin"]];
   [JustAudioPlugin registerWithRegistrar:[registry registrarForPlugin:@"JustAudioPlugin"]];
   [OnAudioQueryPlugin registerWithRegistrar:[registry registrarForPlugin:@"OnAudioQueryPlugin"]];
   [PathProviderPlugin registerWithRegistrar:[registry registrarForPlugin:@"PathProviderPlugin"]];

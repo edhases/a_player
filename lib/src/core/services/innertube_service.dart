@@ -2,27 +2,32 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:get_it/get_it.dart';
 import '../../domain/entities/youtube_song.dart';
+import 'google_auth_service.dart';
 
 class InnerTubeService {
   final Dio _dio;
   final FlutterSecureStorage _storage;
+  late final GoogleAuthService _authService;
 
   InnerTubeService()
       : _storage = const FlutterSecureStorage(),
         _dio = Dio(BaseOptions(
           baseUrl: 'https://music.youtube.com/youtubei/v1',
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
           headers: {
             'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
             'Referer': 'https://music.youtube.com/',
             'Content-Type': 'application/json',
             'X-Goog-AuthUser': '0',
             'Origin': 'https://music.youtube.com',
           },
-        ));
+        )) {
+    _authService = GetIt.I<GoogleAuthService>();
+  }
 
   Map<String, dynamic> _webContextBody() {
     return {
@@ -30,8 +35,8 @@ class InnerTubeService {
         "client": {
           "clientName": "WEB_REMIX",
           "clientVersion": "1.20230102.01.00", 
-          "hl": "uk", 
-          "gl": "UA",
+          "hl": "en", 
+          "gl": "US",
         }
       }
     };
@@ -211,10 +216,37 @@ class InnerTubeService {
   }
 
   Future<void> _addAuthHeaders() async {
-    final cookies = await _storage.read(key: 'user_cookies');
-    if (cookies != null) {
-      _dio.options.headers['Cookie'] = cookies;
+    // First, try to use OAuth2 Bearer token
+    final accessToken = await _authService.getAccessToken();
+    if (accessToken != null && accessToken.isNotEmpty) {
+      debugPrint('[InnerTube] Auth: OAuth2 Bearer token applied (${accessToken.length} chars)');
+      _dio.options.headers['Authorization'] = 'Bearer $accessToken';
+      _dio.options.headers.remove('Cookie');
+      return;
     }
+
+    // Fallback to legacy cookie-based authentication
+    final cookies = await _storage.read(key: 'user_cookies');
+    if (cookies != null && cookies.isNotEmpty) {
+      debugPrint('[InnerTube] Auth: Legacy session found (cookie-based, ${cookies.length} chars)');
+      _dio.options.headers['Cookie'] = cookies;
+      _dio.options.headers.remove('Authorization');
+      return;
+    }
+
+    debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
+    _dio.options.headers.remove('Authorization');
+    _dio.options.headers.remove('Cookie');
+  }
+
+  Future<void> logout() async {
+    debugPrint('[InnerTube] Performing logout (clearing OAuth tokens and cookies)');
+    // Clear legacy cookies
+    await _storage.delete(key: 'user_cookies');
+    _dio.options.headers.remove('Cookie');
+    // Sign out from Google
+    await _authService.signOut();
+    _dio.options.headers.remove('Authorization');
   }
 
   List<YouTubeSong> _parseSearchResults(Map<String, dynamic> data) {
@@ -312,5 +344,209 @@ class InnerTubeService {
       debugPrint('Parsing Error: $e');
     }
     return results;
+  }
+
+  Future<bool> isLoggedIn() async {
+    // Check OAuth2 authentication first
+    if (await _authService.isSignedIn()) {
+      return true;
+    }
+    
+    // Fallback to legacy cookie check
+    final cookies = await _storage.read(key: 'user_cookies');
+    return cookies != null && cookies.isNotEmpty;
+  }
+
+  Future<List<Map<String, dynamic>>> getHomeData() async {
+    await _addAuthHeaders();
+    final body = _webContextBody();
+    body['browseId'] = "FEmusic_home";
+
+    try {
+      final response = await _dio.post('/browse', data: body);
+      return _parseHomeData(response.data);
+    } catch (e) {
+      debugPrint('InnerTube getHomeData Error: $e');
+      return [];
+    }
+  }
+
+  List<Map<String, dynamic>> _parseHomeData(Map<String, dynamic> data) {
+    final sections = <Map<String, dynamic>>[];
+    try {
+      final contents = data['contents']?['singleColumnBrowseResultsRenderer']?['tabs']?[0]
+          ?['tabRenderer']?['content']?['sectionListRenderer']?['contents'];
+
+      if (contents == null || contents is! List) return [];
+
+      for (var section in contents) {
+        final shelf = section['musicShelfRenderer'] ?? 
+                      section['musicCarouselShelfRenderer'] ??
+                      section['gridRenderer'];
+        if (shelf == null) continue;
+
+        String title = "Recommended";
+        final titleRuns = shelf['title']?['runs'] as List?;
+        if (titleRuns != null && titleRuns.isNotEmpty) {
+           title = titleRuns[0]['text'];
+        }
+
+        final items = <YouTubeSong>[];
+        final shelfContents = shelf['contents'] ?? shelf['items'];
+        if (shelfContents is List) {
+          for (var item in shelfContents) {
+            final mrlir = item['musicResponsiveListItemRenderer'] ?? 
+                          item['musicTwoColumnItemRenderer'] ??
+                          item['musicMultiRowListItemRenderer'];
+            if (mrlir != null) {
+              final song = _parseSingleSong(mrlir);
+              if (song != null) items.add(song);
+            }
+          }
+        }
+
+        if (items.isNotEmpty) {
+          sections.add({
+            'title': title,
+            'items': items,
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error parsing home data: $e');
+    }
+    return sections;
+  }
+
+  Future<List<Map<String, dynamic>>> getLibraryPlaylists() async {
+    await _addAuthHeaders();
+    final body = _webContextBody();
+    body['browseId'] = "FEmusic_library_landing";
+
+    try {
+      final response = await _dio.post('/browse', data: body);
+      return _parseLibraryPlaylists(response.data);
+    } catch (e) {
+      debugPrint('InnerTube getLibraryPlaylists Error: $e');
+      return [];
+    }
+  }
+
+  List<Map<String, dynamic>> _parseLibraryPlaylists(Map<String, dynamic> data) {
+    final playlists = <Map<String, dynamic>>[];
+    try {
+      final sections = data['contents']?['singleColumnBrowseResultsRenderer']?['tabs']?[0]
+          ?['tabRenderer']?['content']?['sectionListRenderer']?['contents'];
+
+      if (sections == null || sections is! List) return [];
+
+      for (var section in sections) {
+        final grid = section['musicCarouselShelfRenderer'] ?? section['gridRenderer'];
+        if (grid == null) continue;
+
+        final items = grid['items'] as List?;
+        if (items != null) {
+          for (var item in items) {
+            final renderer = item['musicTwoColumnItemRenderer'] ?? item['musicResponsiveListItemRenderer'];
+            if (renderer != null) {
+              final title = renderer['title']?['runs']?[0]?['text'];
+              final browseId = renderer['navigationEndpoint']?['browseEndpoint']?['browseId'];
+              final type = renderer['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs']?['browseEndpointContextMusicConfig']?['pageType'];
+              
+              if (title != null && browseId != null && type == 'MUSIC_PAGE_TYPE_PLAYLIST') {
+                final thumbnails = (renderer['thumbnailRenderer'] ?? renderer['thumbnail'])?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List?;
+                playlists.add({
+                  'title': title,
+                  'playlistId': browseId,
+                  'thumbnail': thumbnails?.last['url'] ?? '',
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error parsing library playlists: $e');
+    }
+    return playlists;
+  }
+
+  Future<List<YouTubeSong>> getPlaylistTracks(String playlistId) async {
+    await _addAuthHeaders();
+    final body = _webContextBody();
+    body['browseId'] = playlistId;
+
+    try {
+      final response = await _dio.post('/browse', data: body);
+      return _parsePlaylistTracks(response.data);
+    } catch (e) {
+      debugPrint('InnerTube getPlaylistTracks Error: $e');
+      return [];
+    }
+  }
+
+  List<YouTubeSong> _parsePlaylistTracks(Map<String, dynamic> data) {
+    final tracks = <YouTubeSong>[];
+    try {
+      final contents = data['contents']?['singleColumnBrowseResultsRenderer']?['tabs']?[0]
+          ?['tabRenderer']?['content']?['sectionListRenderer']?['contents']?[0]
+          ?['musicPlaylistShelfRenderer']?['contents'];
+
+      if (contents == null || contents is! List) return [];
+
+      for (var item in contents) {
+        final mrlir = item['musicResponsiveListItemRenderer'];
+        if (mrlir != null) {
+          final song = _parseSingleSong(mrlir);
+          if (song != null) tracks.add(song);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error parsing playlist tracks: $e');
+    }
+    return tracks;
+  }
+
+  YouTubeSong? _parseSingleSong(Map<String, dynamic> mrlir) {
+    try {
+      final title = mrlir['flexColumns']?[0]['musicResponsiveListItemFlexColumnRenderer']
+          ['text']?['runs']?[0]?['text'] ?? mrlir['title']?['runs']?[0]?['text'];
+      
+      if (title == null) return null;
+
+      String artist = "Unknown";
+      final flexCol1 = mrlir['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer'];
+      if (flexCol1 != null) {
+        final runs = flexCol1['text']?['runs'] as List?;
+        if (runs != null && runs.isNotEmpty) artist = runs[0]['text'];
+      } else {
+        artist = mrlir['subtitle']?['runs']?[0]?['text'] ?? "Unknown";
+      }
+
+      String? videoId;
+      final playButton = mrlir['overlay']?['musicItemThumbnailOverlayRenderer']
+          ?['content']?['musicPlayButtonRenderer'];
+      videoId = playButton?['playNavigationEndpoint']?['watchEndpoint']?['videoId'] ??
+                mrlir['navigationEndpoint']?['watchEndpoint']?['videoId'] ??
+                mrlir['onTap']?['watchEndpoint']?['videoId'];
+
+      if (videoId == null) return null;
+
+      final thumbnails = (mrlir['thumbnail']?['musicThumbnailRenderer'] ?? mrlir['thumbnailRenderer']?['musicThumbnailRenderer'])
+          ?['thumbnail']?['thumbnails'] as List?;
+      String thumbUrl = '';
+      if (thumbnails != null && thumbnails.isNotEmpty) {
+        thumbUrl = thumbnails.last['url'];
+      }
+
+      return YouTubeSong(
+        videoId: videoId,
+        title: title,
+        artist: artist,
+        thumbnailUrl: thumbUrl,
+      );
+    } catch (e) {
+      return null;
+    }
   }
 }

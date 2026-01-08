@@ -11,19 +11,36 @@ part 'app_database.g.dart';
 
 @DataClassName('Track')
 class Tracks extends Table {
-  TextColumn get path => text().unique()();
-  TextColumn get title => text()();
-  TextColumn get artist => text().nullable()();
-  TextColumn get album => text().nullable()();
-  IntColumn get duration => integer()();
-  TextColumn get folderPath => text()();
-  TextColumn get artworkUri => text().nullable()();
-  BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
-  IntColumn get mediaStoreId => integer().nullable()();
+  TextColumn get path => text().unique();
+  TextColumn get title => text();
+  TextColumn get artist => text().nullable();
+  TextColumn get album => text().nullable();
+  IntColumn get duration => integer();
+  TextColumn get folderPath => text();
+  TextColumn get artworkUri => text().nullable();
+  BoolColumn get isFavorite => boolean().withDefault(const Constant(false));
+  IntColumn get mediaStoreId => integer().nullable();
 
   @override
-  Set<Column> get primaryKey => {path};
+  Set<Column<Object>> get primaryKey => {path};
 }
+
+// YouTube track table disabled for now due to Drift database structure changes
+/*
+@DataClassName('YouTubeTrack')
+class YouTubeTracks extends Table {
+  TextColumn get videoId => text().unique();
+  TextColumn get title => text();
+  TextColumn get artist => text();
+  TextColumn get thumbnailUrl => text();
+  IntColumn get duration => integer();
+  TextColumn get downloadPath => text().nullable(); // Path to downloaded file for offline play
+  DateTimeColumn get lastPlayed => dateTime().nullable();
+  
+  @override
+  Set<Column> get primaryKey => {videoId};
+}
+*/
 
 // --- DATA WRAPPER CLASSES ---
 
@@ -54,7 +71,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5; // Incremented from 4
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -70,6 +87,12 @@ class AppDatabase extends _$AppDatabase {
       if (from < 4) {
         await m.addColumn(tracks, tracks.mediaStoreId);
       }
+      // YouTube tracks table disabled for now
+      /*
+      if (from < 5) {
+        await m.createTable(youTubeTracks);
+      }
+      */
     },
   );
 
@@ -132,6 +155,43 @@ class AppDatabase extends _$AppDatabase {
         .watchSingle()
         .map((t) => t.isFavorite);
   }
+
+  // --- YOUTUBE TRACK METHODS ---
+  // These methods are disabled for now due to Drift database structure changes
+  /*
+  
+  // Insert or update a YouTube track
+  Future<void> upsertYouTubeTrack(YouTubeTrack track) async {
+    await into(youTubeTracks).insert(
+      track,
+      onConflict: DoUpdate((old) => track),
+    );
+  }
+  
+  // Get a YouTube track by video ID
+  Future<YouTubeTrack?> getYouTubeTrack(String videoId) {
+    return (select(youTubeTracks)..where((t) => t.videoId.equals(videoId))).getSingleOrNull();
+  }
+  
+  // Get all downloaded tracks
+  Stream<List<YouTubeTrack>> watchDownloadedTracks() {
+    return (select(youTubeTracks)..where((t) => t.downloadPath.isNotNull())).watch();
+  }
+  
+  // Update download path for offline access
+  Future<void> updateDownloadPath(String videoId, String? path) async {
+    await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId))).write(
+      YouTubeTracksCompanion(downloadPath: Value(path)),
+    );
+  }
+  
+  // Mark as recently played
+  Future<void> markAsPlayed(String videoId) async {
+    await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId))).write(
+      YouTubeTracksCompanion(lastPlayed: Value(DateTime.now())),
+    );
+  }
+  */
 }
 
 LazyDatabase _openConnection() {

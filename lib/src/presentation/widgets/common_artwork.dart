@@ -7,6 +7,7 @@ import 'package:metadata_god/metadata_god.dart';
 class CommonArtwork extends StatelessWidget {
   final int? mediaStoreId;
   final String? path;
+  final String? url;
   final ArtworkType type;
   final double size;
   final double radius;
@@ -16,6 +17,7 @@ class CommonArtwork extends StatelessWidget {
     super.key,
     this.mediaStoreId,
     this.path,
+    this.url,
     this.type = ArtworkType.AUDIO,
     this.size = 50,
     this.radius = 6,
@@ -24,6 +26,19 @@ class CommonArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (url != null && url!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Image.network(
+          url!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(context),
+        ),
+      );
+    }
+
     if (mediaStoreId != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
