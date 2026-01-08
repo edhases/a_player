@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:provider/provider.dart';
+
 import '../../core/services/audio_handler.dart';
 import '../../data/datasources/app_database.dart';
 import 'equalizer_screen.dart';
@@ -25,7 +25,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final db = Provider.of<AppDatabase>(context, listen: false);
+    final db = GetIt.I<AppDatabase>();
     
     return Scaffold(
       backgroundColor: Colors.black,
@@ -423,7 +423,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
+          SelectableText(
+            value, 
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            maxLines: 4,
+          ),
         ],
       ),
     );

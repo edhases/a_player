@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get_it/get_it.dart';
 import '../../data/datasources/app_database.dart';
 import '../widgets/search/search_delegate.dart';
 import 'all_tracks_screen.dart';
@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<AppDatabase>(context, listen: false);
+    final db = GetIt.I<AppDatabase>();
 
     return Scaffold(
       appBar: AppBar(

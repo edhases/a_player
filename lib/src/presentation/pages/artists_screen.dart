@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:get_it/get_it.dart';
 import '../../data/datasources/app_database.dart';
 import 'detail_screen.dart';
 
@@ -8,7 +8,7 @@ class ArtistsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<AppDatabase>(context, listen: false);
+    final db = GetIt.I<AppDatabase>();
 
     return Scaffold(
       appBar: AppBar(

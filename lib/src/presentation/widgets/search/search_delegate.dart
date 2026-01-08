@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
@@ -7,6 +9,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../../data/datasources/app_database.dart';
 import '../../../core/services/audio_handler.dart';
 import '../../../core/services/innertube_service.dart';
+import '../../../core/services/youtube_audio_source.dart';
 import '../../../domain/entities/youtube_song.dart';
 import '../common_artwork.dart';
 
@@ -163,7 +166,8 @@ class _YouTubeSearchSection extends StatefulWidget {
 
 class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
   final InnerTubeService _innerTubeService = GetIt.I<InnerTubeService>();
-  final YoutubeExplode _ytExplode = YoutubeExplode();
+  final YouTubeHelper _ytHelper = GetIt.I<YouTubeHelper>(); // Changed from YoutubeExplode
+  Timer? _debounceTimer;
   
   late Future<List<YouTubeSong>> _searchFuture;
 
@@ -177,13 +181,24 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
   void didUpdateWidget(covariant _YouTubeSearchSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.query != widget.query) {
-      _searchFuture = _innerTubeService.search(widget.query);
+      _debounceSearch();
     }
+  }
+
+  void _debounceSearch() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {
+          _searchFuture = _innerTubeService.search(widget.query);
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
-    _ytExplode.close();
+    _debounceTimer?.cancel();
     super.dispose();
   }
 
@@ -253,34 +268,67 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fetching audio stream...'), duration: Duration(seconds: 1)));
 
     try {
-      // 1. Try generic robust clients (Android, iOS, TV) - Fast and direct
-      String? url = await _innerTubeService.getSongUrl(song.videoId);
+      Duration? duration;
+      String? url;
+      String? userAgent;
+
+      // 1. Try robust clients (Android, iOS, TVHTML5) - Fast and direct
+      final songData = await _innerTubeService.getSongUrl(song.videoId);
       
-      // 2. If failed (likely Signature Cipher), try YoutubeExplode - Slower but handles cipher
+      if (songData != null) {
+        url = songData['url'];
+        userAgent = songData['agent'];
+      }
+      
+      // 3. Always try to get duration/details as it fixes "00:00" UI issue
+      try {
+        debugPrint('[SearchDelegate] Fetching video details for: ${song.videoId}');
+        final video = await _ytHelper.getVideoDetails(song.videoId);
+        duration = video?.duration;
+      } catch (e) {
+        debugPrint('[SearchDelegate] Failed to fetch video details: $e');
+      }
+
+      // 2. If failed (likely Signature Cipher), try YouTubeHelper fallback - Slower but handles manifest
       if (url == null) {
+        debugPrint('Internal Client failed. Falling back to YouTubeHelper...');
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Decrypting stream...'), duration: Duration(milliseconds: 500)));
         try {
-          final manifest = await _ytExplode.videos.streamsClient.getManifest(song.videoId);
-          final audio = manifest.audioOnly.withHighestBitrate();
-          url = audio.url.toString();
+          debugPrint('[SearchDelegate] Fetching URL via YouTubeHelper for: ${song.videoId}');
+          url = await _ytHelper.getAudioUrl(song.videoId);
+          
+          // Use the synchronized mobile User-Agent
+          userAgent = 'com.google.android.apps.youtube.music/6.33.51 (Linux; U; Android 11; US) gzip';
+          
+          debugPrint('[SearchDelegate] YouTubeHelper succeeded.');
         } catch (e) {
-          print('YoutubeExplode fallback failed: $e');
+          debugPrint('YouTubeHelper fallback failed: $e');
         }
       }
 
       if (url != null) {
+        debugPrint('[SearchDelegate] Ready to play YouTube. URL starts with: ${url.substring(0, 50)}...');
+        debugPrint('[SearchDelegate] Duration: $duration, User-Agent: $userAgent');
+        
         final mediaItem = MediaItem(
           id: url, 
           title: song.title,
           artist: song.artist,
+          duration: duration,
           artUri: Uri.parse(song.thumbnailUrl),
-          extras: {'isOnline': true, 'videoId': song.videoId},
+          extras: {
+            'isOnline': true, 
+            'videoId': song.videoId,
+            if (userAgent != null) 'user_agent': userAgent, // Critical for avoiding 403
+          },
         );
 
         await widget.audioHandler.updateQueue([mediaItem]);
-        await widget.audioHandler.play();
+        // Don't await play() here as it might hang 20s on emulators
+        widget.audioHandler.play();
         widget.onClose();
       } else {
+        debugPrint('[SearchDelegate] Failed to obtain URL for YouTube track: ${song.title}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load. Track might be restricted.')));
         }

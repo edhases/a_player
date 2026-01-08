@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:get_it/get_it.dart';
 import '../../data/datasources/app_database.dart';
@@ -14,8 +14,8 @@ class AllTracksScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<AppDatabase>(context);
-    final musicFinder = Provider.of<MusicFinder>(context);
+    final db = GetIt.I<AppDatabase>();
+    final musicFinder = GetIt.I<MusicFinder>();
     final audioHandler = GetIt.I<MyAudioHandler>();
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -89,17 +89,34 @@ class AllTracksScreen extends StatelessWidget {
   }
 
   Future<void> _playQueue(MyAudioHandler audioHandler, List<Track> tracks, int startIndex) async {
-    final mediaItems = tracks.map((track) => MediaItem(
-      id: track.path,
-      album: track.album ?? '',
-      title: track.title,
-      artist: track.artist,
-      duration: Duration(milliseconds: track.duration),
-      extras: track.mediaStoreId != null ? {'mediaStoreId': track.mediaStoreId} : null,
-    )).toList();
+    // Optimization: Don't load 2000+ songs into the player queue at once.
+    // This causes huge delays (15s+) and Android Binder Transaction errors.
+    // Instead, load a "window" of tracks around the current one.
+    
+    const windowSize = 20; // Load 20 tracks before and after (total 40)
+    final start = (startIndex - windowSize).clamp(0, tracks.length);
+    final end = (startIndex + windowSize + 1).clamp(0, tracks.length);
+    
+    final subset = tracks.sublist(start, end);
+    final relativeIndex = startIndex - start;
+
+    final mediaItems = subset.map((track) {
+      final extras = <String, dynamic>{};
+      if (track.mediaStoreId != null) {
+        extras['mediaStoreId'] = track.mediaStoreId;
+      }
+      return MediaItem(
+        id: track.path,
+        album: track.album ?? '',
+        title: track.title,
+        artist: track.artist,
+        duration: Duration(milliseconds: track.duration),
+        extras: extras.isEmpty ? null : extras,
+      );
+    }).toList();
 
     await audioHandler.updateQueue(mediaItems);
-    await audioHandler.skipToQueueItem(startIndex);
+    await audioHandler.skipToQueueItem(relativeIndex);
   }
 }
 

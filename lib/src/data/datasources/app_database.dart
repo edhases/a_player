@@ -76,30 +76,35 @@ class AppDatabase extends _$AppDatabase {
   // --- QUERY METHODS ---
 
   Future<List<AlbumWithArtwork>> getAllAlbums() async {
-    final allTracks = await select(tracks).get();
-    final groupedByAlbum = groupBy(allTracks, (Track track) => track.album ?? 'Unknown Album');
+    // Optimized: Use SQL GROUP BY instead of loading all tracks into memory
+    final query = selectOnly(tracks)
+      ..addColumns([tracks.album, tracks.artist, tracks.path, tracks.mediaStoreId])
+      ..groupBy([tracks.album]);
 
-    return groupedByAlbum.entries.map((entry) {
-      final firstTrack = entry.value.first;
+    final rows = await query.get();
+
+    return rows.map((row) {
       return AlbumWithArtwork(
-        title: entry.key,
-        artist: firstTrack.artist,
-        artworkPath: firstTrack.path, // Use the path of a track for artwork
-        mediaStoreId: firstTrack.mediaStoreId,
+        title: row.read(tracks.album) ?? 'Unknown Album',
+        artist: row.read(tracks.artist),
+        artworkPath: row.read(tracks.path), // SQLite picks one random row's path from the group, which is fine for artwork
+        mediaStoreId: row.read(tracks.mediaStoreId),
       );
     }).toList()
       ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
   }
 
   Future<List<Artist>> getAllArtists() async {
-    final allTracks = await select(tracks).get();
-    final uniqueArtists = allTracks
-        .where((track) => track.artist != null)
-        .map((track) => track.artist!)
-        .toSet()
-        .toList();
+    // Optimized: Use SQL DISTINCT instead of loading all tracks
+    final query = selectOnly(tracks, distinct: true)
+      ..addColumns([tracks.artist])
+      ..where(tracks.artist.isNotNull());
 
-    return uniqueArtists.map((name) => Artist(name: name)).toList()
+    final rows = await query.get();
+
+    return rows
+        .map((row) => Artist(name: row.read(tracks.artist)!))
+        .toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 

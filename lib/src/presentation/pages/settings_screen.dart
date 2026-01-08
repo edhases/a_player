@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+
 import 'package:get_it/get_it.dart';
 import '../../core/services/music_finder.dart';
 import '../../core/services/settings_service.dart';
@@ -10,7 +10,7 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final musicFinder = Provider.of<MusicFinder>(context, listen: false);
+    final musicFinder = GetIt.I<MusicFinder>();
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(

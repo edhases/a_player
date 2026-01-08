@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:metadata_god/metadata_god.dart';
-import 'package:provider/provider.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import 'src/data/datasources/app_database.dart';
 import 'src/core/services/audio_handler.dart';
@@ -12,11 +11,10 @@ import 'src/core/services/music_finder.dart';
 import 'src/core/services/settings_service.dart';
 import 'src/core/services/innertube_service.dart';
 import 'src/core/services/youtube_audio_source.dart';
+import 'src/core/theme/app_theme.dart';
 import 'src/presentation/pages/home_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
 import 'src/presentation/widgets/mini_player.dart';
-
-late MyAudioHandler audioHandler;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,20 +27,26 @@ void main() async {
     ),
   );
   
+  debugPrint('[Main] MetadataGod initializing...');
   await MetadataGod.initialize();
+  debugPrint('[Main] MetadataGod initialized.');
 
+  // Initialize and register services in order
   final settingsService = SettingsService();
   await settingsService.init();
   GetIt.I.registerSingleton<SettingsService>(settingsService);
 
-  // Register YouTube services
+  final db = AppDatabase();
+  GetIt.I.registerSingleton<AppDatabase>(db);
+
+  final musicFinder = MusicFinder(db);
+  GetIt.I.registerSingleton<MusicFinder>(musicFinder);
+
   GetIt.I.registerSingleton<InnerTubeService>(InnerTubeService());
   GetIt.I.registerSingleton<YouTubeHelper>(YouTubeHelper());
 
-  final db = AppDatabase();
-  final musicFinder = MusicFinder(db);
-
-  audioHandler = await AudioService.init(
+  debugPrint('[Main] AudioService initializing...');
+  final handler = await AudioService.init(
     builder: () => MyAudioHandler(db),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.example.oxide_player.channel.audio',
@@ -50,18 +54,11 @@ void main() async {
       androidNotificationOngoing: true,
     ),
   );
+  debugPrint('[Main] AudioService initialized.');
 
-  GetIt.I.registerSingleton<MyAudioHandler>(audioHandler);
+  GetIt.I.registerSingleton<MyAudioHandler>(handler);
 
-  runApp(
-    MultiProvider(
-      providers: [
-        Provider<AppDatabase>.value(value: db),
-        Provider<MusicFinder>.value(value: musicFinder),
-      ],
-      child: const OxidePlayerApp(),
-    ),
-  );
+  runApp(const OxidePlayerApp());
 }
 
 class OxidePlayerApp extends StatelessWidget {
@@ -69,60 +66,12 @@ class OxidePlayerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final musicFinder = Provider.of<MusicFinder>(context, listen: false);
-
-    // Poweramp-inspired color scheme
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFFFF6B00), // Orange accent like Poweramp
-      brightness: Brightness.dark,
-    );
+    final musicFinder = GetIt.I<MusicFinder>();
 
     return MaterialApp(
       title: 'Oxide Player',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: colorScheme,
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.dark().textTheme,
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFF1E1E1E),
-          elevation: 0,
-          centerTitle: false,
-          titleTextStyle: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: const Color(0xFF1E1E1E),
-          indicatorColor: colorScheme.primary.withValues(alpha: 0.2),
-          labelTextStyle: WidgetStateProperty.all(
-            const TextStyle(fontSize: 11),
-          ),
-        ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF1E1E1E),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        listTileTheme: const ListTileThemeData(
-          contentPadding: EdgeInsets.symmetric(horizontal: 16),
-        ),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: colorScheme.primary,
-          foregroundColor: Colors.white,
-        ),
-        snackBarTheme: SnackBarThemeData(
-          backgroundColor: colorScheme.surfaceContainerHighest,
-          contentTextStyle: const TextStyle(color: Colors.white),
-        ),
-      ),
+      theme: AppTheme.darkTheme,
       home: PermissionGate(
         child: Scaffold(
           body: Stack(
@@ -141,7 +90,7 @@ class OxidePlayerApp extends StatelessWidget {
                   if (!isScanning) return const SizedBox.shrink();
                   
                   return Container(
-                    color: Colors.black.withValues(alpha: 0.8),
+                    color: Colors.black.withOpacity(0.8),
                     child: Center(
                       child: Card(
                         child: Padding(

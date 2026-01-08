@@ -39,9 +39,10 @@ class CommonArtwork extends StatelessWidget {
       );
     }
 
-    // Fallback for when we don't have a mediaStoreId (e.g. manually downloaded files not in DB yet)
-    // Avoid using MetadataGod in list views if possible, as it's slow.
-    if (path != null) {
+    // Fallback for local files. 
+    // CRITICAL: Never use MetadataGod on network URLs (http/https).
+    // It will try to download/stream the file to read ID3 tags, causing huge lags.
+    if (path != null && !path!.startsWith('http')) {
       return FutureBuilder<Metadata?>(
         future: MetadataGod.readMetadata(file: path!),
         builder: (context, snapshot) {
@@ -62,7 +63,7 @@ class CommonArtwork extends StatelessWidget {
         },
       );
     }
-
+    
     return _buildPlaceholder(context);
   }
 

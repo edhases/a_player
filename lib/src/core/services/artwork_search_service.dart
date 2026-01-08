@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 class ArtworkSearchService {
   final String _baseUrl =
@@ -22,7 +23,7 @@ class ArtworkSearchService {
       }
     } catch (e) {
       // Handle exceptions, e.g., network errors
-      print('Error searching for artwork: $e');
+      debugPrint('Error searching for artwork: $e');
     }
     return null;
   }

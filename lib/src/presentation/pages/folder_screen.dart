@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:path/path.dart' as p;
@@ -19,7 +19,7 @@ class FolderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final db = Provider.of<AppDatabase>(context, listen: false);
+    final db = GetIt.I<AppDatabase>();
     final audioHandler = GetIt.I<MyAudioHandler>();
 
     final bool isRoot = path == '.';

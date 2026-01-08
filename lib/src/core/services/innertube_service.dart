@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../domain/entities/youtube_song.dart';
@@ -10,9 +12,11 @@ class InnerTubeService {
       : _storage = const FlutterSecureStorage(),
         _dio = Dio(BaseOptions(
           baseUrl: 'https://music.youtube.com/youtubei/v1',
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
           headers: {
             'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:88.0) Gecko/20100101 Firefox/88.0',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
             'Referer': 'https://music.youtube.com/',
             'Content-Type': 'application/json',
             'X-Goog-AuthUser': '0',
@@ -80,57 +84,98 @@ class InnerTubeService {
 
     final body = _webContextBody();
     body['query'] = query;
-    body['params'] = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"; // Filter: Songs only
+    body['params'] = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"; 
 
     try {
-      final response = await _dio.post(
-        '/search', 
-        data: body,
-      );
-
+      final response = await _dio.post('/search', data: body);
       return _parseSearchResults(response.data);
     } catch (e) {
-      print('InnerTube Search Error: $e');
+      debugPrint('InnerTube Search Error: $e');
       return [];
     }
   }
 
-  Future<String?> getSongUrl(String videoId) async {
+  /// Returns {'url': string, 'agent': string} on success, null on failure.
+  Future<Map<String, String>?> getSongUrl(String videoId) async {
     await _addAuthHeaders(); 
     
-    // Strategy 1: Try ANDROID_MUSIC (Best quality)
-    String? url = await _getStreamUrl(videoId, _androidContextBody());
+    // Multi-client strategy for maximum reliability
+    final results = await _waitForFirstSuccess<Map<String, String>>([
+      _tryAndroidMusic(videoId),
+      _tryTVHTML5(videoId),
+    ]);
     
-    // Strategy 2: IOS (Fallback for some restrictions)
-    if (url == null) {
-      print('ANDROID_MUSIC failed, trying IOS fallback...');
-      url = await _getStreamUrl(videoId, _iosContextBody());
-    }
-
-    // Strategy 3: TVHTML5 (Most permissive, solves LOGIN_REQUIRED)
-    if (url == null) {
-       print('IOS failed, trying TVHTML5 fallback...');
-       url = await _getStreamUrl(videoId, _tvHtml5ContextBody());
-    }
-
-    return url;
+    return results;
   }
 
-  Future<String?> _getStreamUrl(String videoId, Map<String, dynamic> contextBody) async {
+  Future<Map<String, String>?> _tryAndroidMusic(String videoId) async {
+    const String mobileAgent = 'com.google.android.apps.youtube.music/6.33.51 (Linux; U; Android 11; US) gzip';
+    try {
+      debugPrint('[InnerTube] Trying ANDROID_MUSIC for: $videoId');
+      final url = await _getStreamUrl(
+        videoId, 
+        _androidContextBody(), 
+        options: Options(headers: {'User-Agent': mobileAgent}),
+      );
+      if (url != null) return {'url': url, 'agent': mobileAgent};
+    } catch (e) {
+      debugPrint('[InnerTube] ANDROID_MUSIC error: $e');
+    }
+    return null;
+  }
+
+  Future<Map<String, String>?> _tryTVHTML5(String videoId) async {
+    const String tvAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+    try {
+      debugPrint('[InnerTube] Trying TVHTML5 for: $videoId');
+      final url = await _getStreamUrl(
+        videoId, 
+        _tvHtml5ContextBody(), 
+        options: Options(headers: {'User-Agent': tvAgent}),
+      );
+      if (url != null) return {'url': url, 'agent': tvAgent};
+    } catch (e) {
+      debugPrint('[InnerTube] TVHTML5 error: $e');
+    }
+    return null;
+  }
+
+  // Returns the first non-null result from a list of futures
+  Future<T?> _waitForFirstSuccess<T>(List<Future<T?>> futures) async {
+    final completer = Completer<T?>();
+    int completedCount = 0;
+
+    for (final future in futures) {
+      future.then((result) {
+        if (!completer.isCompleted && result != null) {
+          completer.complete(result);
+        }
+      }).catchError((e) {
+        // Ignore errors
+      }).whenComplete(() {
+        completedCount++;
+        if (completedCount == futures.length && !completer.isCompleted) {
+          completer.complete(null);
+        }
+      });
+    }
+    return completer.future;
+  }
+
+  Future<String?> _getStreamUrl(String videoId, Map<String, dynamic> contextBody, {Options? options}) async {
     contextBody['videoId'] = videoId;
     contextBody['playbackContext'] = {
       'contentPlaybackContext': {
-        'signatureTimestamp': 19595 
+        'signatureTimestamp': 20380 // Updated for 2024+
       }
     };
 
     try {
-      final response = await _dio.post('/player', data: contextBody);
+      final response = await _dio.post('/player', data: contextBody, options: options);
       
       final playabilityStatus = response.data['playabilityStatus'];
       if (playabilityStatus != null && playabilityStatus['status'] != 'OK') {
-        // Log status but don't print error to avoid clutter, as we have fallbacks
-        // print('Playability Status: ${playabilityStatus['status']}');
+        debugPrint('[InnerTube] Playability Status: ${playabilityStatus['status']} for $videoId');
         return null;
       }
 
@@ -160,7 +205,7 @@ class InnerTubeService {
         } 
       }
     } catch (e) {
-      print('InnerTube Player Error: $e');
+      // ignore
     }
     return null;
   }
@@ -176,7 +221,6 @@ class InnerTubeService {
     final results = <YouTubeSong>[];
 
     try {
-      // Try path 1: Tabbed results (standard for search)
       var contents = data['contents']
           ?['tabbedSearchResultsRenderer']
           ?['tabs']?[0]
@@ -185,12 +229,10 @@ class InnerTubeService {
           ?['sectionListRenderer']
           ?['contents'];
 
-      // Try path 2: Direct section list
       if (contents == null) {
         contents = data['contents']?['sectionListRenderer']?['contents'];
       }
 
-      // Try path 3: Single column results
       if (contents == null) {
          contents = data['contents']
             ?['singleColumnSearchResultsRenderer']
@@ -202,7 +244,6 @@ class InnerTubeService {
       }
 
       if (contents == null || contents is! List) {
-        print('InnerTube Parser: No content found in response structure.');
         return [];
       }
 
@@ -215,29 +256,22 @@ class InnerTubeService {
               final mrlir = item['musicResponsiveListItemRenderer'];
               if (mrlir != null) {
                 try {
-                  // ... (parsing logic remains similar)
-                  // Title
                   final title = mrlir['flexColumns'][0]['musicResponsiveListItemFlexColumnRenderer']
                       ['text']['runs'][0]['text'] as String;
 
-                  // Artist
                   final secondaryText = mrlir['flexColumns'][1]['musicResponsiveListItemFlexColumnRenderer']
                       ['text']['runs'] as List;
                   String artist = "Unknown";
                    if (secondaryText.isNotEmpty) {
                     for (var run in secondaryText) {
                       final text = run['text'];
-                      if (text != ' • ' && 
-                          !text.contains('views') && 
-                          !text.contains('plays') &&
-                          !text.contains(':')) { 
+                      if (text != ' • ' && !text.contains('views') && !text.contains('plays') && !text.contains(':')) { 
                         artist = text;
                         break; 
                       }
                     }
                   }
 
-                  // ID
                   String? videoId;
                   final playButton = mrlir['overlay']?['musicItemThumbnailOverlayRenderer']
                       ?['content']?['musicPlayButtonRenderer'];
@@ -252,7 +286,6 @@ class InnerTubeService {
                      videoId = mrlir['navigationItem']?['watchEndpoint']?['videoId'];
                   }
 
-                  // Thumbnail
                   final thumbnails = mrlir['thumbnail']?['musicThumbnailRenderer']
                       ?['thumbnail']?['thumbnails'] as List?;
                   String thumbUrl = '';
@@ -269,7 +302,6 @@ class InnerTubeService {
                      ));
                   }
                 } catch (e) {
-                  // Skip bad item
                 }
               }
             }
@@ -277,10 +309,8 @@ class InnerTubeService {
         }
       }
     } catch (e) {
-      print('Parsing Error: $e');
+      debugPrint('Parsing Error: $e');
     }
-    
-    print('InnerTube Parser: Found ${results.length} items.');
     return results;
   }
 }

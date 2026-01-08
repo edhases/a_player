@@ -40,26 +40,11 @@ class MusicFinder {
         return;
       }
 
-      final List<TracksCompanion> trackCompanions = [];
+      // Process in Isolate to avoid blocking UI
+      // We also removed per-item UI updates to prevent 60fps rebuilds
+      scanStatus.value = 'Processing metadata...';
       
-      for (int i = 0; i < songs.length; i++) {
-        final song = songs[i];
-        
-        // Skip if no valid data
-        if (song.data == null || song.data!.isEmpty) continue;
-        
-        scanStatus.value = 'Processing ${i + 1} of ${songs.length}...';
-        
-        trackCompanions.add(TracksCompanion.insert(
-          path: song.data!,
-          title: song.title.isNotEmpty ? song.title : p.basenameWithoutExtension(song.data!),
-          artist: Value(song.artist != '<unknown>' ? song.artist : null),
-          album: Value(song.album != '<unknown>' ? song.album : null),
-          duration: song.duration ?? 0,
-          folderPath: p.dirname(song.data!),
-          mediaStoreId: Value(song.id),
-        ));
-      }
+      final trackCompanions = await compute(_mapSongsToCompanions, songs);
 
       // Insert into database
       if (trackCompanions.isNotEmpty) {
@@ -97,5 +82,26 @@ class MusicFinder {
   /// Check and request audio permission.
   Future<bool> checkPermission() async {
     return await _audioQuery.checkAndRequest();
+  }
+
+  /// Static function to run in Isolate
+  static List<TracksCompanion> _mapSongsToCompanions(List<SongModel> songs) {
+    final List<TracksCompanion> list = [];
+    
+    for (var song in songs) {
+      if (song.data == null || song.data!.isEmpty) continue;
+      
+      list.add(TracksCompanion.insert(
+        path: song.data!,
+        title: song.title.isNotEmpty ? song.title : p.basenameWithoutExtension(song.data!),
+        artist: Value(song.artist != '<unknown>' ? song.artist : null),
+        album: Value(song.album != '<unknown>' ? song.album : null),
+        duration: song.duration ?? 0,
+        folderPath: p.dirname(song.data!),
+        mediaStoreId: Value(song.id),
+      ));
+    }
+    
+    return list;
   }
 }
