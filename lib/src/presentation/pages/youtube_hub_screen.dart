@@ -60,13 +60,8 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
     try {
       // Load both home data and user playlists
-      final List<YouTubeSong> songs = await _innerTube.getHomeData();
+      final sections = await _innerTube.getHomeData();
       final playlists = await _innerTube.getLibraryPlaylists();
-
-      // Convert to the format expected by the UI
-      final List<Map<String, dynamic>> sections = [
-        {'title': 'Recommended', 'items': songs}
-      ];
 
       setState(() {
         _sections = sections;

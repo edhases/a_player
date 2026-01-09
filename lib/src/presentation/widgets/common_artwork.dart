@@ -36,6 +36,8 @@ class CommonArtwork extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
+          memCacheWidth: size.toInt(),
+          memCacheHeight: size.toInt(),
           cacheManager: CacheManager(
             Config(
               'youtubeCache',

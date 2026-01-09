@@ -367,7 +367,7 @@ class InnerTubeService {
     return _googleAuthService.isSignedIn();
   }
 
-  Future<List<YouTubeSong>> getHomeData() async {
+  Future<List<Map<String, dynamic>>> getHomeData() async {
     try {
       // Check if user is logged in to determine whether to bypass cache
       bool isLoggedIn = await _googleAuthService.isSignedIn();
@@ -383,12 +383,7 @@ class InnerTubeService {
         try {
           final cachedJson = json.decode(cachedEntry.data);
           if (cachedJson is List) {
-            return cachedJson.map((item) => YouTubeSong(
-              videoId: item['videoId'] ?? '',
-              title: item['title'] ?? '',
-              artist: item['artist'] ?? '',
-              thumbnailUrl: item['thumbnailUrl'] ?? '',
-            )).toList();
+            return cachedJson.cast<Map<String, dynamic>>();
           }
         } catch (e) {
           debugPrint('Failed to decode cached home data: $e');
@@ -410,18 +405,9 @@ class InnerTubeService {
       
       final freshData = _parseHomeData(response.data);
       if (freshData.isNotEmpty) {
-        // Flatten the sections to a list of YouTubeSong objects
-        final List<YouTubeSong> songs = [];
-        for (final section in freshData) {
-          final items = section['items'] as List<YouTubeSong>?;
-          if (items != null) {
-            songs.addAll(items);
-          }
-        }
-        
-        // Cache the fresh data
-        await _db.cacheHomeData(json.encode(songs.map((song) => song.toJson()).toList()));
-        return songs;
+        // Cache the fresh data as sections
+        await _db.cacheHomeData(json.encode(freshData));
+        return freshData;
       }
       return [];
     } catch (e) {
