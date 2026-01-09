@@ -13,4 +13,11 @@ class YouTubeSong {
   
   @override
   String toString() => '$title - $artist ($videoId)';
+  
+  Map<String, dynamic> toJson() => {
+        'videoId': videoId,
+        'title': title,
+        'artist': artist,
+        'thumbnailUrl': thumbnailUrl,
+      };
 }

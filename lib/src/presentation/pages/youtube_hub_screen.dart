@@ -26,42 +26,58 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
   bool _isLoggedIn = false;
   bool _isLoading = true;
-  List<Map<String, dynamic>> _homeSections = [];
-  List<Map<String, dynamic>> _playlists = [];
+  List<Map<String, dynamic>> _sections = [];
+  List<Map<String, dynamic>> _playlists = [];  // Added playlists variable
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    final isLoggedIn = await _authService.isSignedIn();
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = isLoggedIn;
+      });
+      if (isLoggedIn) {
+        _loadData();
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
     try {
-      _isLoggedIn = await _innerTube.isLoggedIn();
-      
-      if (_isLoggedIn) {
-        debugPrint('[YouTubeHubScreen] User is logged in, fetching data...');
-        final results = await Future.wait<List<Map<String, dynamic>>>([
-          _innerTube.getHomeData(),
-          _innerTube.getLibraryPlaylists(),
-        ]);
-        _homeSections = results[0];
-        _playlists = results[1];
-        debugPrint('[YouTubeHubScreen] Data loaded: ${_homeSections.length} sections, ${_playlists.length} playlists');
-      } else {
-        debugPrint('[YouTubeHubScreen] User not logged in');
-      }
+      // Load both home data and user playlists
+      final List<YouTubeSong> songs = await _innerTube.getHomeData();
+      final playlists = await _innerTube.getLibraryPlaylists();
+
+      // Convert to the format expected by the UI
+      final List<Map<String, dynamic>> sections = [
+        {'title': 'Recommended', 'items': songs}
+      ];
+
+      setState(() {
+        _sections = sections;
+        _playlists = playlists;  // Set the playlists
+        _isLoading = false;
+      });
     } catch (e) {
-      debugPrint('[YouTubeHubScreen] Error loading data: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading data: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
@@ -180,7 +196,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
           ),
           const SizedBox(height: 8),
 
-          ..._homeSections.map((section) => _buildSection(section)),
+          ..._sections.map((section) => _buildSection(section)),
           
           if (_playlists.isNotEmpty) ...[
             const Padding(
@@ -250,7 +266,21 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
   Widget _buildSection(Map<String, dynamic> section) {
     final title = section['title'] as String;
-    final items = section['items'] as List<YouTubeSong>;
+    final List<dynamic> itemsDynamic = section['items'];
+    // Convert the dynamic items to YouTubeSong objects properly
+    final items = <YouTubeSong>[];
+    for (final item in itemsDynamic) {
+      if (item is YouTubeSong) {
+        items.add(item);
+      } else if (item is Map<String, dynamic>) {
+        items.add(YouTubeSong(
+          videoId: item['videoId'],
+          title: item['title'],
+          artist: item['artist'],
+          thumbnailUrl: item['thumbnailUrl'],
+        ));
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

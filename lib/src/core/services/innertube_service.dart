@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
@@ -7,7 +8,7 @@ import 'google_auth_service.dart';
 import 'rate_limiter.dart';
 
 import '../../data/datasources/app_database.dart';
-
+ 
 class InnerTubeService {
   final Dio _dio;
   final GoogleAuthService _googleAuthService;
@@ -36,9 +37,15 @@ class InnerTubeService {
       "context": {
         "client": {
           "clientName": "WEB_REMIX",
-          "clientVersion": "1.20250101.01.00", 
-          "hl": "en", // Changed from uk to en according to spec
-          "gl": "US", // Changed from UA to US according to spec
+          "clientVersion": "1.20230615.1.0",
+          "hl": "en", 
+          "gl": "US",
+          "browserName": "Chrome",
+          "browserVersion": "114.0.5735.134",
+          "screenWidthPoints": 1920,
+          "screenHeightPoints": 1080,
+          "screenPixelDensity": 1,
+          "platform": "DESKTOP"
         }
       }
     };
@@ -67,19 +74,6 @@ class InnerTubeService {
           "deviceMake": "Apple",
           "deviceModel": "iPhone14,5",
           "hl": "en",
-          "gl": "US",
-        }
-      }
-    };
-  }
-
-  Map<String, dynamic> _tvHtml5ContextBody() {
-    return {
-      "context": {
-        "client": {
-          "clientName": "TVHTML5",
-          "clientVersion": "7.20230405.08.01", 
-          "hl": "en", 
           "gl": "US",
         }
       }
@@ -147,6 +141,19 @@ class InnerTubeService {
       debugPrint('[InnerTube] TVHTML5 error: $e');
     }
     return null;
+  }
+
+  Map<String, dynamic> _tvHtml5ContextBody() {
+    return {
+      "context": {
+        "client": {
+          "clientName": "TVHTML5",
+          "clientVersion": "7.20230405.08.01",
+          "hl": "en",
+          "gl": "US",
+        }
+      }
+    };
   }
 
   // Returns the first non-null result from a list of futures
@@ -219,22 +226,14 @@ class InnerTubeService {
     return null;
   }
 
-  Future<void> _addAuthHeaders() async {
+  Future<Map<String, String>> _addAuthHeaders() async {
     final cookies = await _googleAuthService.getCookies();
-    if (cookies != null && cookies.isNotEmpty) {
-      debugPrint('[InnerTube] Auth: Active session found (${cookies.length} chars)');
-      _dio.options.headers['Cookie'] = cookies;
-      
-      // Also add other auth headers
-      final authHeaders = await _googleAuthService.getAuthHeaders();
-      _dio.options.headers.addAll({
-        'User-Agent': authHeaders['User-Agent'] ?? _dio.options.headers['User-Agent'],
-        'Accept-Language': authHeaders['Accept-Language'] ?? _dio.options.headers['Accept-Language'],
-      });
-    } else {
-      debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
-      _dio.options.headers.remove('Cookie');
-    }
+    return {
+      'Cookie': cookies ?? '',
+      'User-Agent': _dio.options.headers['User-Agent'] as String,
+      'X-Goog-Authuser': '0',
+      'Content-Type': 'application/json',
+    };
   }
 
   Future<void> logout() async {
@@ -349,35 +348,63 @@ class InnerTubeService {
     return _googleAuthService.isSignedIn();
   }
 
-import 'dart:convert';
-
-  Future<List<Map<String, dynamic>>> getHomeData() async {
-    // Check the cache first
-    final cached = await _db.getCachedHomeData();
-    if (cached != null &&
-        DateTime.now().difference(cached.timestamp) < const Duration(hours: 6)) {
-      debugPrint('[InnerTubeService] Using cached home data.');
-      final decodedData = json.decode(cached.data) as List;
-      return decodedData.cast<Map<String, dynamic>>();
-    }
-
-    // If cache is old or doesn't exist, fetch from network
-    await _rateLimiter.throttle();
-    await _addAuthHeaders();
-    final body = _webContextBody();
-    body['browseId'] = "FEmusic_home";
-
+  Future<List<YouTubeSong>> getHomeData() async {
     try {
-      final response = await _dio.post('/browse', data: body);
-      final freshData = _parseHomeData(response.data);
-
-      // Cache the new data
-      if (freshData.isNotEmpty) {
-        await _db.cacheHomeData(json.encode(freshData));
-        debugPrint('[InnerTubeService] Cached fresh home data.');
+      // Check if user is logged in to determine whether to bypass cache
+      bool isLoggedIn = await _googleAuthService.isSignedIn();
+      
+      // If logged in, bypass cache to get personalized recommendations
+      HomeCacheEntry? cachedEntry;
+      if (!isLoggedIn) {
+        cachedEntry = await _db.getCachedHomeData();
+      }
+      
+      if (cachedEntry != null && !isLoggedIn) {
+        debugPrint('[InnerTubeService] Using cached home data.');
+        try {
+          final cachedJson = json.decode(cachedEntry.data);
+          if (cachedJson is List) {
+            return cachedJson.map((item) => YouTubeSong(
+              videoId: item['videoId'] ?? '',
+              title: item['title'] ?? '',
+              artist: item['artist'] ?? '',
+              thumbnailUrl: item['thumbnailUrl'] ?? '',
+            )).toList();
+          }
+        } catch (e) {
+          debugPrint('Failed to decode cached home data: $e');
+        }
       }
 
-      return freshData;
+      debugPrint('[InnerTubeService] Fetching fresh home data (cache bypassed for logged-in user).');
+      
+      // Create a proper API call to get home data
+      final body = _webContextBody();
+      body['browseId'] = "FEmusic_home";
+
+      final headers = await _addAuthHeaders();
+      final response = await _dio.post(
+        '/browse',
+        data: body,
+        options: Options(headers: headers),
+      );
+      
+      final freshData = _parseHomeData(response.data);
+      if (freshData.isNotEmpty) {
+        // Flatten the sections to a list of YouTubeSong objects
+        final List<YouTubeSong> songs = [];
+        for (final section in freshData) {
+          final items = section['items'] as List<YouTubeSong>?;
+          if (items != null) {
+            songs.addAll(items);
+          }
+        }
+        
+        // Cache the fresh data
+        await _db.cacheHomeData(json.encode(songs.map((song) => song.toJson()).toList()));
+        return songs;
+      }
+      return [];
     } catch (e) {
       debugPrint('InnerTube getHomeData Error: $e');
       return [];
@@ -562,6 +589,26 @@ import 'dart:convert';
       );
     } catch (e) {
       return null;
+    }
+  }
+
+  Future<dynamic> _makeRequest(String endpoint, Map<String, dynamic> body, {bool useAuth = true}) async {
+    try {
+      final options = Options(
+        headers: useAuth ? await _addAuthHeaders() : null,
+        contentType: Headers.jsonContentType,
+      );
+
+      final response = await _dio.post(
+        endpoint,
+        data: body,
+        options: options,
+      );
+      
+      return response.data;
+    } catch (e) {
+      debugPrint('InnerTube API $endpoint Error: $e');
+      rethrow;
     }
   }
 }
