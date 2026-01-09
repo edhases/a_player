@@ -349,13 +349,16 @@ class InnerTubeService {
     return _googleAuthService.isSignedIn();
   }
 
+import 'dart:convert';
+
   Future<List<Map<String, dynamic>>> getHomeData() async {
     // Check the cache first
     final cached = await _db.getCachedHomeData();
     if (cached != null &&
         DateTime.now().difference(cached.timestamp) < const Duration(hours: 6)) {
       debugPrint('[InnerTubeService] Using cached home data.');
-      return cached.data;
+      final decodedData = json.decode(cached.data) as List;
+      return decodedData.cast<Map<String, dynamic>>();
     }
 
     // If cache is old or doesn't exist, fetch from network
@@ -370,7 +373,7 @@ class InnerTubeService {
 
       // Cache the new data
       if (freshData.isNotEmpty) {
-        await _db.cacheHomeData(freshData);
+        await _db.cacheHomeData(json.encode(freshData));
         debugPrint('[InnerTubeService] Cached fresh home data.');
       }
 
