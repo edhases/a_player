@@ -948,12 +948,9 @@ class $HomeCacheTable extends HomeCache
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
   static const VerificationMeta _dataMeta = const VerificationMeta('data');
   @override
-  late final GeneratedColumn<List<Map<String, dynamic>>> data =
-      GeneratedColumn<List<Map<String, dynamic>>>(
-              'data', aliasedName, false,
-              type: DriftSqlType.string, requiredDuringInsert: true)
-          .withConverter<List<Map<String, dynamic>>>(
-              $HomeCacheTable.$converterdata);
+  late final GeneratedColumn<String> data = GeneratedColumn<String>(
+      'data', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _timestampMeta =
       const VerificationMeta('timestamp');
   @override
@@ -998,8 +995,8 @@ class $HomeCacheTable extends HomeCache
     return HomeCacheEntry(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
-      data: $HomeCacheTable.$converterdata.fromSql(attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}data'])!),
+      data: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}data'])!,
       timestamp: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}timestamp'])!,
     );
@@ -1009,14 +1006,11 @@ class $HomeCacheTable extends HomeCache
   $HomeCacheTable createAlias(String alias) {
     return $HomeCacheTable(attachedDatabase, alias);
   }
-
-  static const TypeConverter<List<Map<String, dynamic>>, String> $converterdata =
-      HomeCacheDataConverter();
 }
 
 class HomeCacheEntry extends DataClass implements Insertable<HomeCacheEntry> {
   final int id;
-  final List<Map<String, dynamic>> data;
+  final String data;
   final DateTime timestamp;
   const HomeCacheEntry(
       {required this.id, required this.data, required this.timestamp});
@@ -1024,10 +1018,7 @@ class HomeCacheEntry extends DataClass implements Insertable<HomeCacheEntry> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
-    {
-      final converter = $HomeCacheTable.$converterdata;
-      map['data'] = Variable<String>(converter.toSql(data));
-    }
+    map['data'] = Variable<String>(data);
     map['timestamp'] = Variable<DateTime>(timestamp);
     return map;
   }
@@ -1045,7 +1036,7 @@ class HomeCacheEntry extends DataClass implements Insertable<HomeCacheEntry> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return HomeCacheEntry(
       id: serializer.fromJson<int>(json['id']),
-      data: serializer.fromJson<List<Map<String, dynamic>>>(json['data']),
+      data: serializer.fromJson<String>(json['data']),
       timestamp: serializer.fromJson<DateTime>(json['timestamp']),
     );
   }
@@ -1054,15 +1045,12 @@ class HomeCacheEntry extends DataClass implements Insertable<HomeCacheEntry> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
-      'data': serializer.toJson<List<Map<String, dynamic>>>(data),
+      'data': serializer.toJson<String>(data),
       'timestamp': serializer.toJson<DateTime>(timestamp),
     };
   }
 
-  HomeCacheEntry copyWith(
-          {int? id,
-          List<Map<String, dynamic>>? data,
-          DateTime? timestamp}) =>
+  HomeCacheEntry copyWith({int? id, String? data, DateTime? timestamp}) =>
       HomeCacheEntry(
         id: id ?? this.id,
         data: data ?? this.data,
@@ -1079,19 +1067,19 @@ class HomeCacheEntry extends DataClass implements Insertable<HomeCacheEntry> {
   }
 
   @override
-  int get hashCode => Object.hash(id, $driftBlobEquality.hash(data), timestamp);
+  int get hashCode => Object.hash(id, data, timestamp);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is HomeCacheEntry &&
           other.id == this.id &&
-          $driftBlobEquality.equals(other.data, this.data) &&
+          other.data == this.data &&
           other.timestamp == this.timestamp);
 }
 
 class HomeCacheCompanion extends UpdateCompanion<HomeCacheEntry> {
   final Value<int> id;
-  final Value<List<Map<String, dynamic>>> data;
+  final Value<String> data;
   final Value<DateTime> timestamp;
   const HomeCacheCompanion({
     this.id = const Value.absent(),
@@ -1100,7 +1088,7 @@ class HomeCacheCompanion extends UpdateCompanion<HomeCacheEntry> {
   });
   HomeCacheCompanion.insert({
     this.id = const Value.absent(),
-    required List<Map<String, dynamic>> data,
+    required String data,
     required DateTime timestamp,
   })  : data = Value(data),
         timestamp = Value(timestamp);
@@ -1117,9 +1105,7 @@ class HomeCacheCompanion extends UpdateCompanion<HomeCacheEntry> {
   }
 
   HomeCacheCompanion copyWith(
-      {Value<int>? id,
-      Value<List<Map<String, dynamic>>>? data,
-      Value<DateTime>? timestamp}) {
+      {Value<int>? id, Value<String>? data, Value<DateTime>? timestamp}) {
     return HomeCacheCompanion(
       id: id ?? this.id,
       data: data ?? this.data,
@@ -1134,8 +1120,7 @@ class HomeCacheCompanion extends UpdateCompanion<HomeCacheEntry> {
       map['id'] = Variable<int>(id.value);
     }
     if (data.present) {
-      final converter = $HomeCacheTable.$converterdata;
-      map['data'] = Variable<String>(converter.toSql(data.value));
+      map['data'] = Variable<String>(data.value);
     }
     if (timestamp.present) {
       map['timestamp'] = Variable<DateTime>(timestamp.value);

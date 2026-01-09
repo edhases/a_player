@@ -47,23 +47,8 @@ class YouTubeTracks extends Table {
 @DataClassName('HomeCacheEntry')
 class HomeCache extends Table {
   IntColumn get id => integer().autoIncrement()();
-  TextColumn get data => text().map(const HomeCacheDataConverter())();
+  TextColumn get data => text()(); // Store data as a simple JSON string
   DateTimeColumn get timestamp => dateTime()();
-}
-
-class HomeCacheDataConverter extends TypeConverter<List<Map<String, dynamic>>, String> {
-  const HomeCacheDataConverter();
-  @override
-  List<Map<String, dynamic>> fromSql(String fromDb) {
-    if (fromDb.isEmpty) return [];
-    final decoded = json.decode(fromDb) as List;
-    return decoded.cast<Map<String, dynamic>>();
-  }
-
-  @override
-  String toSql(List<Map<String, dynamic>> value) {
-    return json.encode(value);
-  }
 }
 
 // --- DATA WRAPPER CLASSES ---
@@ -95,7 +80,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7; // Incremented from 6
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -112,7 +97,6 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(tracks, tracks.mediaStoreId);
       }
       if (from < 5) {
-        // Add YouTube tracks table
         await m.createTable(youTubeTracks);
       }
       if (from < 7) {
@@ -182,38 +166,32 @@ class AppDatabase extends _$AppDatabase {
   }
 
   // --- YOUTUBE TRACK METHODS ---
-  // These methods are enabled for YouTube metadata caching
-  // Insert or update a YouTube track
   Future<void> upsertYouTubeTrack(YouTubeTrack track) async {
     await into(youTubeTracks).insertOnConflictUpdate(track);
   }
   
-  // Get a YouTube track by video ID
   Future<YouTubeTrack?> getYouTubeTrack(String videoId) {
     return (select(youTubeTracks)..where((t) => t.videoId.equals(videoId))).getSingleOrNull();
   }
   
-  // Get all downloaded tracks
   Stream<List<YouTubeTrack>> watchDownloadedTracks() {
     return (select(youTubeTracks)..where((t) => t.downloadPath.isNotNull())).watch();
   }
   
-  // Update download path for offline access
   Future<void> updateDownloadPath(String videoId, String? path) async {
     await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId))).write(
       YouTubeTracksCompanion(downloadPath: Value(path)),
     );
   }
   
-  // Mark as recently played
   Future<void> markAsPlayed(String videoId) async {
     await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId))).write(
       YouTubeTracksCompanion(lastPlayed: Value(DateTime.now())),
     );
   }
 
-  // Home Cache operations
-  Future<void> cacheHomeData(List<Map<String, dynamic>> data) async {
+  // --- HOME CACHE METHODS ---
+  Future<void> cacheHomeData(String data) async {
     await delete(homeCache).go();
     await into(homeCache).insert(
       HomeCacheCompanion.insert(
