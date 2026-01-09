@@ -111,7 +111,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
               tooltip: 'Logout',
               onPressed: () async {
                 await _innerTube.logout();
-                _loadData();
+                _checkLoginStatus();
               },
             ),
         ],

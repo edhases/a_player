@@ -227,13 +227,32 @@ class InnerTubeService {
   }
 
   Future<Map<String, String>> _addAuthHeaders() async {
-    final cookies = await _googleAuthService.getCookies();
-    return {
-      'Cookie': cookies ?? '',
-      'User-Agent': _dio.options.headers['User-Agent'] as String,
-      'X-Goog-Authuser': '0',
-      'Content-Type': 'application/json',
-    };
+    // Get all auth headers from the auth service
+    final authHeaders = await _googleAuthService.getAuthHeaders();
+    
+    if (authHeaders.containsKey('Cookie')) {
+      debugPrint('[InnerTube] Auth: Active session headers applying...');
+      
+      // Add ALL headers (Cookie, Authorization, User-Agent, etc.)
+      _dio.options.headers.addAll(authHeaders);
+      
+      // Ensure Origin is in place (important for SAPISIDHASH)
+      _dio.options.headers['Origin'] = 'https://music.youtube.com';
+      
+    } else {
+      debugPrint('[InnerTube] Auth: No active session. Personalization disabled.');
+      _dio.options.headers.remove('Cookie');
+      _dio.options.headers.remove('Authorization');
+    }
+    
+    // Return only the headers we just added to maintain the method signature
+    final result = <String, String>{};
+    for (final key in authHeaders.keys) {
+      if (_dio.options.headers[key] is String) {
+        result[key] = _dio.options.headers[key];
+      }
+    }
+    return result;
   }
 
   Future<void> logout() async {
@@ -382,11 +401,11 @@ class InnerTubeService {
       final body = _webContextBody();
       body['browseId'] = "FEmusic_home";
 
-      final headers = await _addAuthHeaders();
+      await _addAuthHeaders();
+      
       final response = await _dio.post(
         '/browse',
         data: body,
-        options: Options(headers: headers),
       );
       
       final freshData = _parseHomeData(response.data);
@@ -594,15 +613,13 @@ class InnerTubeService {
 
   Future<dynamic> _makeRequest(String endpoint, Map<String, dynamic> body, {bool useAuth = true}) async {
     try {
-      final options = Options(
-        headers: useAuth ? await _addAuthHeaders() : null,
-        contentType: Headers.jsonContentType,
-      );
+      if (useAuth) {
+        await _addAuthHeaders();
+      }
 
       final response = await _dio.post(
         endpoint,
         data: body,
-        options: options,
       );
       
       return response.data;

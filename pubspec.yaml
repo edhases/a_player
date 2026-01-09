@@ -50,6 +50,7 @@ dependencies:
   flutter_inappwebview: ^6.0.0
   flutter_secure_storage: ^9.0.0
   google_sign_in: ^6.3.0
+  crypto: ^3.0.3  # Added for SAPISID hash generation
 
 dev_dependencies:
   flutter_test:

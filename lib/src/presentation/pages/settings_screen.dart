@@ -3,14 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/music_finder.dart';
 import '../../core/services/settings_service.dart';
+import '../../core/services/google_auth_service.dart';
 import '../../data/datasources/app_database.dart';
+import 'webview_login_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  @override
   Widget build(BuildContext context) {
     final musicFinder = GetIt.I<MusicFinder>();
+    final authService = GetIt.I<GoogleAuthService>();
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -34,7 +42,7 @@ class SettingsScreen extends StatelessWidget {
                   valueListenable: musicFinder.scanStatus,
                   builder: (context, status, _) {
                     return Text(
-                      isScanning 
+                      isScanning
                           ? (status.isNotEmpty ? status : 'Scanning...')
                           : 'Scan device for all music files',
                     );
@@ -88,7 +96,7 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
               );
-              
+
               if (confirmed == true && context.mounted) {
                 await musicFinder.clearLibrary();
                 if (context.mounted) {
@@ -102,9 +110,9 @@ class SettingsScreen extends StatelessWidget {
               }
             },
           ),
-          
+
           const Divider(),
-          
+
           // Playback Section
           _buildSectionHeader(context, 'Playback'),
           ListTile(
@@ -116,9 +124,56 @@ class SettingsScreen extends StatelessWidget {
               // TODO: Navigate to equalizer
             },
           ),
-          
+
           const Divider(),
-          
+
+          // YouTube Section
+          _buildSectionHeader(context, 'YouTube'),
+          FutureBuilder<bool>(
+            future: authService.isSignedIn(),
+            builder: (context, snapshot) {
+              final isSignedIn = snapshot.data ?? false;
+              return Column(
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      isSignedIn ? Icons.check_circle : Icons.cancel,
+                      color: isSignedIn ? Colors.green : Colors.red,
+                    ),
+                    title: Text(isSignedIn ? 'Signed in to YouTube Music' : 'Not signed in'),
+                    subtitle: const Text('Personalized recommendations'),
+                  ),
+                  if (isSignedIn)
+                    ListTile(
+                      leading: const Icon(Icons.refresh),
+                      title: const Text('Re-authenticate'),
+                      subtitle: const Text('Update cookies for YouTube Music'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        final success = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const WebViewLoginScreen(),
+                          ),
+                        );
+                        if (success == true && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Cookies updated successfully!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          setState(() {}); // Refresh the UI
+                        }
+                      },
+                    ),
+                ],
+              );
+            },
+          ),
+
+          const Divider(),
+
           // About Section
           _buildSectionHeader(context, 'About'),
           ListTile(
