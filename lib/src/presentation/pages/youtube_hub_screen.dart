@@ -59,12 +59,17 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
     try {
       // Load both home data and user playlists
-      final sections = await _innerTube.getHomeData();
+      // Load both home data and user playlists
+      final sectionsResult = await _innerTube.getHomeData();
       final playlists = await _innerTube.getLibraryPlaylists();
 
       setState(() {
-        _sections = sections;
-        _playlists = playlists; // Set the playlists
+        if (sectionsResult.isSuccess) {
+          _sections = sectionsResult.data!;
+        } else {
+          _error = sectionsResult.error;
+        }
+        _playlists = playlists;
         _isLoading = false;
       });
     } catch (e) {
@@ -191,6 +196,31 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
             ],
           ),
           const SizedBox(height: 8),
+
+          const SizedBox(height: 8),
+
+          // Error Banner
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Text('Error: $_error',
+                            style: const TextStyle(color: Colors.red))),
+                  ],
+                ),
+              ),
+            ),
 
           ..._sections.map((section) => _buildSection(section)),
 

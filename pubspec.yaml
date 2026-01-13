@@ -37,7 +37,7 @@ dependencies:
   # Utils
   get_it: ^9.2.0
   injectable: ^2.3.2
-  logger: ^2.0.0
+  logger: ^2.6.2
   rxdart: ^0.28.0
   http: ^1.2.1
   metadata_god: ^1.1.0

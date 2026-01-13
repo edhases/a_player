@@ -1,19 +1,29 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_service/audio_service.dart';
+import 'dart:async'; // Add async import
 
 // Keys for storing settings
 const String kShuffleModeKey = 'shuffle_mode';
 const String kRepeatModeKey = 'repeat_mode';
 const String kLastTrackIdKey = 'last_track_id';
 const String kLastPositionKey = 'last_position';
+
 const String kQueueKey = 'queue';
+const String kMinTrackDurationKey = 'min_track_duration'; // in seconds
+const String kMaxTrackDurationKey =
+    'max_track_duration'; // in seconds (0 = no limit)
+const String kExcludedFoldersKey = 'excluded_folders';
 
 class SettingsService {
   late final SharedPreferences _prefs;
+  final _settingsController = StreamController<void>.broadcast();
+  Stream<void> get onSettingsChanged => _settingsController.stream;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
   }
+
+  void _notify() => _settingsController.add(null);
 
   // --- Shuffle Mode ---
   Future<void> saveShuffleMode(AudioServiceShuffleMode mode) async {
@@ -65,10 +75,56 @@ class SettingsService {
     return _prefs.getStringList(kQueueKey) ?? [];
   }
 
+  // --- Library Filters ---
+
+  // Min Duration in Seconds (default 30s to skip notifications)
+  Future<void> saveMinTrackDuration(int seconds) async {
+    await _prefs.setInt(kMinTrackDurationKey, seconds);
+    _notify();
+  }
+
+  int loadMinTrackDuration() {
+    return _prefs.getInt(kMinTrackDurationKey) ?? 30; // Default 30s
+  }
+
+  // Max Duration in Seconds (default 0 = unlimited)
+  Future<void> saveMaxTrackDuration(int seconds) async {
+    await _prefs.setInt(kMaxTrackDurationKey, seconds);
+    _notify();
+  }
+
+  int loadMaxTrackDuration() {
+    return _prefs.getInt(kMaxTrackDurationKey) ?? 0;
+  }
+
+  // Excluded Folders
+  Future<void> addExcludedFolder(String path) async {
+    final current = loadExcludedFolders();
+    if (!current.contains(path)) {
+      current.add(path);
+      await _prefs.setStringList(kExcludedFoldersKey, current);
+      _notify(); // Notify
+    }
+  }
+
+  Future<void> removeExcludedFolder(String path) async {
+    final current = loadExcludedFolders();
+    if (current.contains(path)) {
+      current.remove(path);
+      await _prefs.setStringList(kExcludedFoldersKey, current);
+      _notify(); // Notify
+    }
+  }
+
+  List<String> loadExcludedFolders() {
+    return _prefs.getStringList(kExcludedFoldersKey) ?? [];
+  }
+
   // --- Generic Storage ---
   bool? loadBool(String key) => _prefs.getBool(key);
   Future<void> saveBool(String key, bool value) => _prefs.setBool(key, value);
-  
+
   String? loadString(String key) => _prefs.getString(key);
-  Future<void> saveString(String key, String value) => _prefs.setString(key, value);
+  Future<void> saveString(String key, String value) =>
+      _prefs.setString(key, value);
 }

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:drift/drift.dart';
@@ -23,7 +22,7 @@ class MusicFinder {
     try {
       isScanning.value = true;
       scanStatus.value = 'Querying music library...';
-      
+
       // Query all songs from MediaStore
       final songs = await _audioQuery.querySongs(
         sortType: SongSortType.TITLE,
@@ -31,7 +30,7 @@ class MusicFinder {
         uriType: UriType.EXTERNAL,
         ignoreCase: true,
       );
-      
+
       debugPrint('[MusicFinder] Found ${songs.length} songs in MediaStore');
       scanStatus.value = 'Found ${songs.length} songs...';
 
@@ -43,20 +42,21 @@ class MusicFinder {
       // Process in Isolate to avoid blocking UI
       // We also removed per-item UI updates to prevent 60fps rebuilds
       scanStatus.value = 'Processing metadata...';
-      
+
       final trackCompanions = await compute(_mapSongsToCompanions, songs);
 
       // Insert into database
       if (trackCompanions.isNotEmpty) {
         scanStatus.value = 'Saving ${trackCompanions.length} tracks...';
-        
+
         await _db.batch((batch) {
-          batch.insertAll(_db.tracks, trackCompanions, mode: InsertMode.replace);
+          batch.insertAll(_db.tracks, trackCompanions,
+              mode: InsertMode.replace);
         });
-        
-        debugPrint('[MusicFinder] Saved ${trackCompanions.length} tracks to database');
+
+        debugPrint(
+            '[MusicFinder] Saved ${trackCompanions.length} tracks to database');
       }
-      
     } catch (e, stackTrace) {
       debugPrint('[MusicFinder] Error: $e');
       debugPrint('[MusicFinder] Stack: $stackTrace');
@@ -84,24 +84,31 @@ class MusicFinder {
     return await _audioQuery.checkAndRequest();
   }
 
+  /// Get recently played tracks from local database
+  Future<List<Track>> getRecentTracks({int limit = 10}) async {
+    return _db.getRecentTracks(limit: limit);
+  }
+
   /// Static function to run in Isolate
   static List<TracksCompanion> _mapSongsToCompanions(List<SongModel> songs) {
     final List<TracksCompanion> list = [];
-    
+
     for (var song in songs) {
-      if (song.data == null || song.data!.isEmpty) continue;
-      
+      if (song.data.isEmpty) continue;
+
       list.add(TracksCompanion.insert(
-        path: song.data!,
-        title: song.title.isNotEmpty ? song.title : p.basenameWithoutExtension(song.data!),
+        path: song.data,
+        title: song.title.isNotEmpty
+            ? song.title
+            : p.basenameWithoutExtension(song.data),
         artist: Value(song.artist != '<unknown>' ? song.artist : null),
         album: Value(song.album != '<unknown>' ? song.album : null),
         duration: song.duration ?? 0,
-        folderPath: p.dirname(song.data!),
+        folderPath: p.dirname(song.data),
         mediaStoreId: Value(song.id),
       ));
     }
-    
+
     return list;
   }
 }

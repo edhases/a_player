@@ -62,6 +62,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
   late final GeneratedColumn<int> mediaStoreId = GeneratedColumn<int>(
       'media_store_id', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _lastPlayedMeta =
+      const VerificationMeta('lastPlayed');
+  @override
+  late final GeneratedColumn<DateTime> lastPlayed = GeneratedColumn<DateTime>(
+      'last_played', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         path,
@@ -72,7 +78,8 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
         folderPath,
         artworkUri,
         isFavorite,
-        mediaStoreId
+        mediaStoreId,
+        lastPlayed
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -136,6 +143,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
           mediaStoreId.isAcceptableOrUnknown(
               data['media_store_id']!, _mediaStoreIdMeta));
     }
+    if (data.containsKey('last_played')) {
+      context.handle(
+          _lastPlayedMeta,
+          lastPlayed.isAcceptableOrUnknown(
+              data['last_played']!, _lastPlayedMeta));
+    }
     return context;
   }
 
@@ -167,6 +180,8 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
           .read(DriftSqlType.bool, data['${effectivePrefix}is_favorite'])!,
       mediaStoreId: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}media_store_id']),
+      lastPlayed: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}last_played']),
     );
   }
 
@@ -186,6 +201,7 @@ class Track extends DataClass implements Insertable<Track> {
   final String? artworkUri;
   final bool isFavorite;
   final int? mediaStoreId;
+  final DateTime? lastPlayed;
   const Track(
       {required this.path,
       required this.title,
@@ -195,7 +211,8 @@ class Track extends DataClass implements Insertable<Track> {
       required this.folderPath,
       this.artworkUri,
       required this.isFavorite,
-      this.mediaStoreId});
+      this.mediaStoreId,
+      this.lastPlayed});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -215,6 +232,9 @@ class Track extends DataClass implements Insertable<Track> {
     map['is_favorite'] = Variable<bool>(isFavorite);
     if (!nullToAbsent || mediaStoreId != null) {
       map['media_store_id'] = Variable<int>(mediaStoreId);
+    }
+    if (!nullToAbsent || lastPlayed != null) {
+      map['last_played'] = Variable<DateTime>(lastPlayed);
     }
     return map;
   }
@@ -236,6 +256,9 @@ class Track extends DataClass implements Insertable<Track> {
       mediaStoreId: mediaStoreId == null && nullToAbsent
           ? const Value.absent()
           : Value(mediaStoreId),
+      lastPlayed: lastPlayed == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPlayed),
     );
   }
 
@@ -252,6 +275,7 @@ class Track extends DataClass implements Insertable<Track> {
       artworkUri: serializer.fromJson<String?>(json['artworkUri']),
       isFavorite: serializer.fromJson<bool>(json['isFavorite']),
       mediaStoreId: serializer.fromJson<int?>(json['mediaStoreId']),
+      lastPlayed: serializer.fromJson<DateTime?>(json['lastPlayed']),
     );
   }
   @override
@@ -267,6 +291,7 @@ class Track extends DataClass implements Insertable<Track> {
       'artworkUri': serializer.toJson<String?>(artworkUri),
       'isFavorite': serializer.toJson<bool>(isFavorite),
       'mediaStoreId': serializer.toJson<int?>(mediaStoreId),
+      'lastPlayed': serializer.toJson<DateTime?>(lastPlayed),
     };
   }
 
@@ -279,7 +304,8 @@ class Track extends DataClass implements Insertable<Track> {
           String? folderPath,
           Value<String?> artworkUri = const Value.absent(),
           bool? isFavorite,
-          Value<int?> mediaStoreId = const Value.absent()}) =>
+          Value<int?> mediaStoreId = const Value.absent(),
+          Value<DateTime?> lastPlayed = const Value.absent()}) =>
       Track(
         path: path ?? this.path,
         title: title ?? this.title,
@@ -291,6 +317,7 @@ class Track extends DataClass implements Insertable<Track> {
         isFavorite: isFavorite ?? this.isFavorite,
         mediaStoreId:
             mediaStoreId.present ? mediaStoreId.value : this.mediaStoreId,
+        lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
       );
   Track copyWithCompanion(TracksCompanion data) {
     return Track(
@@ -308,6 +335,8 @@ class Track extends DataClass implements Insertable<Track> {
       mediaStoreId: data.mediaStoreId.present
           ? data.mediaStoreId.value
           : this.mediaStoreId,
+      lastPlayed:
+          data.lastPlayed.present ? data.lastPlayed.value : this.lastPlayed,
     );
   }
 
@@ -322,14 +351,15 @@ class Track extends DataClass implements Insertable<Track> {
           ..write('folderPath: $folderPath, ')
           ..write('artworkUri: $artworkUri, ')
           ..write('isFavorite: $isFavorite, ')
-          ..write('mediaStoreId: $mediaStoreId')
+          ..write('mediaStoreId: $mediaStoreId, ')
+          ..write('lastPlayed: $lastPlayed')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(path, title, artist, album, duration,
-      folderPath, artworkUri, isFavorite, mediaStoreId);
+      folderPath, artworkUri, isFavorite, mediaStoreId, lastPlayed);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -342,7 +372,8 @@ class Track extends DataClass implements Insertable<Track> {
           other.folderPath == this.folderPath &&
           other.artworkUri == this.artworkUri &&
           other.isFavorite == this.isFavorite &&
-          other.mediaStoreId == this.mediaStoreId);
+          other.mediaStoreId == this.mediaStoreId &&
+          other.lastPlayed == this.lastPlayed);
 }
 
 class TracksCompanion extends UpdateCompanion<Track> {
@@ -355,6 +386,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
   final Value<String?> artworkUri;
   final Value<bool> isFavorite;
   final Value<int?> mediaStoreId;
+  final Value<DateTime?> lastPlayed;
   final Value<int> rowid;
   const TracksCompanion({
     this.path = const Value.absent(),
@@ -366,6 +398,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     this.artworkUri = const Value.absent(),
     this.isFavorite = const Value.absent(),
     this.mediaStoreId = const Value.absent(),
+    this.lastPlayed = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TracksCompanion.insert({
@@ -378,6 +411,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     this.artworkUri = const Value.absent(),
     this.isFavorite = const Value.absent(),
     this.mediaStoreId = const Value.absent(),
+    this.lastPlayed = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : path = Value(path),
         title = Value(title),
@@ -393,6 +427,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     Expression<String>? artworkUri,
     Expression<bool>? isFavorite,
     Expression<int>? mediaStoreId,
+    Expression<DateTime>? lastPlayed,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -405,6 +440,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       if (artworkUri != null) 'artwork_uri': artworkUri,
       if (isFavorite != null) 'is_favorite': isFavorite,
       if (mediaStoreId != null) 'media_store_id': mediaStoreId,
+      if (lastPlayed != null) 'last_played': lastPlayed,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -419,6 +455,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       Value<String?>? artworkUri,
       Value<bool>? isFavorite,
       Value<int?>? mediaStoreId,
+      Value<DateTime?>? lastPlayed,
       Value<int>? rowid}) {
     return TracksCompanion(
       path: path ?? this.path,
@@ -430,6 +467,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       artworkUri: artworkUri ?? this.artworkUri,
       isFavorite: isFavorite ?? this.isFavorite,
       mediaStoreId: mediaStoreId ?? this.mediaStoreId,
+      lastPlayed: lastPlayed ?? this.lastPlayed,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -464,6 +502,9 @@ class TracksCompanion extends UpdateCompanion<Track> {
     if (mediaStoreId.present) {
       map['media_store_id'] = Variable<int>(mediaStoreId.value);
     }
+    if (lastPlayed.present) {
+      map['last_played'] = Variable<DateTime>(lastPlayed.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -482,6 +523,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
           ..write('artworkUri: $artworkUri, ')
           ..write('isFavorite: $isFavorite, ')
           ..write('mediaStoreId: $mediaStoreId, ')
+          ..write('lastPlayed: $lastPlayed, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1171,6 +1213,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<String?> artworkUri,
   Value<bool> isFavorite,
   Value<int?> mediaStoreId,
+  Value<DateTime?> lastPlayed,
   Value<int> rowid,
 });
 typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
@@ -1183,6 +1226,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<String?> artworkUri,
   Value<bool> isFavorite,
   Value<int?> mediaStoreId,
+  Value<DateTime?> lastPlayed,
   Value<int> rowid,
 });
 
@@ -1221,6 +1265,9 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<int> get mediaStoreId => $composableBuilder(
       column: $table.mediaStoreId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastPlayed => $composableBuilder(
+      column: $table.lastPlayed, builder: (column) => ColumnFilters(column));
 }
 
 class $$TracksTableOrderingComposer
@@ -1259,6 +1306,9 @@ class $$TracksTableOrderingComposer
   ColumnOrderings<int> get mediaStoreId => $composableBuilder(
       column: $table.mediaStoreId,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastPlayed => $composableBuilder(
+      column: $table.lastPlayed, builder: (column) => ColumnOrderings(column));
 }
 
 class $$TracksTableAnnotationComposer
@@ -1296,6 +1346,9 @@ class $$TracksTableAnnotationComposer
 
   GeneratedColumn<int> get mediaStoreId => $composableBuilder(
       column: $table.mediaStoreId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastPlayed => $composableBuilder(
+      column: $table.lastPlayed, builder: (column) => column);
 }
 
 class $$TracksTableTableManager extends RootTableManager<
@@ -1330,6 +1383,7 @@ class $$TracksTableTableManager extends RootTableManager<
             Value<String?> artworkUri = const Value.absent(),
             Value<bool> isFavorite = const Value.absent(),
             Value<int?> mediaStoreId = const Value.absent(),
+            Value<DateTime?> lastPlayed = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               TracksCompanion(
@@ -1342,6 +1396,7 @@ class $$TracksTableTableManager extends RootTableManager<
             artworkUri: artworkUri,
             isFavorite: isFavorite,
             mediaStoreId: mediaStoreId,
+            lastPlayed: lastPlayed,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -1354,6 +1409,7 @@ class $$TracksTableTableManager extends RootTableManager<
             Value<String?> artworkUri = const Value.absent(),
             Value<bool> isFavorite = const Value.absent(),
             Value<int?> mediaStoreId = const Value.absent(),
+            Value<DateTime?> lastPlayed = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               TracksCompanion.insert(
@@ -1366,6 +1422,7 @@ class $$TracksTableTableManager extends RootTableManager<
             artworkUri: artworkUri,
             isFavorite: isFavorite,
             mediaStoreId: mediaStoreId,
+            lastPlayed: lastPlayed,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0

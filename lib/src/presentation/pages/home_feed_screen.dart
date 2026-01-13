@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:provider/provider.dart';
-import '../../core/services/innertube_service.dart';
-import '../../core/services/music_finder.dart';
-import '../../core/services/audio_handler.dart';
-import '../../core/services/youtube_service.dart';
+import '../../domain/repositories/music_repository.dart';
 import '../../core/utils/localization.dart';
 import '../../data/datasources/app_database.dart';
-import '../widgets/common_artwork.dart';
-import 'package:audio_service/audio_service.dart';
-import 'playlist_tracks_screen.dart';
+import '../../domain/entities/youtube_song.dart';
+import '../../core/services/audio_handler.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -20,13 +14,14 @@ class HomeFeedScreen extends StatefulWidget {
 }
 
 class _HomeFeedScreenState extends State<HomeFeedScreen> {
-  final _innerTube = GetIt.I<InnerTubeService>();
+  final _repository = GetIt.I<MusicRepository>();
   final _audioHandler = GetIt.I<MyAudioHandler>();
-  final _ytHelper = GetIt.I<YouTubeHelper>();
 
+  List<Track> _recentLocalTracks = [];
+  List<Map<String, dynamic>> _youtubeSections = [];
   bool _isLoading = true;
-  List<Track> _quickPicksLocal = [];
-  List<Map<String, dynamic>> _ytMixes = [];
+  String? _error;
+  String? _youtubeError;
 
   @override
   void initState() {
@@ -34,209 +29,177 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     _loadData();
   }
 
-  // Safe way to get MusicFinder if Provider is used
-  MusicFinder get musicFinder =>
-      Provider.of<MusicFinder>(context, listen: false);
-
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      // 1. Local Quick Picks
-      _quickPicksLocal = await musicFinder.getRandomTracks(limit: 10);
+      // 1. Fetch Local Recents
+      final recents = await _repository.getRecentLocalTracks(limit: 10);
 
-      // 2. YouTube Home Data
-      final homeJson = await _innerTube.getHomeData();
-      _parseYouTubeHome(homeJson);
-    } catch (e) {
-      debugPrint('Error loading home feed: $e');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
+      // 2. Fetch YouTube Home Data
+      final ytResult = await _repository.getHomeFeed();
+
       if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  void _parseYouTubeHome(Map<String, dynamic> json) {
-    try {
-      final tabs =
-          json['contents']?['singleColumnBrowseResultsRenderer']?['tabs'];
-      if (tabs == null || tabs is! List) return;
-
-      final content = tabs[0]?['tabRenderer']?['content']
-          ?['sectionListRenderer']?['contents'];
-      if (content == null || content is! List) return;
-
-      _ytMixes.clear();
-
-      for (var section in content) {
-        final musicCarousel = section['musicCarouselShelfRenderer'];
-        if (musicCarousel != null) {
-          final title = musicCarousel['header']
-                      ?['musicCarouselShelfBasicHeaderRenderer']?['title']
-                  ?['runs']?[0]?['text'] ??
-              "Mix";
-          final items = musicCarousel['contents'];
-
-          if (items != null && items is List) {
-            final sectionItems = <Map<String, dynamic>>[];
-            for (var item in items) {
-              final mrlir = item['musicResponsiveListItemRenderer'] ??
-                  item['musicTwoColumnItemRenderer'];
-              if (mrlir != null) {
-                // Extract basic info
-                final titleText = mrlir['title']?['runs']?[0]?['text'] ?? "";
-                final thumb = mrlir['thumbnail']?['musicThumbnailRenderer']
-                            ?['thumbnail']?['thumbnails']
-                        ?.last['url'] ??
-                    "";
-                final navEndpoint = mrlir['navigationEndpoint'];
-
-                String? id;
-                String type = "song";
-
-                if (navEndpoint?['watchEndpoint'] != null) {
-                  id = navEndpoint['watchEndpoint']['videoId'];
-                  type = "song";
-                } else if (navEndpoint?['browseEndpoint'] != null) {
-                  id = navEndpoint['browseEndpoint']['browseId'];
-                  type = "playlist";
-                }
-
-                if (titleText.isNotEmpty && id != null) {
-                  sectionItems.add({
-                    'title': titleText,
-                    'thumbnail': thumb,
-                    'id': id,
-                    'type': type,
-                    'subtitle': mrlir['subtitle']?['runs']?[0]?['text'] ?? "",
-                  });
-                }
-              }
-            }
-
-            if (sectionItems.isNotEmpty) {
-              _ytMixes.add({
-                'title': title,
-                'items': sectionItems,
-              });
-            }
+        setState(() {
+          _recentLocalTracks = recents;
+          if (ytResult.isSuccess) {
+            _youtubeSections = ytResult.data!;
+          } else {
+            _youtubeError = ytResult.error;
+            debugPrint('HomeFeed YouTube Error: ${ytResult.error}');
           }
-        }
+          _isLoading = false;
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      debugPrint('Error parsing YT Home: $e');
+      debugPrint('[HomeFeed] Error loading data: $e');
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _playLocalTrack(Track track) async {
-    final mediaItem = MediaItem(
-      id: track.path,
-      album: track.album ?? '',
-      title: track.title,
-      artist: track.artist,
-      duration: Duration(milliseconds: track.duration),
-      extras: track.mediaStoreId != null
-          ? {'mediaStoreId': track.mediaStoreId}
-          : null,
-    );
-    await _audioHandler.updateQueue([mediaItem]);
-    await _audioHandler.play();
-  }
-
-  Future<void> _onYoutubeItemTap(Map<String, dynamic> item) async {
-    final id = item['id'];
-    final type = item['type'];
-    final title = item['title'];
-
-    if (type == 'playlist') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              PlaylistTracksScreen(playlistId: id, title: title),
-        ),
-      );
-    } else {
-      // Assume song
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Loading $title...')));
-      final mediaItem = await _ytHelper.createMediaItem(id);
-      await _audioHandler.updateQueue([mediaItem]);
-      _audioHandler.play();
-    }
+  String _getGreeting(AppLocalizations loc) {
+    final hour = DateTime.now().hour;
+    if (hour < 12)
+      return 'Good morning'; // TODO: Localize these specifically if desired
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(AppLocalizations.of('nav_home')),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Quick Picks (Local)
-              if (_quickPicksLocal.isNotEmpty) ...[
-                _buildSectionHeader(AppLocalizations.of('quick_picks')),
-                SizedBox(
-                  height: 210, // Increased from 180 to prevent overflow
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _quickPicksLocal.length,
-                    itemBuilder: (context, index) {
-                      final track = _quickPicksLocal[index];
-                      return _buildLocalTrackCard(track);
-                    },
-                  ),
-                ),
-              ],
-
-              // 2. YouTube Mixes
-              for (var mixSection in _ytMixes) ...[
-                _buildSectionHeader(mixSection['title']),
-                SizedBox(
-                  height: 220,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: (mixSection['items'] as List).length,
-                    itemBuilder: (context, index) {
-                      final item = (mixSection['items'] as List)[index];
-                      return _buildYoutubeCard(item);
-                    },
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 80),
-            ],
-          ),
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text('Error loading home feed',
+                style: Theme.of(context).textTheme.titleMedium),
+            Text(_error!, style: Theme.of(context).textTheme.bodySmall),
+            TextButton(
+              onPressed: _loadData,
+              child: const Text('Retry'),
+            ),
+          ],
         ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        children: [
+          // Greeting
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              _getGreeting(loc),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+
+          // 1. Listen Again (Local Recents)
+          if (_recentLocalTracks.isNotEmpty) ...[
+            _buildSectionHeader(
+                context, loc.listenAgain), // Use localized "Listen Again"
+            SizedBox(
+              height: 180,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: _recentLocalTracks.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final track = _recentLocalTracks[index];
+                  return _buildLocalTrackCard(context, track);
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // 2. YouTube Error Banner
+          if (_youtubeError != null)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Text('YouTube Error: $_youtubeError',
+                            style: const TextStyle(color: Colors.red))),
+                  ],
+                ),
+              ),
+            ),
+
+          // 3. YouTube Sections (Mixes, Recents, Community etc.)
+          ..._youtubeSections.map((section) {
+            final title = section['title'] as String? ?? '';
+            final contents = section['contents'] as List<dynamic>? ?? [];
+
+            if (contents.isEmpty) return const SizedBox.shrink();
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionHeader(context, title),
+                SizedBox(
+                  height: 200,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: contents.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final item = contents[index];
+                      // Determine type: Song, Video, Playlist...
+                      // For simplicity, treating as Song or Playlist card
+                      return _buildYouTubeCard(context, item);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+            );
+          }),
+
+          // Bottom padding for MiniPlayer
+          const SizedBox(height: 80),
+        ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -246,25 +209,36 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     );
   }
 
-  Widget _buildLocalTrackCard(Track track) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      child: InkWell(
-        onTap: () => _playLocalTrack(track),
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildLocalTrackCard(BuildContext context, Track track) {
+    return GestureDetector(
+      onTap: () async {
+        // Play local track
+        // We need to convert Track to MediaItem or similar for AudioHandler
+        await _audioHandler.playLocalTrack(track);
+      },
+      child: SizedBox(
+        width: 140,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Artwork
             AspectRatio(
               aspectRatio: 1,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CommonArtwork(
-                  mediaStoreId: track.mediaStoreId,
-                  path: track.path,
-                  size: 140,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey[800],
+                  image: track.artworkUri != null
+                      ? DecorationImage(
+                          image: NetworkImage(
+                              track.artworkUri!), // Or FileImage if local path
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
+                child: track.artworkUri == null
+                    ? const Icon(Icons.music_note, size: 48, color: Colors.grey)
+                    : null,
               ),
             ),
             const SizedBox(height: 8),
@@ -275,10 +249,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             Text(
-              track.artist ?? 'Unknown',
+              track.artist ?? 'Unknown Artist',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
@@ -286,40 +260,67 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     );
   }
 
-  Widget _buildYoutubeCard(Map<String, dynamic> item) {
-    return Container(
-      width: 160,
-      margin: const EdgeInsets.only(right: 12),
-      child: InkWell(
-        onTap: () => _onYoutubeItemTap(item),
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildYouTubeCard(BuildContext context, dynamic item) {
+    // Basic extraction - adjust based on actual InnerTubeService data structure
+    final title = item['title'] ?? '';
+    final subtitle = item['subtitle'] ?? '';
+    final thumb = item['thumbnail'] ?? '';
+    final videoId = item['videoId'];
+    final playlistId = item['playlistId'];
+
+    return GestureDetector(
+      onTap: () async {
+        if (videoId != null) {
+          // Play Song
+          final song = YouTubeSong(
+            videoId: videoId,
+            title: title,
+            artist: subtitle,
+            thumbnailUrl: thumb,
+            duration: 0,
+          );
+          await _audioHandler.playYouTubeSong(song);
+        } else if (playlistId != null) {
+          // Open Playlist (Not implemented yet, just print)
+          debugPrint('Open playlist: $playlistId');
+        }
+      },
+      child: SizedBox(
+        width: 140,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 16 / 9,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(
-                  imageUrl: item['thumbnail'],
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) =>
-                      Container(color: Colors.grey[800]),
+              aspectRatio: 1,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey[800],
+                  image: thumb.isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(thumb),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
+                child: thumb.isEmpty
+                    ? const Icon(Icons.play_circle_outline,
+                        size: 48, color: Colors.grey)
+                    : null,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              item['title'],
-              maxLines: 2,
+              title,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             Text(
-              item['subtitle'],
+              subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),

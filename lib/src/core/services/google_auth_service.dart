@@ -35,13 +35,14 @@ class GoogleAuthService {
   Future<Map<String, String>> getAuthHeaders() async {
     final cookie = await getCookies();
     final Map<String, String> headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
     };
 
     if (cookie != null && cookie.isNotEmpty) {
       headers['Cookie'] = cookie;
-      
+
       // Extract SAPISID for hash generation
       final sapisid = _extractSapisid(cookie);
       if (sapisid != null) {
@@ -107,7 +108,8 @@ class GoogleAuthService {
       final GoogleSignInAccount? account = await _googleSignIn.signIn();
       if (account != null) {
         await saveUserEmail(account.email);
-        debugPrint('[GoogleAuthService] Native sign-in successful for ${account.email}');
+        debugPrint(
+            '[GoogleAuthService] Native sign-in successful for ${account.email}');
         // You might want to get tokens and use them with your backend or other services.
         // final GoogleSignInAuthentication auth = await account.authentication;
         // final String? idToken = auth.idToken;

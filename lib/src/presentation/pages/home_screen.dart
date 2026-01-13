@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import '../../core/utils/localization.dart';
 import '../../core/services/music_finder.dart';
 import '../../data/datasources/app_database.dart';
 import '../widgets/search/search_delegate.dart';
 import 'all_tracks_screen.dart';
 import 'folder_screen.dart';
-import 'albums_screen.dart';
-import 'artists_screen.dart';
+import 'library_screen.dart';
 import 'settings_screen.dart';
 import 'login_screen.dart';
 import 'youtube_hub_screen.dart';
+import 'home_feed_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,10 +25,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final MusicFinder _musicFinder = GetIt.I<MusicFinder>();
 
   final List<Widget> _pages = [
+    const HomeFeedScreen(),
     const AllTracksScreen(),
     const YouTubeHubScreen(),
-    const AlbumsScreen(),
-    const ArtistsScreen(),
+    const LibraryScreen(),
     const SettingsScreen(),
   ];
 
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final db = GetIt.I<AppDatabase>();
+    final loc = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -131,31 +133,31 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onItemTapped,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.music_note_outlined),
-            selectedIcon: Icon(Icons.music_note),
-            label: 'Tracks',
+            icon: const Icon(Icons.home_outlined),
+            selectedIcon: const Icon(Icons.home),
+            label: loc.home,
           ),
           NavigationDestination(
-            icon: Icon(Icons.play_circle_outline),
-            selectedIcon: Icon(Icons.play_circle_filled),
-            label: 'YouTube',
+            icon: const Icon(Icons.music_note_outlined),
+            selectedIcon: const Icon(Icons.music_note),
+            label: loc.tracks,
           ),
           NavigationDestination(
-            icon: Icon(Icons.album_outlined),
-            selectedIcon: Icon(Icons.album),
-            label: 'Albums',
+            icon: const Icon(Icons.play_circle_outline),
+            selectedIcon: const Icon(Icons.play_circle_filled),
+            label: loc.youtube,
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outlined),
-            selectedIcon: Icon(Icons.person),
-            label: 'Artists',
+            icon: const Icon(Icons.library_music_outlined),
+            selectedIcon: const Icon(Icons.library_music),
+            label: loc.library,
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings),
+            label: loc.settings,
           ),
         ],
       ),

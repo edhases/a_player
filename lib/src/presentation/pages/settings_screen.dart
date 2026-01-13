@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-
 import 'package:get_it/get_it.dart';
+import 'package:provider/provider.dart';
+
 import '../../core/services/music_finder.dart';
-import '../../core/services/settings_service.dart';
+import '../../core/services/settings_service.dart'; // Add SettingsService
 import '../../core/services/google_auth_service.dart';
-import '../../data/datasources/app_database.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/utils/localization.dart';
 import 'webview_login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -18,17 +20,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final musicFinder = GetIt.I<MusicFinder>();
+    final settingsService = GetIt.I<SettingsService>();
     final authService = GetIt.I<GoogleAuthService>();
+    final localizationService = Provider.of<LocalizationService>(context);
+    final loc = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(loc.settings),
       ),
       body: ListView(
         children: [
           // Library Section
-          _buildSectionHeader(context, 'Library'),
+          _buildSectionHeader(context, loc.library),
           ValueListenableBuilder<bool>(
             valueListenable: musicFinder.isScanning,
             builder: (context, isScanning, child) {
@@ -37,14 +42,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Icons.refresh,
                   color: isScanning ? colorScheme.primary : null,
                 ),
-                title: const Text('Scan Music Library'),
+                title: Text(loc.scanLibrary),
                 subtitle: ValueListenableBuilder<String>(
                   valueListenable: musicFinder.scanStatus,
                   builder: (context, status, _) {
                     return Text(
                       isScanning
-                          ? (status.isNotEmpty ? status : 'Scanning...')
-                          : 'Scan device for all music files',
+                          ? (status.isNotEmpty ? status : loc.scanning)
+                          : loc.scanDesc,
                     );
                   },
                 ),
@@ -61,9 +66,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await musicFinder.scanAllMusic();
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Library scan complete!'),
-                              duration: Duration(seconds: 2),
+                            SnackBar(
+                              content: Text(loc.scanComplete),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         }
@@ -73,25 +78,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.delete_outline),
-            title: const Text('Clear Library'),
-            subtitle: const Text('Remove all tracks from the database'),
+            title: Text(loc.clearLibrary),
+            subtitle: Text(loc.clearDesc),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('Clear Library?'),
-                  content: const Text(
-                    'This will remove all tracks from the library. You will need to scan your music folders again.',
-                  ),
+                  title: Text(loc.clearTitle),
+                  content: Text(loc.clearConfirm),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
+                      child: Text(loc.cancel),
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Clear'),
+                      child: Text(loc.clear),
                     ),
                   ],
                 ),
@@ -101,9 +104,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await musicFinder.clearLibrary();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Library cleared!'),
-                      duration: Duration(seconds: 2),
+                    SnackBar(
+                      content: Text(loc.cleared),
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 }
@@ -113,11 +116,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
+          // Library Filters Section
+          _buildSectionHeader(context, 'Filters'),
+
+          // Min Duration
+          StatefulBuilder(
+            builder: (context, setState) {
+              final min = settingsService.loadMinTrackDuration();
+              return ListTile(
+                title: Text('Skip Short Tracks'),
+                subtitle: Text('Less than $min seconds'),
+                trailing: SizedBox(
+                  width: 150,
+                  child: Slider(
+                    value: min.toDouble(),
+                    min: 0,
+                    max: 120,
+                    divisions: 24,
+                    label: '$min s',
+                    onChanged: (val) {
+                      setState(() {
+                        settingsService.saveMinTrackDuration(val.toInt());
+                      });
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // Max Duration
+          StatefulBuilder(builder: (context, setState) {
+            final max = settingsService.loadMaxTrackDuration();
+            return ListTile(
+              title: Text('Skip Long Tracks'),
+              subtitle: Text(max == 0 ? 'No Limit' : 'More than ${max ~/ 60}m'),
+              trailing: SizedBox(
+                width: 150,
+                child: Slider(
+                  value: max.toDouble(),
+                  min: 0,
+                  max: 3600, // 1 hour max for slider
+                  divisions: 60,
+                  label: max == 0 ? 'Off' : '${max ~/ 60}m',
+                  onChanged: (val) {
+                    setState(() {
+                      settingsService.saveMaxTrackDuration(val.toInt());
+                    });
+                  },
+                ),
+              ),
+            );
+          }),
+
+          // Excluded Folders
+          ListTile(
+            title: Text('Excluded Folders'),
+            subtitle: Text(
+                '${settingsService.loadExcludedFolders().length} folders hidden'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              _showExcludedFoldersDialog(context, settingsService);
+            },
+          ),
+
+          const Divider(),
+
+          // Language Section
+          _buildSectionHeader(context, loc.language),
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: Text(localizationService.currentLocale.languageCode == 'en'
+                ? 'English'
+                : 'Українська'),
+            subtitle: Text(loc.language),
+            trailing: DropdownButton<String>(
+              value: localizationService.currentLocale.languageCode,
+              items: const [
+                DropdownMenuItem(value: 'en', child: Text('English')),
+                DropdownMenuItem(value: 'uk', child: Text('Українська')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  localizationService.changeLanguage(value);
+                }
+              },
+              underline: const SizedBox(),
+            ),
+          ),
+
+          const Divider(),
+
           // Playback Section
-          _buildSectionHeader(context, 'Playback'),
+          _buildSectionHeader(context, loc.playback),
           ListTile(
             leading: const Icon(Icons.equalizer),
-            title: const Text('Equalizer'),
+            title: Text(loc.equalizer),
             subtitle: const Text('Adjust audio frequencies'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
@@ -128,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
 
           // YouTube Section
-          _buildSectionHeader(context, 'YouTube'),
+          _buildSectionHeader(context, loc.youtube),
           FutureBuilder<bool>(
             future: authService.isSignedIn(),
             builder: (context, snapshot) {
@@ -140,14 +234,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       isSignedIn ? Icons.check_circle : Icons.cancel,
                       color: isSignedIn ? Colors.green : Colors.red,
                     ),
-                    title: Text(isSignedIn ? 'Signed in to YouTube Music' : 'Not signed in'),
+                    title: Text(isSignedIn ? loc.signedIn : loc.notSignedIn),
                     subtitle: const Text('Personalized recommendations'),
                   ),
                   if (isSignedIn)
                     ListTile(
                       leading: const Icon(Icons.refresh),
-                      title: const Text('Re-authenticate'),
-                      subtitle: const Text('Update cookies for YouTube Music'),
+                      title: Text(loc.reauth),
+                      subtitle: Text(loc.reauthDesc),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () async {
                         final success = await Navigator.push(
@@ -158,8 +252,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                         if (success == true && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Cookies updated successfully!'),
+                            SnackBar(
+                              content: Text(loc.cookiesUpdated),
                               backgroundColor: Colors.green,
                             ),
                           );
@@ -175,7 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
 
           // About Section
-          _buildSectionHeader(context, 'About'),
+          _buildSectionHeader(context, loc.about),
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('Oxide Player'),
@@ -199,5 +293,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  void _showExcludedFoldersDialog(
+      BuildContext context, SettingsService settings) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final folders = settings.loadExcludedFolders();
+            return AlertDialog(
+              title: const Text('Excluded Folders'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: folders.isEmpty
+                    ? const Text('No excluded folders.')
+                    : ListView.builder(
+                        itemCount: folders.length,
+                        itemBuilder: (context, index) {
+                          final folder = folders[index];
+                          return ListTile(
+                            title: Text(_basename(folder)),
+                            subtitle: Text(folder,
+                                style: const TextStyle(fontSize: 10)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete),
+                              onPressed: () {
+                                settings.removeExcludedFolder(folder).then((_) {
+                                  setState(() {});
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _basename(String path) {
+    // simple basename to avoid path import if not present
+    return path.split(RegExp(r'[/\\]')).last;
   }
 }

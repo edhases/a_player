@@ -14,6 +14,7 @@ import '../../../core/services/youtube_helper.dart';
 import '../../../domain/entities/youtube_song.dart';
 import '../common_artwork.dart';
 import 'package:rxdart/rxdart.dart';
+import '../../../core/utils/result.dart';
 
 class MusicSearchDelegate extends SearchDelegate<Track?> {
   final AppDatabase db;
@@ -215,7 +216,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
           child: Text('YouTube Music',
               style: Theme.of(context).textTheme.titleMedium),
         ),
-        FutureBuilder<List<YouTubeSong>>(
+        FutureBuilder<Result<List<YouTubeSong>>>(
           future: _innerTubeService.search(widget.query),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -232,7 +233,21 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
                     style: const TextStyle(color: Colors.red)),
               );
             }
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            if (!snapshot.hasData) {
+              return const SizedBox.shrink();
+            }
+
+            final result = snapshot.data!;
+            if (result.isFailure) {
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text('Error: ${result.error}',
+                    style: const TextStyle(color: Colors.red)),
+              );
+            }
+
+            final onlineTracks = result.data!;
+            if (onlineTracks.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Text('No results found online.',
@@ -240,7 +255,6 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
               );
             }
 
-            final onlineTracks = snapshot.data!;
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),

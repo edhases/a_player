@@ -1,77 +1,86 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import '../../data/datasources/app_database.dart';
+import 'dart:async';
 
-/// YouTubeAudioSource - управління завантаженням та потоковою передачею YouTube аудіо
-class YouTubeAudioSource {
-  final AppDatabase _db;
-  final YoutubeExplode _yt;
+import 'package:http/http.dart' as http;
+import 'package:just_audio/just_audio.dart';
 
-  YouTubeAudioSource(this._db) : _yt = YoutubeExplode();
+import 'youtube_helper.dart';
 
-  /// Скачує аудіо трек для офлайн програвання
-  Future<bool> downloadTrack(String videoId, String title) async {
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final downloadsDir = Directory('${appDir.path}/downloads');
-      if (!await downloadsDir.exists()) {
-        await downloadsDir.create();
+// A custom AudioSource that fetches the stream URL for a YouTube video
+// just in time and supports caching of the URL.
+class YoutubeAudioSource extends StreamAudioSource {
+  final String videoId;
+  final YouTubeHelper _ytHelper;
+  String? _cachedUrl;
+  DateTime? _cacheTime;
+
+  YoutubeAudioSource(this.videoId, this._ytHelper) : super(tag: videoId);
+
+  @override
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    // If the cached URL is null or older than 4 hours, fetch a new one.
+    if (_cachedUrl == null ||
+        _cacheTime == null ||
+        DateTime.now().difference(_cacheTime!) > const Duration(hours: 4)) {
+      try {
+        _cachedUrl = await _ytHelper.getAudioUrl(videoId);
+        _cacheTime = DateTime.now();
+      } catch (e) {
+        // Propagate the error if the URL fetch fails.
+        throw Exception('Failed to get audio URL for videoId: $videoId - $e');
       }
-      
-      final fileName = '${videoId}.opus';
-      final file = File('${downloadsDir.path}/$fileName');
-      
-      // Перевірка чи файл вже існує
-      if (await file.exists()) {
-        debugPrint('[YouTubeAudioSource] File already exists: ${file.path}');
-        return true;
-      }
-      
-      debugPrint('[YouTubeAudioSource] Downloading: $title');
-      final manifest = await _yt.videos.streams.getManifest(videoId);
-      final audioStream = manifest.audioOnly.withHighestBitrate();
-      
-      if (audioStream == null) {
-        debugPrint('[YouTubeAudioSource] No audio stream found');
-        return false;
-      }
-
-      // Створити вихідний файл та записувати в нього потік
-      final fileStream = file.openWrite();
-      await _yt.videos.streams.get(audioStream).pipe(fileStream);
-      await fileStream.flush();
-      await fileStream.close();
-      
-      debugPrint('[YouTubeAudioSource] Successfully downloaded: $title -> ${file.path}');
-      return true;
-    } catch (e) {
-      debugPrint('[YouTubeAudioSource] Error downloading track $videoId: $e');
-      return false;
     }
-  }
-  
-  /// Повертає шлях до локального файлу, якщо доступно, або null
-  Future<String?> getLocalFilePath(String videoId) async {
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = '${videoId}.opus';
-      final file = File('${appDir.path}/downloads/$fileName');
-      
-      if (await file.exists()) {
-        debugPrint('[YouTubeAudioSource] Found local file: ${file.path}');
-        return file.path;
-      }
-      return null;
-    } catch (e) {
-      debugPrint('[YouTubeAudioSource] Error getting local file path: $e');
-      return null;
-    }
-  }
 
-  /// Закрити YoutubeExplode
-  void dispose() {
-    _yt.close();
+    // If after trying to fetch, the URL is still null, we cannot proceed.
+    if (_cachedUrl == null) {
+      throw Exception('Audio URL for videoId: $videoId is null.');
+    }
+
+    final uri = Uri.parse(_cachedUrl!);
+    final headers = <String, String>{};
+    if (start != null || end != null) {
+      headers['Range'] = 'bytes=${start ?? 0}-${end ?? ""}';
+    }
+
+    final client = http.Client();
+    final request = http.Request('GET', uri)..headers.addAll(headers);
+    final response = await client.send(request);
+
+    final contentLength = response.contentLength;
+    final statusCode = response.statusCode;
+
+    // Check if the server supports range requests and returned a partial response.
+    if (statusCode < 200 || statusCode >= 300) {
+      client.close();
+      throw Exception('HTTP request failed with status: $statusCode');
+    }
+
+    final contentRange = response.headers['content-range'];
+    int? totalLength;
+    if (contentRange != null) {
+      final parts = contentRange.split('/');
+      if (parts.length == 2) {
+        try {
+          totalLength = int.parse(parts[1]);
+        } catch (_) {
+          // Ignore parsing errors.
+        }
+      }
+    }
+
+    return StreamAudioResponse(
+      sourceLength: totalLength,
+      contentLength: contentLength,
+      offset: start ?? 0,
+      stream: response.stream.handleError((error) {
+        client.close();
+        throw error;
+      }, test: (error) => true).transform(StreamTransformer.fromHandlers(
+        handleDone: (sink) {
+          client.close();
+          sink.close();
+        },
+      )),
+      contentType: response.headers['content-type'] ?? 'audio/mpeg',
+    );
   }
 }

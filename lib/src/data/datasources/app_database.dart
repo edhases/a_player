@@ -20,6 +20,7 @@ class Tracks extends Table {
   TextColumn get artworkUri => text().nullable()();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
   IntColumn get mediaStoreId => integer().nullable()();
+  DateTimeColumn get lastPlayed => dateTime().nullable()();
 
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -80,7 +81,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -101,6 +102,17 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 7) {
             await m.createTable(homeCache);
+          }
+          if (from < 8) {
+            await m.addColumn(tracks, tracks.lastPlayed);
+          }
+          if (from < 9) {
+            // Defensive migration: ensure lastPlayed exists for broken v8 states
+            try {
+              await m.addColumn(tracks, tracks.lastPlayed);
+            } catch (e) {
+              // Ignore if column already exists (valid v8 state)
+            }
           }
         },
       );
@@ -138,6 +150,88 @@ class AppDatabase extends _$AppDatabase {
 
     return rows.map((row) => Artist(name: row.read(tracks.artist)!)).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  // --- FOLDER & FILTER QUERIES ---
+
+  Future<List<String>> getAllFolders() async {
+    final query = selectOnly(tracks, distinct: true)
+      ..addColumns([tracks.folderPath]);
+
+    final rows = await query.get();
+    return rows.map((row) => row.read(tracks.folderPath)!).toList()..sort();
+  }
+
+  Future<List<Track>> getTracksByFolder(String folderPath) {
+    return (select(tracks)..where((t) => t.folderPath.equals(folderPath)))
+        .get();
+  }
+
+  /// returns tracks respecting min/max duration (seconds) and excluded folders
+  Future<List<Track>> getFilteredTracks({
+    int minDurationSeconds = 0,
+    int maxDurationSeconds = 0,
+    List<String> excludedFolders = const [],
+  }) {
+    return (select(tracks)
+          ..where((t) {
+            // duration is in milliseconds in DB
+            final minMs = minDurationSeconds * 1000;
+            final maxMs = maxDurationSeconds * 1000;
+
+            Expression<bool> predicate = t.duration.isBiggerOrEqualValue(minMs);
+
+            if (maxMs > 0) {
+              predicate &= t.duration.isSmallerOrEqualValue(maxMs);
+            }
+
+            if (excludedFolders.isNotEmpty) {
+              predicate &= t.folderPath.isNotIn(excludedFolders);
+            }
+
+            return predicate;
+          })
+          ..orderBy([(t) => OrderingTerm(expression: t.title)]))
+        .get();
+  }
+
+  /// returns stream of tracks respecting min/max duration (seconds) and excluded folders
+  Stream<List<Track>> watchFilteredTracks({
+    int minDurationSeconds = 0,
+    int maxDurationSeconds = 0,
+    List<String> excludedFolders = const [],
+  }) {
+    return (select(tracks)
+          ..where((t) {
+            // duration is in milliseconds in DB
+            final minMs = minDurationSeconds * 1000;
+            final maxMs = maxDurationSeconds * 1000;
+
+            Expression<bool> predicate = t.duration.isBiggerOrEqualValue(minMs);
+
+            if (maxMs > 0) {
+              predicate &= t.duration.isSmallerOrEqualValue(maxMs);
+            }
+
+            if (excludedFolders.isNotEmpty) {
+              predicate &= t.folderPath.isNotIn(excludedFolders);
+            }
+
+            return predicate;
+          })
+          ..orderBy([(t) => OrderingTerm(expression: t.title)]))
+        .watch();
+  }
+
+  Future<List<Track>> getRecentTracks({int limit = 10}) {
+    return (select(tracks)
+          ..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.lastPlayed, mode: OrderingMode.desc)
+          ])
+          ..where((t) => t.lastPlayed.isNotNull())
+          ..limit(limit))
+        .get();
   }
 
   Future<List<Track>> getTracksByAlbum(String albumName) {
@@ -192,6 +286,12 @@ class AppDatabase extends _$AppDatabase {
     await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId)))
         .write(
       YouTubeTracksCompanion(lastPlayed: Value(DateTime.now())),
+    );
+  }
+
+  Future<void> markLocalTrackAsPlayed(String path) async {
+    await (update(tracks)..where((t) => t.path.equals(path))).write(
+      TracksCompanion(lastPlayed: Value(DateTime.now())),
     );
   }
 

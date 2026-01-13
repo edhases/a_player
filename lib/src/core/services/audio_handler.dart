@@ -4,14 +4,16 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:get_it/get_it.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:audio_session/audio_session.dart';
 import 'package:collection/collection.dart'; // For firstWhereOrNull
+import 'package:audio_session/audio_session.dart';
 import '../../data/datasources/app_database.dart';
 import 'settings_service.dart';
 import 'equalizer_service.dart';
 // Add import for YouTubeHelper
 import 'youtube_helper.dart';
-import 'youtube_streaming_audio_source.dart';
+import '../../domain/entities/youtube_song.dart';
+import '../utils/media_item_adapter.dart';
+import 'audio_source_factory.dart';
 
 /// The main audio handler that bridges just_audio with audio_service.
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -21,6 +23,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AppDatabase _db;
   // Add YouTubeHelper reference
   late final YouTubeHelper _ytHelper;
+  late final AudioSourceFactory _audioSourceFactory;
 
   StreamSubscription<int?>? _audioSessionIdSubscription;
   bool _isInitialized = false;
@@ -39,13 +42,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Initialize YouTubeHelper if not already registered
     try {
       _ytHelper = GetIt.I<YouTubeHelper>();
+      _audioSourceFactory = AudioSourceFactory(_ytHelper);
     } catch (e) {
       debugPrint(
           '[AudioHandler] YouTubeHelper not yet registered, will be lazy-loaded');
     }
 
-    // DISABLE AudioSession configuration on emulators as it often hangs
-    /*
+    // Enable AudioSession configuration safely
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
@@ -53,7 +56,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } catch (e) {
       debugPrint('[AudioHandler] AudioSession error: $e');
     }
-    */
 
     // Broadcast playback state changes
     player.playbackEventStream.listen((event) {
@@ -163,17 +165,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     ));
   }
 
-  Future<void> _initEqualizer(int sessionId) async {
-    if (GetIt.I.isRegistered<EqualizerService>()) return;
-    try {
-      final service = EqualizerService();
-      await service.init(sessionId);
-      GetIt.I.registerSingleton<EqualizerService>(service);
-    } catch (e) {
-      // Ignore eq errors
-    }
-  }
-
   @override
   Future<void> play() => player.play();
 
@@ -246,21 +237,35 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   @override
-  Future<void> updateQueue(List<MediaItem> newQueue) async {
+  Future<void> updateQueue(List<MediaItem> queue) async {
     final start = DateTime.now();
-    debugPrint(
-        '[AudioHandler] updateQueue called with ${newQueue.length} items');
+    debugPrint('[AudioHandler] updateQueue called with ${queue.length} items');
 
-    if (const ListEquality().equals(queue.value, newQueue)) {
+    if (const ListEquality().equals(this.queue.value, queue)) {
       debugPrint('[AudioHandler] updateQueue: identical, skipping');
       return;
     }
 
-    queue.add(newQueue);
+    this.queue.add(queue);
 
     // Perform the heavy setAudioSource operation in the background
     // to avoid potential main-thread stalls on emulators.
-    _updateSourceInBackground(newQueue, start);
+    _updateSourceInBackground(queue, start);
+  }
+
+  Future<void> playLocalTrack(Track track) async {
+    final mediaItem = MediaItemAdapter.fromTrack(track);
+    await addQueueItem(mediaItem);
+    await play();
+    // Optional: Jump to the newly added item (last in queue)
+    await skipToQueueItem(queue.value.length - 1);
+  }
+
+  Future<void> playYouTubeSong(YouTubeSong song) async {
+    final mediaItem = MediaItemAdapter.fromYouTubeSong(song);
+    await addQueueItem(mediaItem);
+    await play();
+    await skipToQueueItem(queue.value.length - 1);
   }
 
   Future<void> _updateSourceInBackground(
@@ -269,7 +274,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       debugPrint(
           '[AudioHandler] Background: Preparing ConcatenatingAudioSource...');
       final newSource = ConcatenatingAudioSource(
-        children: newQueue.map(_createAudioSource).toList(),
+        children: newQueue.map(_audioSourceFactory.createSource).toList(),
         useLazyPreparation: true,
       );
 
@@ -280,44 +285,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } catch (e) {
       debugPrint('[AudioHandler] Background Error: $e');
     }
-  }
-
-  AudioSource _createAudioSource(MediaItem item) {
-    debugPrint('[AudioHandler] Creating AudioSource for ${item.title}');
-
-    // Check if it's an online YouTube track that needs JIT fetching.
-    if (item.extras?['isOnline'] == true) {
-      final videoId = item.extras!['videoId'] as String;
-      debugPrint(
-          '[AudioHandler] Creating YoutubeAudioSource for videoId: $videoId');
-      return YoutubeAudioSource(videoId, _ytHelper);
-    }
-
-    // Handle content URIs from sources like Android MediaStore.
-    if (item.id.startsWith('content://')) {
-      debugPrint('[AudioHandler] Source: Content URI: ${item.id}');
-      return AudioSource.uri(Uri.parse(item.id), tag: item);
-    }
-
-    // Handle direct HTTP URLs (e.g., from a previous implementation, not used for YT anymore).
-    if (item.id.startsWith('http')) {
-      final headers = <String, String>{};
-
-      if (item.extras != null && item.extras!.containsKey('user_agent')) {
-        headers['User-Agent'] = item.extras!['user_agent'];
-      }
-
-      debugPrint(
-          '[AudioHandler] Source: HTTP URL: ${item.id.substring(0, item.id.length > 100 ? 100 : item.id.length)}...');
-
-      return AudioSource.uri(Uri.parse(item.id),
-          tag: item, headers: headers.isEmpty ? null : headers);
-    }
-
-    // Default to assuming the ID is a local file path.
-    // This handles both regular local files and downloaded YouTube tracks.
-    debugPrint('[AudioHandler] Source: File path: ${item.id}');
-    return AudioSource.uri(Uri.file(item.id), tag: item);
   }
 
   Future<void> _loadInitialState() async {
@@ -353,9 +320,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     queue.add(mediaItems);
     try {
-      await _playlist.addAll(mediaItems.map(_createAudioSource).toList());
+      if (mediaItems.isNotEmpty) {
+        // Ensure factory is initialized if we have items
+        if (!_isInitialized)
+          await _init(); // Should be init by now but safe check
+        // Or if helper not registered, we can't create online sources
+        // Assuming persistence primarily for local tracks or YT logic handles lazy loading
+
+        // If factory exists (init called and passed try/catch)
+        // Actually _init is called in constructor.
+
+        await _playlist
+            .addAll(mediaItems.map(_audioSourceFactory.createSource).toList());
+      }
     } catch (e) {
-      // ignore
+      debugPrint('[AudioHandler] Error loading initial playlist: $e');
     }
 
     final lastTrackId = _settingsService.loadLastTrackId();

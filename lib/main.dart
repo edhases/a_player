@@ -14,10 +14,12 @@ import 'src/core/services/settings_service.dart';
 import 'src/core/services/google_auth_service.dart';
 import 'src/core/services/youtube_helper.dart';
 import 'src/core/services/innertube_service.dart';
-import 'src/core/services/youtube_audio_source.dart';
+
 import 'src/core/services/localization_service.dart';
 import 'src/core/utils/localization.dart';
 import 'src/core/theme/app_theme.dart';
+import 'src/domain/repositories/music_repository.dart';
+import 'src/data/repositories/music_repository_impl.dart';
 import 'src/presentation/pages/home_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
 import 'src/presentation/widgets/mini_player.dart';
@@ -62,6 +64,9 @@ void main() async {
   debugPrint('[Main] GoogleAuthService initialized.');
 
   GetIt.I.registerSingleton<InnerTubeService>(InnerTubeService());
+
+  // Register MusicRepository
+  GetIt.I.registerSingleton<MusicRepository>(MusicRepositoryImpl());
 
   // Register YouTubeHelper with database
   debugPrint('[Main] YouTubeHelper initializing...');
