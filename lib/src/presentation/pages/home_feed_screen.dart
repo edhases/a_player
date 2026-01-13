@@ -5,6 +5,8 @@ import '../../core/utils/localization.dart';
 import '../../data/datasources/app_database.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../../core/services/audio_handler.dart';
+import '../widgets/common_artwork.dart';
+import 'dart:math';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -18,6 +20,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   final _audioHandler = GetIt.I<MyAudioHandler>();
 
   List<Track> _recentLocalTracks = [];
+  List<Track> _shuffledLocalTracks = [];
   List<Map<String, dynamic>> _youtubeSections = [];
   bool _isLoading = true;
   String? _error;
@@ -37,19 +40,24 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       // 1. Fetch Local Recents
       final recents = await _repository.getRecentLocalTracks(limit: 10);
 
+      // 1.5 Fetch shuffled local tracks for "Your Library" section
+      final db = GetIt.I<AppDatabase>();
+      final allTracks = await db.getFilteredTracks();
+      final shuffled = List<Track>.from(allTracks)..shuffle(Random());
+
       // 2. Fetch YouTube Home Data
       final ytResult = await _repository.getHomeFeed();
 
       if (mounted) {
         setState(() {
           _recentLocalTracks = recents;
+          _shuffledLocalTracks = shuffled.take(15).toList();
           if (ytResult.isSuccess) {
             _youtubeSections = ytResult.data!;
           } else {
             _youtubeError = ytResult.error;
             debugPrint('HomeFeed YouTube Error: ${ytResult.error}');
           }
-          _isLoading = false;
           _isLoading = false;
         });
       }
@@ -120,7 +128,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             _buildSectionHeader(
                 context, loc.listenAgain), // Use localized "Listen Again"
             SizedBox(
-              height: 180,
+              height: 195,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
@@ -128,6 +136,25 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final track = _recentLocalTracks[index];
+                  return _buildLocalTrackCard(context, track);
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // 1.5. Your Library (Shuffled Local Tracks)
+          if (_shuffledLocalTracks.isNotEmpty) ...[
+            _buildSectionHeader(context, 'Your Library'), // TODO: Localize
+            SizedBox(
+              height: 195,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: _shuffledLocalTracks.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final track = _shuffledLocalTracks[index];
                   return _buildLocalTrackCard(context, track);
                 },
               ),
@@ -212,8 +239,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   Widget _buildLocalTrackCard(BuildContext context, Track track) {
     return GestureDetector(
       onTap: () async {
-        // Play local track
-        // We need to convert Track to MediaItem or similar for AudioHandler
         await _audioHandler.playLocalTrack(track);
       },
       child: SizedBox(
@@ -221,24 +246,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Artwork
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.grey[800],
-                  image: track.artworkUri != null
-                      ? DecorationImage(
-                          image: NetworkImage(
-                              track.artworkUri!), // Or FileImage if local path
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: track.artworkUri == null
-                    ? const Icon(Icons.music_note, size: 48, color: Colors.grey)
-                    : null,
+            // Artwork using CommonArtwork for proper local file artwork
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CommonArtwork(
+                mediaStoreId: track.mediaStoreId,
+                path: track.path,
+                url: track.artworkUri,
+                size: 140,
+                radius: 0,
               ),
             ),
             const SizedBox(height: 8),
