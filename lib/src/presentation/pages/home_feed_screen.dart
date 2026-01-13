@@ -162,9 +162,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           // 3. YouTube Sections (Mixes, Recents, Community etc.)
           ..._youtubeSections.map((section) {
             final title = section['title'] as String? ?? '';
-            final contents = section['contents'] as List<dynamic>? ?? [];
+            final items = section['items'] as List<dynamic>? ?? [];
 
-            if (contents.isEmpty) return const SizedBox.shrink();
+            if (items.isEmpty) return const SizedBox.shrink();
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,10 +175,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
-                    itemCount: contents.length,
+                    itemCount: items.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
-                      final item = contents[index];
+                      final item = items[index];
                       // Determine type: Song, Video, Playlist...
                       // For simplicity, treating as Song or Playlist card
                       return _buildYouTubeCard(context, item);
@@ -261,27 +261,74 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   Widget _buildYouTubeCard(BuildContext context, dynamic item) {
-    // Basic extraction - adjust based on actual InnerTubeService data structure
-    final title = item['title'] ?? '';
-    final subtitle = item['subtitle'] ?? '';
-    final thumb = item['thumbnail'] ?? '';
-    final videoId = item['videoId'];
-    final playlistId = item['playlistId'];
+    // Handle YouTubeSong objects from the parser
+    if (item is YouTubeSong) {
+      return GestureDetector(
+        onTap: () async {
+          await _audioHandler.playYouTubeSong(item);
+        },
+        child: SizedBox(
+          width: 140,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.grey[800],
+                    image: item.thumbnailUrl.isNotEmpty
+                        ? DecorationImage(
+                            image: NetworkImage(item.thumbnailUrl),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: item.thumbnailUrl.isEmpty
+                      ? const Icon(Icons.music_note,
+                          size: 48, color: Colors.grey)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              Text(
+                item.artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Fallback for Map-based items (legacy compatibility)
+    final Map<String, dynamic> mapItem = item as Map<String, dynamic>;
+    final title = mapItem['title']?.toString() ?? '';
+    final subtitle = mapItem['subtitle']?.toString() ?? '';
+    final thumb = mapItem['thumbnail']?.toString() ?? '';
+    final videoId = mapItem['videoId']?.toString();
+    final playlistId = mapItem['playlistId']?.toString();
 
     return GestureDetector(
       onTap: () async {
         if (videoId != null) {
-          // Play Song
           final song = YouTubeSong(
             videoId: videoId,
             title: title,
             artist: subtitle,
             thumbnailUrl: thumb,
-            duration: 0,
           );
           await _audioHandler.playYouTubeSong(song);
         } else if (playlistId != null) {
-          // Open Playlist (Not implemented yet, just print)
           debugPrint('Open playlist: $playlistId');
         }
       },
@@ -304,8 +351,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       : null,
                 ),
                 child: thumb.isEmpty
-                    ? const Icon(Icons.play_circle_outline,
-                        size: 48, color: Colors.grey)
+                    ? const Icon(Icons.music_note, size: 48, color: Colors.grey)
                     : null,
               ),
             ),

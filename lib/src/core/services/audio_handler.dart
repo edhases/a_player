@@ -263,9 +263,27 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<void> playYouTubeSong(YouTubeSong song) async {
     final mediaItem = MediaItemAdapter.fromYouTubeSong(song);
-    await addQueueItem(mediaItem);
-    await play();
-    await skipToQueueItem(queue.value.length - 1);
+
+    debugPrint('[AudioHandler] playYouTubeSong: ${song.title}');
+
+    // Clear and set new queue to bypass "identical" check
+    queue.add([mediaItem]);
+
+    // Create and set audio source directly
+    final source = _audioSourceFactory.createSource(mediaItem);
+    final concatenatingSource = ConcatenatingAudioSource(
+      children: [source],
+      useLazyPreparation: false, // Start loading immediately
+    );
+
+    try {
+      await player.setAudioSource(concatenatingSource, preload: true);
+      await player.play();
+      debugPrint(
+          '[AudioHandler] playYouTubeSong: Started playing ${song.title}');
+    } catch (e) {
+      debugPrint('[AudioHandler] playYouTubeSong error: $e');
+    }
   }
 
   Future<void> _updateSourceInBackground(

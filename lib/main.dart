@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -24,6 +23,9 @@ import 'src/presentation/pages/home_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
 import 'src/presentation/widgets/mini_player.dart';
 
+/// Global flag to track if MetadataGod native library is available
+bool isMetadataGodAvailable = false;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -38,8 +40,10 @@ void main() async {
   debugPrint('[Main] MetadataGod initializing...');
   try {
     await MetadataGod.initialize();
+    isMetadataGodAvailable = true;
     debugPrint('[Main] MetadataGod initialized.');
   } catch (e) {
+    isMetadataGodAvailable = false;
     debugPrint('[Main] MetadataGod failed to initialize: $e');
   }
 

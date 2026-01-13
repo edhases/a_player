@@ -119,11 +119,11 @@ class InnerTubeService {
       "context": {
         "client": {
           "clientName": "WEB_REMIX",
-          "clientVersion": "1.20230615.1.0",
+          "clientVersion": "1.20241111.01.00",
           "hl": "en",
           "gl": "US",
           "browserName": "Chrome",
-          "browserVersion": "114.0.5735.134",
+          "browserVersion": "120.0.0.0",
           "screenWidthPoints": 1920,
           "screenHeightPoints": 1080,
           "screenPixelDensity": 1,
@@ -138,10 +138,10 @@ class InnerTubeService {
       "context": {
         "client": {
           "clientName": "ANDROID_MUSIC",
-          "clientVersion": "6.33.51",
+          "clientVersion": "7.02.51",
           "hl": "en",
           "gl": "US",
-          "androidSdkVersion": 31
+          "androidSdkVersion": 33
         }
       }
     };
@@ -534,47 +534,84 @@ class InnerTubeService {
 
       if (contents == null || contents is! List) {
         debugPrint(
-            '[InnerTube] _parseHomeData: Could not find sectionListRenderer contents.');
+            '[InnerTube] _parseHomeData: Could not find sectionListRenderer contents. Keys: ${data['contents']?.keys}');
         return [];
       }
 
       for (var section in contents) {
+        // Handle multiple shelf types including musicImmersiveCarouselShelfRenderer
         final shelf = section['musicShelfRenderer'] ??
             section['musicCarouselShelfRenderer'] ??
-            section['gridRenderer'];
-        if (shelf == null) continue;
+            section['musicImmersiveCarouselShelfRenderer'] ??
+            section['gridRenderer'] ??
+            section['musicVisualHeaderRenderer'];
 
-        String title = "Recommended";
-        final titleRuns = shelf['title']?['runs'] as List?;
-        if (titleRuns != null && titleRuns.isNotEmpty) {
-          title = titleRuns[0]['text'];
-        }
-
-        final items = <YouTubeSong>[];
-        final shelfContents = shelf['contents'] ?? shelf['items'];
-        if (shelfContents is List) {
-          for (var item in shelfContents) {
-            final mrlir = item['musicResponsiveListItemRenderer'] ??
-                item['musicTwoColumnItemRenderer'] ??
-                item['musicMultiRowListItemRenderer'];
-            if (mrlir != null) {
-              final song = _parseSingleSong(mrlir);
-              if (song != null) items.add(song);
+        if (shelf == null) {
+          // Try to extract from itemSectionRenderer (common wrapper)
+          final itemSection = section['itemSectionRenderer'];
+          if (itemSection != null) {
+            final innerContents = itemSection['contents'] as List?;
+            if (innerContents != null) {
+              for (var innerItem in innerContents) {
+                final innerShelf = innerItem['musicShelfRenderer'] ??
+                    innerItem['musicCarouselShelfRenderer'] ??
+                    innerItem['musicImmersiveCarouselShelfRenderer'];
+                if (innerShelf != null) {
+                  _processShelf(innerShelf, sections);
+                }
+              }
             }
           }
+          continue;
         }
 
-        if (items.isNotEmpty) {
-          sections.add({
-            'title': title,
-            'items': items,
-          });
-        }
+        _processShelf(shelf, sections);
       }
     } catch (e) {
       debugPrint('Error parsing home data: $e');
     }
+    debugPrint('[InnerTube] _parseHomeData: Found ${sections.length} sections');
     return sections;
+  }
+
+  void _processShelf(
+      Map<String, dynamic> shelf, List<Map<String, dynamic>> sections) {
+    String title = "Recommended";
+    final titleRuns = shelf['title']?['runs'] as List?;
+    final headerRuns = shelf['header']?['musicCarouselShelfBasicHeaderRenderer']
+        ?['title']?['runs'] as List?;
+    final straplineRuns = shelf['straplineTextOne']?['runs'] as List?;
+
+    if (titleRuns != null && titleRuns.isNotEmpty) {
+      title = titleRuns[0]['text'];
+    } else if (headerRuns != null && headerRuns.isNotEmpty) {
+      title = headerRuns[0]['text'];
+    } else if (straplineRuns != null && straplineRuns.isNotEmpty) {
+      title = straplineRuns[0]['text'];
+    }
+
+    final items = <YouTubeSong>[];
+    final shelfContents = shelf['contents'] ?? shelf['items'];
+    if (shelfContents is List) {
+      for (var item in shelfContents) {
+        final mrlir = item['musicResponsiveListItemRenderer'] ??
+            item['musicTwoColumnItemRenderer'] ??
+            item['musicTwoRowItemRenderer'] ??
+            item['musicMultiRowListItemRenderer'] ??
+            item['musicNavigationButtonRenderer'];
+        if (mrlir != null) {
+          final song = _parseSingleSong(mrlir);
+          if (song != null) items.add(song);
+        }
+      }
+    }
+
+    if (items.isNotEmpty) {
+      sections.add({
+        'title': title,
+        'items': items,
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> getLibraryPlaylists() async {
@@ -680,33 +717,61 @@ class InnerTubeService {
 
   YouTubeSong? _parseSingleSong(Map<String, dynamic> mrlir) {
     try {
-      final title = mrlir['flexColumns']?[0]
-                  ['musicResponsiveListItemFlexColumnRenderer']['text']?['runs']
-              ?[0]?['text'] ??
-          mrlir['title']?['runs']?[0]?['text'];
+      // Try multiple title extraction paths
+      String? title = mrlir['flexColumns']?[0]
+              ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']
+          ?[0]?['text'];
+
+      // Title from musicTwoRowItemRenderer/musicTwoColumnItemRenderer
+      title ??= mrlir['title']?['runs']?[0]?['text'];
+
+      // Title from navigationEndpoint context
+      title ??=
+          mrlir['navigationEndpoint']?['watchEndpoint']?['videoId'] != null
+              ? 'Unknown Title'
+              : null;
 
       if (title == null) return null;
 
+      // Extract artist with multiple fallbacks
       String artist = "Unknown";
-      final flexCol1 =
-          mrlir['flexColumns']?[1]['musicResponsiveListItemFlexColumnRenderer'];
+      final flexCol1 = mrlir['flexColumns']?[1]
+          ?['musicResponsiveListItemFlexColumnRenderer'];
       if (flexCol1 != null) {
         final runs = flexCol1['text']?['runs'] as List?;
-        if (runs != null && runs.isNotEmpty) artist = runs[0]['text'];
+        if (runs != null && runs.isNotEmpty) {
+          // Find the first run that's not a separator or type label
+          artist = _extractArtistFromRuns(runs);
+        }
       } else {
-        artist = mrlir['subtitle']?['runs']?[0]?['text'] ?? "Unknown";
+        // Try subtitle for musicTwoRowItemRenderer
+        final subtitleRuns = mrlir['subtitle']?['runs'] as List?;
+        if (subtitleRuns != null && subtitleRuns.isNotEmpty) {
+          artist = _extractArtistFromRuns(subtitleRuns);
+        }
       }
 
+      // Extract videoId with multiple paths
       String? videoId;
+
+      // Path 1: Overlay play button
       final playButton = mrlir['overlay']?['musicItemThumbnailOverlayRenderer']
           ?['content']?['musicPlayButtonRenderer'];
-      videoId = playButton?['playNavigationEndpoint']?['watchEndpoint']
-              ?['videoId'] ??
-          mrlir['navigationEndpoint']?['watchEndpoint']?['videoId'] ??
-          mrlir['onTap']?['watchEndpoint']?['videoId'];
+      videoId =
+          playButton?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+
+      // Path 2: Direct navigationEndpoint
+      videoId ??= mrlir['navigationEndpoint']?['watchEndpoint']?['videoId'];
+
+      // Path 3: onTap
+      videoId ??= mrlir['onTap']?['watchEndpoint']?['videoId'];
+
+      // Path 4: playlistItemData
+      videoId ??= mrlir['playlistItemData']?['videoId'];
 
       if (videoId == null) return null;
 
+      // Extract thumbnail with multiple paths
       final thumbnails = (mrlir['thumbnail']?['musicThumbnailRenderer'] ??
               mrlir['thumbnailRenderer']
                   ?['musicThumbnailRenderer'])?['thumbnail']?['thumbnails']
@@ -723,7 +788,42 @@ class InnerTubeService {
         thumbnailUrl: thumbUrl,
       );
     } catch (e) {
+      debugPrint('[InnerTube] _parseSingleSong error: $e');
       return null;
     }
+  }
+
+  /// Extract artist from runs, skipping type labels like "Song", "Video", separators
+  String _extractArtistFromRuns(List runs) {
+    // Type labels to skip
+    const skipLabels = [
+      'Song',
+      'Video',
+      'Пісня',
+      'Відео',
+      'EP',
+      'Album',
+      'Альбом',
+      'Single',
+      ' • ',
+      '•'
+    ];
+
+    for (var run in runs) {
+      final text = run['text']?.toString() ?? '';
+      // Skip empty, separators, and type labels
+      if (text.isEmpty) continue;
+      if (text.trim() == '•' || text.trim() == ' • ') continue;
+      if (skipLabels.contains(text.trim())) continue;
+      // Skip view counts and time indicators
+      if (text.contains('views') ||
+          text.contains('plays') ||
+          text.contains(':')) continue;
+      if (RegExp(r'^\d+[KMB]?\s*(views|plays)?$', caseSensitive: false)
+          .hasMatch(text)) continue;
+
+      return text;
+    }
+    return "Unknown";
   }
 }

@@ -23,11 +23,13 @@ class MediaItemAdapter {
       album: song.artist,
       title: song.title,
       artist: song.artist,
-      artUri: Uri.parse(song.thumbnailUrl),
+      artUri:
+          song.thumbnailUrl.isNotEmpty ? Uri.parse(song.thumbnailUrl) : null,
       duration: Duration(seconds: song.duration),
       extras: {
         'isOnline': true,
         'videoId': song.videoId,
+        'thumbnailUrl': song.thumbnailUrl,
       },
     );
   }

@@ -26,7 +26,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final db = GetIt.I<AppDatabase>();
-    
+
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
@@ -34,7 +34,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.keyboard_arrow_down, size: 32, color: Colors.white),
+          icon: const Icon(Icons.keyboard_arrow_down,
+              size: 32, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -89,7 +90,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                             final isFavorite = favSnapshot.data ?? false;
                             return IconButton(
                               icon: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
+                                isFavorite
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
                                 color: isFavorite ? Colors.red : Colors.white70,
                                 size: 28,
                               ),
@@ -148,6 +151,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
               child: CommonArtwork(
                 mediaStoreId: mediaItem.extras?['mediaStoreId'] as int?,
                 path: mediaItem.id,
+                url: mediaItem.artUri
+                    ?.toString(), // Pass artUri for network thumbnails
                 size: 400,
                 radius: 0,
                 placeholderIcon: Icons.music_note,
@@ -165,7 +170,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       children: [
         Text(
           mediaItem.title,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+          style: const TextStyle(
+              fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
           textAlign: TextAlign.start,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -173,7 +179,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
         const SizedBox(height: 4),
         Text(
           mediaItem.artist ?? 'Unknown Artist',
-          style: TextStyle(fontSize: 18, color: Colors.white.withValues(alpha: 0.7)),
+          style: TextStyle(
+              fontSize: 18, color: Colors.white.withValues(alpha: 0.7)),
           textAlign: TextAlign.start,
           maxLines: 1,
         ),
@@ -194,9 +201,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
           stream: _audioHandler.player.positionStream,
           builder: (context, posSnapshot) {
             final position = posSnapshot.data ?? Duration.zero;
-            double sliderValue = _dragValue ?? position.inMilliseconds.toDouble();
+            double sliderValue =
+                _dragValue ?? position.inMilliseconds.toDouble();
             double maxSliderValue = duration.inMilliseconds.toDouble();
-            
+
             if (maxSliderValue <= 0) maxSliderValue = 1.0;
             sliderValue = sliderValue.clamp(0.0, maxSliderValue);
 
@@ -205,7 +213,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 7),
                     activeTrackColor: Theme.of(context).colorScheme.primary,
                     inactiveTrackColor: Colors.white24,
                     thumbColor: Colors.white,
@@ -227,12 +236,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _formatDuration(Duration(milliseconds: sliderValue.round())),
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                        _formatDuration(
+                            Duration(milliseconds: sliderValue.round())),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500),
                       ),
                       Text(
                         _formatDuration(duration),
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
@@ -251,8 +267,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (context, snapshot) {
         final playbackState = snapshot.data;
         final isPlaying = playbackState?.playing ?? false;
-        final repeatMode = playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
-        final shuffleMode = playbackState?.shuffleMode ?? AudioServiceShuffleMode.none;
+        final repeatMode =
+            playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
+        final shuffleMode =
+            playbackState?.shuffleMode ?? AudioServiceShuffleMode.none;
 
         return Column(
           children: [
@@ -260,11 +278,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
-                  icon: Icon(Icons.shuffle, color: shuffleMode != AudioServiceShuffleMode.none ? colorScheme.primary : Colors.white70),
-                  onPressed: () => _audioHandler.setShuffleMode(shuffleMode == AudioServiceShuffleMode.none ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none),
+                  icon: Icon(Icons.shuffle,
+                      color: shuffleMode != AudioServiceShuffleMode.none
+                          ? colorScheme.primary
+                          : Colors.white70),
+                  onPressed: () => _audioHandler.setShuffleMode(
+                      shuffleMode == AudioServiceShuffleMode.none
+                          ? AudioServiceShuffleMode.all
+                          : AudioServiceShuffleMode.none),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.skip_previous, color: Colors.white, size: 45),
+                  icon: const Icon(Icons.skip_previous,
+                      color: Colors.white, size: 45),
                   onPressed: _audioHandler.skipToPrevious,
                 ),
                 GestureDetector(
@@ -272,19 +297,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   child: Container(
                     height: 80,
                     width: 80,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: colorScheme.primary),
-                    child: Icon(isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 50),
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle, color: colorScheme.primary),
+                    child: Icon(isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white, size: 50),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.skip_next, color: Colors.white, size: 45),
+                  icon: const Icon(Icons.skip_next,
+                      color: Colors.white, size: 45),
                   onPressed: _audioHandler.skipToNext,
                 ),
                 IconButton(
-                  icon: Icon(repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat, color: repeatMode != AudioServiceRepeatMode.none ? colorScheme.primary : Colors.white70),
+                  icon: Icon(
+                      repeatMode == AudioServiceRepeatMode.one
+                          ? Icons.repeat_one
+                          : Icons.repeat,
+                      color: repeatMode != AudioServiceRepeatMode.none
+                          ? colorScheme.primary
+                          : Colors.white70),
                   onPressed: () {
-                    final modes = [AudioServiceRepeatMode.none, AudioServiceRepeatMode.all, AudioServiceRepeatMode.one];
-                    _audioHandler.setRepeatMode(modes[(modes.indexOf(repeatMode) + 1) % modes.length]);
+                    final modes = [
+                      AudioServiceRepeatMode.none,
+                      AudioServiceRepeatMode.all,
+                      AudioServiceRepeatMode.one
+                    ];
+                    _audioHandler.setRepeatMode(
+                        modes[(modes.indexOf(repeatMode) + 1) % modes.length]);
                   },
                 ),
               ],
@@ -294,19 +333,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.equalizer, color: Colors.white54), 
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EqualizerScreen()))
-                ),
+                    icon: const Icon(Icons.equalizer, color: Colors.white54),
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const EqualizerScreen()))),
                 IconButton(
-                  icon: const Icon(Icons.playlist_play, color: Colors.white54), 
-                  onPressed: () => _showQueue(context)
-                ),
+                    icon:
+                        const Icon(Icons.playlist_play, color: Colors.white54),
+                    onPressed: () => _showQueue(context)),
                 IconButton(
-                  icon: const Icon(Icons.info_outline, color: Colors.white54),
-                  onPressed: () {
-                    _showDetailsSheet(context, _audioHandler.mediaItem.value);
-                  }
-                ),
+                    icon: const Icon(Icons.info_outline, color: Colors.white54),
+                    onPressed: () {
+                      _showDetailsSheet(context, _audioHandler.mediaItem.value);
+                    }),
               ],
             ),
           ],
@@ -319,7 +359,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return StreamBuilder<List<MediaItem>>(
           stream: _audioHandler.queue,
@@ -329,18 +370,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
               children: [
                 const Padding(
                   padding: EdgeInsets.all(16.0),
-                  child: Text('Current Queue', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: Text('Current Queue',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
                 ),
                 Expanded(
                   child: ListView.builder(
                     itemCount: currentQueue.length,
                     itemBuilder: (context, index) {
                       final item = currentQueue[index];
-                      final isCurrent = _audioHandler.mediaItem.value?.id == item.id;
+                      final isCurrent =
+                          _audioHandler.mediaItem.value?.id == item.id;
                       return ListTile(
                         leading: _buildQueueArtwork(item),
-                        title: Text(item.title, style: TextStyle(color: isCurrent ? Theme.of(context).colorScheme.primary : Colors.white)),
-                        subtitle: Text(item.artist ?? '', style: const TextStyle(color: Colors.white70)),
+                        title: Text(item.title,
+                            style: TextStyle(
+                                color: isCurrent
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.white)),
+                        subtitle: Text(item.artist ?? '',
+                            style: const TextStyle(color: Colors.white70)),
                         onTap: () {
                           _audioHandler.skipToQueueItem(index);
                           Navigator.pop(context);
@@ -364,6 +415,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: CommonArtwork(
         mediaStoreId: item.extras?['mediaStoreId'] as int?,
         path: item.id,
+        url: item.artUri?.toString(),
         size: 40,
         radius: 4,
       ),
@@ -379,12 +431,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         children: [
           ListTile(
             leading: const Icon(Icons.timer, color: Colors.white),
-            title: const Text('Sleep Timer', style: TextStyle(color: Colors.white)),
+            title: const Text('Sleep Timer',
+                style: TextStyle(color: Colors.white)),
             onTap: () => Navigator.pop(context),
           ),
           ListTile(
             leading: const Icon(Icons.share, color: Colors.white),
-            title: const Text('Share Track', style: TextStyle(color: Colors.white)),
+            title: const Text('Share Track',
+                style: TextStyle(color: Colors.white)),
             onTap: () => Navigator.pop(context),
           ),
         ],
@@ -398,7 +452,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: const Text('Track Details', style: TextStyle(color: Colors.white)),
+        title:
+            const Text('Track Details', style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,7 +465,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close')),
         ],
       ),
     );
@@ -422,9 +479,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Text(label,
+              style: const TextStyle(color: Colors.white54, fontSize: 12)),
           SelectableText(
-            value, 
+            value,
             style: const TextStyle(color: Colors.white, fontSize: 14),
             maxLines: 4,
           ),

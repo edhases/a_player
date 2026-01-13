@@ -30,9 +30,10 @@ class MiniPlayer extends StatelessWidget {
             Navigator.push(
               context,
               PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) => 
+                pageBuilder: (context, animation, secondaryAnimation) =>
                     PlayerScreen(heroTag: heroTag),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
                   return SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(0, 1),
@@ -70,7 +71,7 @@ class MiniPlayer extends StatelessWidget {
                     final progress = duration.inMilliseconds > 0
                         ? position.inMilliseconds / duration.inMilliseconds
                         : 0.0;
-                    
+
                     return LinearProgressIndicator(
                       value: progress.clamp(0.0, 1.0),
                       minHeight: 2,
@@ -81,7 +82,8 @@ class MiniPlayer extends StatelessWidget {
                 ),
                 // Main content
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Row(
                     children: [
                       // Album art
@@ -91,8 +93,10 @@ class MiniPlayer extends StatelessWidget {
                           width: 48,
                           height: 48,
                           child: CommonArtwork(
-                            mediaStoreId: mediaItem.extras?['mediaStoreId'] as int?,
+                            mediaStoreId:
+                                mediaItem.extras?['mediaStoreId'] as int?,
                             path: mediaItem.id,
+                            url: mediaItem.artUri?.toString(),
                             size: 48,
                             radius: 6,
                           ),
@@ -145,7 +149,7 @@ class MiniPlayer extends StatelessWidget {
       stream: audioHandler.playbackState,
       builder: (context, playbackStateSnapshot) {
         final isPlaying = playbackStateSnapshot.data?.playing ?? false;
-        
+
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
