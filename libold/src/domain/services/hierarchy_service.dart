@@ -13,14 +13,14 @@ abstract class FileSystemEntry {
 class FolderEntry extends FileSystemEntry {
   /// The full path to this folder.
   final String path;
-  FolderEntry(super.name, this.path);
+  FolderEntry(String name, this.path) : super(name);
 }
 
 /// Represents a music track file in the hierarchy.
 class TrackEntry extends FileSystemEntry {
   /// The full track data from the database.
   final Track track;
-  TrackEntry(super.name, this.track);
+  TrackEntry(String name, this.track) : super(name);
 }
 
 /// A service that transforms a flat list of tracks into a browsable

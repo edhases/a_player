@@ -5,12 +5,12 @@ import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:cached_network_image/cached_network_image.dart';
-
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../../data/datasources/app_database.dart';
 import '../../../core/services/audio_handler.dart';
 import '../../../core/services/innertube_service.dart';
 import '../../../core/services/youtube_helper.dart';
-
+import '../../../core/services/youtube_audio_source.dart';
 import '../../../domain/entities/youtube_song.dart';
 import '../common_artwork.dart';
 import 'package:rxdart/rxdart.dart';
@@ -19,9 +19,8 @@ class MusicSearchDelegate extends SearchDelegate<Track?> {
   final AppDatabase db;
   final MyAudioHandler _audioHandler = GetIt.I<MyAudioHandler>();
   final _searchSubject = BehaviorSubject<String>();
-  Stream<String> get _debouncedQuery => _searchSubject.stream
-      .debounceTime(const Duration(milliseconds: 500))
-      .distinct();
+  Stream<String> get _debouncedQuery =>
+      _searchSubject.stream.debounceTime(const Duration(milliseconds: 500)).distinct();
 
   MusicSearchDelegate(this.db) {
     _searchSubject.add(''); // Initial empty query
@@ -171,18 +170,14 @@ class MusicSearchDelegate extends SearchDelegate<Track?> {
   }
 
   Future<void> _playLocalQueue(List<Track> tracks, int startIndex) async {
-    final mediaItems = tracks
-        .map((track) => MediaItem(
-              id: track.path,
-              album: track.album ?? '',
-              title: track.title,
-              artist: track.artist,
-              duration: Duration(milliseconds: track.duration),
-              extras: track.mediaStoreId != null
-                  ? {'mediaStoreId': track.mediaStoreId}
-                  : null,
-            ))
-        .toList();
+    final mediaItems = tracks.map((track) => MediaItem(
+      id: track.path,
+      album: track.album ?? '',
+      title: track.title,
+      artist: track.artist,
+      duration: Duration(milliseconds: track.duration),
+      extras: track.mediaStoreId != null ? {'mediaStoreId': track.mediaStoreId} : null,
+    )).toList();
 
     await _audioHandler.updateQueue(mediaItems);
     await _audioHandler.skipToQueueItem(startIndex);
@@ -194,8 +189,7 @@ class _YouTubeSearchSection extends StatefulWidget {
   final MyAudioHandler audioHandler;
   final VoidCallback onClose;
 
-  const _YouTubeSearchSection(
-      {required this.query, required this.audioHandler, required this.onClose});
+  const _YouTubeSearchSection({required this.query, required this.audioHandler, required this.onClose});
 
   @override
   State<_YouTubeSearchSection> createState() => _YouTubeSearchSectionState();
@@ -212,15 +206,13 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Text('YouTube Music',
-              style: Theme.of(context).textTheme.titleMedium),
+          child: Text('YouTube Music', style: Theme.of(context).textTheme.titleMedium),
         ),
         FutureBuilder<List<YouTubeSong>>(
           future: _innerTubeService.search(widget.query),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child: Padding(
+              return const Center(child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: CircularProgressIndicator(),
               ));
@@ -228,15 +220,13 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
             if (snapshot.hasError) {
               return Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Text('Error: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red)),
+                child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
               );
             }
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(16.0),
-                child: Text('No results found online.',
-                    style: TextStyle(color: Colors.grey)),
+                child: Text('No results found online.', style: TextStyle(color: Colors.grey)),
               );
             }
 
@@ -255,8 +245,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
                       width: 50,
                       height: 50,
                       fit: BoxFit.cover,
-                      errorWidget: (context, url, error) =>
-                          const Icon(Icons.music_note),
+                      errorWidget: (context, url, error) => const Icon(Icons.music_note),
                     ),
                   ),
                   title: Text(track.title),
@@ -273,9 +262,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
   }
 
   Future<void> _playYouTubeTrack(BuildContext context, YouTubeSong song) async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Fetching audio stream...'),
-        duration: Duration(seconds: 1)));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fetching audio stream...'), duration: Duration(seconds: 1)));
 
     try {
       Duration? duration;
@@ -284,18 +271,13 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
 
       // 1. Prioritize YouTubeHelper (YoutubeExplode) as it handles Signature Decryption ('n' parameter)
       // This is slightly slower but MUCH more reliable against 403 errors.
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Fetching audio stream...'),
-            duration: Duration(seconds: 1)));
-
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fetching audio stream...'), duration: Duration(seconds: 1)));
+      
       try {
-        debugPrint(
-            '[SearchDelegate] Fetching URL via YouTubeHelper for: ${song.videoId}');
+        debugPrint('[SearchDelegate] Fetching URL via YouTubeHelper for: ${song.videoId}');
         url = await _ytHelper.getAudioUrl(song.videoId);
         // Use a desktop Chrome User-Agent which matches YoutubeExplode's typical context
-        userAgent =
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+        userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
         debugPrint('[SearchDelegate] YouTubeHelper succeeded.');
       } catch (e) {
         debugPrint('[SearchDelegate] YouTubeHelper failed: $e');
@@ -310,7 +292,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
           userAgent = songData['agent'];
         }
       }
-
+      
       // 3. Always try to get duration/details as it fixes "00:00" UI issue
       try {
         final video = await _ytHelper.getVideoDetails(song.videoId);
@@ -320,36 +302,24 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
       }
 
       if (url != null) {
-        debugPrint(
-            '[SearchDelegate] Ready to play YouTube. URL starts with: ${url.substring(0, 50)}...');
-        debugPrint(
-            '[SearchDelegate] Duration: $duration, User-Agent: $userAgent');
+        debugPrint('[SearchDelegate] Ready to play YouTube. URL starts with: ${url.substring(0, 50)}...');
+        debugPrint('[SearchDelegate] Duration: $duration, User-Agent: $userAgent');
+        
+        final mediaItem = await _ytHelper.createMediaItem(song.videoId, customTitle: song.title, customArtist: song.artist);
 
-        final mediaItem = await _ytHelper.createMediaItem(song.videoId,
-            customTitle: song.title, customArtist: song.artist);
-
-        if (widget.audioHandler.playbackState.value.processingState !=
-            AudioProcessingState.idle) {
-          widget.audioHandler.stop();
-        }
         await widget.audioHandler.updateQueue([mediaItem]);
         // Don't await play() here as it might hang 20s on emulators
         widget.audioHandler.play();
-        if (mounted) {
-          widget.onClose();
-        }
+        widget.onClose();
       } else {
-        debugPrint(
-            '[SearchDelegate] Failed to obtain URL for YouTube track: ${song.title}');
+        debugPrint('[SearchDelegate] Failed to obtain URL for YouTube track: ${song.title}');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Failed to load. Track might be restricted.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load. Track might be restricted.')));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }

@@ -4,8 +4,6 @@ import 'package:metadata_god/metadata_god.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'src/data/datasources/app_database.dart';
 import 'src/core/services/audio_handler.dart';
@@ -15,8 +13,6 @@ import 'src/core/services/google_auth_service.dart';
 import 'src/core/services/youtube_helper.dart';
 import 'src/core/services/innertube_service.dart';
 import 'src/core/services/youtube_audio_source.dart';
-import 'src/core/services/localization_service.dart';
-import 'src/core/utils/localization.dart';
 import 'src/core/theme/app_theme.dart';
 import 'src/presentation/pages/home_screen.dart';
 import 'src/presentation/widgets/permission_gate.dart';
@@ -24,7 +20,7 @@ import 'src/presentation/widgets/mini_player.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -32,22 +28,15 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-
+  
   debugPrint('[Main] MetadataGod initializing...');
-  try {
-    await MetadataGod.initialize();
-    debugPrint('[Main] MetadataGod initialized.');
-  } catch (e) {
-    debugPrint('[Main] MetadataGod failed to initialize: $e');
-  }
+  await MetadataGod.initialize();
+  debugPrint('[Main] MetadataGod initialized.');
 
   // Initialize and register services in order
   final settingsService = SettingsService();
   await settingsService.init();
   GetIt.I.registerSingleton<SettingsService>(settingsService);
-
-  final localizationService = LocalizationService();
-  GetIt.I.registerSingleton<LocalizationService>(localizationService);
 
   final db = AppDatabase();
   GetIt.I.registerSingleton<AppDatabase>(db);
@@ -62,7 +51,7 @@ void main() async {
   debugPrint('[Main] GoogleAuthService initialized.');
 
   GetIt.I.registerSingleton<InnerTubeService>(InnerTubeService());
-
+  
   // Register YouTubeHelper with database
   debugPrint('[Main] YouTubeHelper initializing...');
   final youtubeHelper = YouTubeHelper(db);
@@ -82,12 +71,7 @@ void main() async {
 
   GetIt.I.registerSingleton<MyAudioHandler>(handler);
 
-  runApp(
-    ChangeNotifierProvider.value(
-      value: localizationService,
-      child: const OxidePlayerApp(),
-    ),
-  );
+  runApp(const OxidePlayerApp());
 }
 
 class OxidePlayerApp extends StatelessWidget {
@@ -96,23 +80,11 @@ class OxidePlayerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final musicFinder = GetIt.I<MusicFinder>();
-    final localizationService = Provider.of<LocalizationService>(context);
 
     return MaterialApp(
       title: 'Oxide Player',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      locale: localizationService.currentLocale,
-      supportedLocales: const [
-        Locale('en', ''),
-        Locale('uk', ''),
-      ],
-      localizationsDelegates: const [
-        AppLocalizationsDelegate(),
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
       home: PermissionGate(
         child: Scaffold(
           body: Stack(

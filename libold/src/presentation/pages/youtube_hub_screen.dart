@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import '../../core/services/innertube_service.dart';
 import '../../core/services/google_auth_service.dart';
 import '../../core/services/youtube_helper.dart';
+import '../../core/services/youtube_audio_source.dart';
 import '../../core/services/audio_handler.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../widgets/common_artwork.dart';
@@ -26,7 +27,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   bool _isLoggedIn = false;
   bool _isLoading = true;
   List<Map<String, dynamic>> _sections = [];
-  List<Map<String, dynamic>> _playlists = []; // Added playlists variable
+  List<Map<String, dynamic>> _playlists = [];  // Added playlists variable
   String? _error;
 
   @override
@@ -63,12 +64,13 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
       final playlists = await _innerTube.getLibraryPlaylists();
 
       setState(() {
-        _sections = sections;
-        _playlists = playlists; // Set the playlists
+        _sections = [sections];
+        _playlists = playlists;  // Set the playlists
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
+        _error = e.toString();
         _isLoading = false;
       });
     }
@@ -76,15 +78,12 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
   void _playSong(YouTubeSong song) async {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text('Loading ${song.title}...'),
-          duration: const Duration(seconds: 1)),
+      SnackBar(content: Text('Loading ${song.title}...'), duration: const Duration(seconds: 1)),
     );
 
     final url = await _ytHelper.getAudioUrl(song.videoId);
     if (url != null) {
-      final mediaItem = await _ytHelper.createMediaItem(song.videoId,
-          customTitle: song.title, customArtist: song.artist);
+      final mediaItem = await _ytHelper.createMediaItem(song.videoId, customTitle: song.title, customArtist: song.artist);
 
       await _audioHandler.updateQueue([mediaItem]);
       _audioHandler.play();
@@ -193,7 +192,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
           const SizedBox(height: 8),
 
           ..._sections.map((section) => _buildSection(section)),
-
+          
           if (_playlists.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.only(top: 24, bottom: 16),
@@ -286,7 +285,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
           child: Text(
             title,
             style: const TextStyle(
-              fontSize: 22,
+              fontSize: 22, 
               fontWeight: FontWeight.bold,
               letterSpacing: -0.5,
             ),
@@ -331,7 +330,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.grey[400],
+                          color: Colors.grey[400], 
                           fontSize: 12,
                         ),
                       ),
@@ -358,9 +357,9 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          border: Border.all(color: color.withOpacity(0.3)),
         ),
         child: Row(
           children: [

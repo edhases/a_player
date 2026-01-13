@@ -4,7 +4,9 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
-
+import 'package:drift/drift.dart';
+import 'google_auth_service.dart'; // Import the GoogleAuthService
+import 'package:get_it/get_it.dart';
 import 'rate_limiter.dart';
 
 /// YouTube Helper — wrapper навколо YoutubeExplode для управління
@@ -12,8 +14,11 @@ import 'rate_limiter.dart';
 class YouTubeHelper {
   final YoutubeExplode _yt = YoutubeExplode();
   final AppDatabase _db;
-  YouTubeHelper(this._db);
+  final GoogleAuthService? _authService; // Optional reference to GoogleAuthService
   final RateLimiter _rateLimiter = RateLimiter();
+
+  YouTubeHelper(this._db, {GoogleAuthService? authService}) 
+      : _authService = authService ?? GetIt.I<GoogleAuthService>();
 
   /// Отримати URL для потокування аудіо
   Future<String?> getAudioUrl(String videoId) async {
@@ -33,9 +38,13 @@ class YouTubeHelper {
 
       // Вибрати найкращий аудіопотік за бітрейтом
       final audioStream = manifest.audioOnly.withHighestBitrate();
-      debugPrint(
-          '[YouTubeHelper] Found audio stream: ${audioStream.bitrate} bps');
-      return audioStream.url.toString();
+      if (audioStream != null) {
+        debugPrint('[YouTubeHelper] Found audio stream: ${audioStream.bitrate} bps');
+        return audioStream.url.toString();
+      }
+
+      debugPrint('[YouTubeHelper] No audio stream found for: $videoId');
+      return null;
     } catch (e) {
       debugPrint('[YouTubeHelper] Error getting audio URL: $e');
       return null;
@@ -53,16 +62,15 @@ class YouTubeHelper {
       if (cached != null) {
         debugPrint('[YouTubeHelper] Using cached data: ${cached.title}');
         // Повернути базову інформацію з кеша (можна створити простий Video об'єкт або повернути дані окремо)
-        return await _yt.videos.get(
-            videoId); // Тимчасово все ще отримуємо з YouTube для повних даних
+        return await _yt.videos.get(videoId); // Тимчасово все ще отримуємо з YouTube для повних даних
       }
 
       final video = await _yt.videos.get(videoId);
       debugPrint('[YouTubeHelper] Video: ${video.title} (${video.duration})');
 
       // Кешувати метадані
-      final thumbnailUrl = video.thumbnails.highResUrl;
-      if (thumbnailUrl.isNotEmpty) {
+      final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+      if (thumbnailUrl != null) {
         await cacheVideoMetadata(
           videoId,
           video.title,
@@ -87,13 +95,12 @@ class YouTubeHelper {
       final playlist = await _yt.playlists.get(playlistId);
       final videos = await _yt.playlists.getVideos(playlistId).toList();
 
-      debugPrint(
-          '[YouTubeHelper] Playlist: ${playlist.title}, videos: ${videos.length}');
+      debugPrint('[YouTubeHelper] Playlist: ${playlist.title}, videos: ${videos.length}');
 
       // Кешувати метадані для кожного відео
       for (final video in videos) {
-        final thumbnailUrl = video.thumbnails.highResUrl;
-        if (thumbnailUrl.isNotEmpty) {
+        final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+        if (thumbnailUrl != null) {
           await cacheVideoMetadata(
             video.id.value,
             video.title,
@@ -112,8 +119,7 @@ class YouTubeHelper {
   }
 
   /// Завантажити аудіо файл локально для офлайн відтворення
-  Future<String?> downloadAudio(String videoId,
-      {Function(double)? onProgress}) async {
+  Future<String?> downloadAudio(String videoId, {Function(double)? onProgress}) async {
     try {
       await _rateLimiter.throttle();
       debugPrint('[YouTubeHelper] Downloading audio for: $videoId');
@@ -127,6 +133,8 @@ class YouTubeHelper {
       final manifest = await _yt.videos.streams.getManifest(videoId);
       final audioStream = manifest.audioOnly.withHighestBitrate();
 
+      if (audioStream == null) return null;
+
       final stream = _yt.videos.streams.get(audioStream);
 
       // Отримати директорію для завантажень
@@ -136,13 +144,13 @@ class YouTubeHelper {
         await downloadDir.create(recursive: true);
       }
 
-      final fileName =
-          '${cached.title.replaceAll(RegExp(r'[^\w\s]'), '')}_${videoId}.mp3';
+      final fileName = '${cached.title.replaceAll(RegExp(r'[^\w\s]'), '')}_${videoId}.mp3';
       final filePath = '${downloadDir.path}/$fileName';
       final file = File(filePath);
 
       // Завантажити файл з прогресом
-      // Завантажити файл з прогресом
+      final streamLength = audioStream.size.totalBytes;
+      var downloadedBytes = 0;
 
       await stream.pipe(file.openWrite());
 
@@ -196,21 +204,22 @@ class YouTubeHelper {
   }
 
   /// Кешувати метаполучення YouTube трека
-  Future<void> cacheVideoMetadata(String videoId, String title, String artist,
-      String thumbnailUrl, int? duration) async {
+  Future<void> cacheVideoMetadata(String videoId, String title, String artist, String thumbnailUrl, int? duration) async {
     try {
       debugPrint('[YouTubeHelper] Caching metadata for: $videoId');
 
-      await _db.upsertYouTubeTrack(YouTubeTrack(
-        videoId: videoId,
-        title: title,
-        artist: artist,
-        thumbnailUrl: thumbnailUrl,
-        duration: duration ?? 0,
-        downloadPath: null,
-        lastPlayed: null,
-        cachedAt: DateTime.now(),
-      ));
+      await _db.upsertYouTubeTrack(
+        YouTubeTrack(
+          videoId: videoId,
+          title: title,
+          artist: artist,
+          thumbnailUrl: thumbnailUrl,
+          duration: duration ?? 0,
+          downloadPath: null,
+          lastPlayed: null,
+          cachedAt: DateTime.now(),
+        )
+      );
 
       debugPrint('[YouTubeHelper] Metadata cached successfully');
     } catch (e) {
@@ -240,8 +249,9 @@ class YouTubeHelper {
 
       // Якщо немає в кеші, отримати з YouTube
       final video = await _yt.videos.get(videoId);
-      final thumbnailUrl = video.thumbnails.highResUrl;
-      if (thumbnailUrl.isNotEmpty) {
+      final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+
+      if (thumbnailUrl != null) {
         // Кешувати метадані
         await cacheVideoMetadata(
           videoId,
@@ -267,15 +277,13 @@ class YouTubeHelper {
       final videos = await getPlaylistVideos(playlistId);
 
       // Create all MediaItems in parallel to avoid blocking the UI.
-      final mediaItemFutures = videos
-          .map((video) => createMediaItem(video.id.value,
-              customTitle: video.title, customArtist: video.author))
-          .toList();
+      final mediaItemFutures = videos.map((video) =>
+        createMediaItem(video.id.value, customTitle: video.title, customArtist: video.author)
+      ).toList();
 
       final mediaItems = await Future.wait(mediaItemFutures);
 
-      debugPrint(
-          '[YouTubeHelper] Created ${mediaItems.length} media items from playlist');
+      debugPrint('[YouTubeHelper] Created ${mediaItems.length} media items from playlist');
       return mediaItems;
     } catch (e) {
       debugPrint('[YouTubeHelper] Error creating playlist queue: $e');
@@ -284,8 +292,7 @@ class YouTubeHelper {
   }
 
   /// Create a MediaItem from a YouTube video ID
-  Future<MediaItem> createMediaItem(String videoId,
-      {String? customTitle, String? customArtist}) async {
+  Future<MediaItem> createMediaItem(String videoId, {String? customTitle, String? customArtist}) async {
     try {
       // Спочатку перевірити кеш
       var cached = await getCachedMetadata(videoId);
@@ -293,8 +300,9 @@ class YouTubeHelper {
       if (cached == null) {
         // Якщо немає в кеші, отримати дані з YouTube
         final video = await _yt.videos.get(videoId);
-        final thumbnailUrl = video.thumbnails.highResUrl;
-        if (thumbnailUrl.isNotEmpty) {
+        final thumbnailUrl = video.thumbnails.highResUrl ?? video.thumbnails.mediumResUrl ?? video.thumbnails.lowResUrl;
+
+        if (thumbnailUrl != null) {
           await cacheVideoMetadata(
             videoId,
             video.title,
@@ -313,8 +321,7 @@ class YouTubeHelper {
         // або шлях до файлу для офлайн-треків.
         final mediaId = localPath ?? videoId;
 
-        final desktopUA =
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+        final desktopUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
 
         return MediaItem(
           id: mediaId,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'package:get_it/get_it.dart';
+import '../../core/services/google_auth_service.dart';
 import 'webview_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,11 +11,11 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _authService = GetIt.I<GoogleAuthService>();
   bool _isLoading = false;
   String? _error;
 
   Future<void> _handleSignIn() async {
-    setState(() => _isLoading = true);
     // Відкриваємо WebView для логіну
     final success = await Navigator.push(
       context,
@@ -23,13 +24,9 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
 
-    if (mounted) {
-      if (success == true) {
-        debugPrint('[LoginScreen] Login successful');
-        Navigator.pop(context, true);
-      } else {
-        setState(() => _isLoading = false);
-      }
+    if (success == true && mounted) {
+      debugPrint('[LoginScreen] Login successful');
+      Navigator.pop(context, true);
     }
   }
 
@@ -74,10 +71,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
+                    color: Colors.red.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
                   ),
                   child: Text(
                     _error!,
@@ -101,11 +97,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       )
                     : const Icon(Icons.login),
-                label:
-                    Text(_isLoading ? 'Signing in...' : 'Sign in with Google'),
+                label: Text(_isLoading ? 'Signing in...' : 'Sign in with Google'),
                 style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   backgroundColor: const Color(0xFF4285F4),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
@@ -115,11 +109,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed:
-                    _isLoading ? null : () => Navigator.pop(context, false),
+                onPressed: _isLoading ? null : () => Navigator.pop(context, false),
                 style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   backgroundColor: Colors.grey[800],
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
@@ -132,9 +124,9 @@ class _LoginScreenState extends State<LoginScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
+                  color: Colors.blue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
                 ),
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

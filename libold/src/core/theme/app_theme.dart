@@ -33,7 +33,7 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: surfaceColor,
-        indicatorColor: primaryColor.withValues(alpha: 0.2),
+        indicatorColor: primaryColor.withOpacity(0.2),
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(fontSize: 11),
         ),

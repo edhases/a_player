@@ -35,13 +35,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     final initStart = DateTime.now();
     debugPrint('[AudioHandler] _init started');
-
+    
     // Initialize YouTubeHelper if not already registered
     try {
       _ytHelper = GetIt.I<YouTubeHelper>();
     } catch (e) {
-      debugPrint(
-          '[AudioHandler] YouTubeHelper not yet registered, will be lazy-loaded');
+      debugPrint('[AudioHandler] YouTubeHelper not yet registered, will be lazy-loaded');
     }
 
     // DISABLE AudioSession configuration on emulators as it often hangs
@@ -69,17 +68,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         stop();
       }
     });
-
-    player.shuffleModeEnabledStream
-        .listen((_) => _broadcastState(player.playbackEvent));
+    
+    player.shuffleModeEnabledStream.listen((_) => _broadcastState(player.playbackEvent));
     player.loopModeStream.listen((_) => _broadcastState(player.playbackEvent));
 
     // Update current song info immediately when index changes
     player.currentIndexStream.listen((index) {
       if (index != null && index < queue.value.length) {
         final item = queue.value[index];
-        debugPrint(
-            '[AudioHandler] Current index changed to: $index (${item.title})');
+        debugPrint('[AudioHandler] Current index changed to: $index (${item.title})');
         mediaItem.add(item);
       }
     });
@@ -91,8 +88,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         if (index != null && index < queue.value.length) {
           final item = queue.value[index];
           if (item.duration != duration) {
-            debugPrint(
-                '[AudioHandler] Duration updated for ${item.title}: $duration');
+            debugPrint('[AudioHandler] Duration updated for ${item.title}: $duration');
             mediaItem.add(item.copyWith(duration: duration));
           }
         }
@@ -115,13 +111,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     try {
       await player.setAudioSource(_playlist, preload: false);
-    } catch (e) {
-      // ignore: empty_catches
-    }
-
+    } catch (e) {}
+    
     await _loadInitialState();
-    debugPrint(
-        '[AudioHandler] _init completed in ${DateTime.now().difference(initStart).inMilliseconds}ms');
+    debugPrint('[AudioHandler] _init completed in ${DateTime.now().difference(initStart).inMilliseconds}ms');
   }
 
   void _broadcastState(PlaybackEvent event) {
@@ -204,21 +197,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> skipToQueueItem(int index) async {
     if (index < 0 || index >= queue.value.length) return;
     final item = queue.value[index];
-    debugPrint(
-        '[AudioHandler] Playing item: ${item.title} with URI: ${item.id}');
-
+    debugPrint('[AudioHandler] Playing item: ${item.title} with URI: ${item.id}');
+    
     final start = DateTime.now();
     debugPrint('[AudioHandler] skipToQueueItem started at $start');
-
+    
     // NON-BLOCKING: Don't await these to avoid UI hang on emulators
     player.seek(Duration.zero, index: index).then((_) {
-      debugPrint(
-          '[AudioHandler] seek finished after ${DateTime.now().difference(start).inMilliseconds}ms');
+      debugPrint('[AudioHandler] seek finished after ${DateTime.now().difference(start).inMilliseconds}ms');
     });
-
+    
     player.play().then((_) {
-      debugPrint(
-          '[AudioHandler] play completed after ${DateTime.now().difference(start).inMilliseconds}ms total');
+      debugPrint('[AudioHandler] play completed after ${DateTime.now().difference(start).inMilliseconds}ms total');
     }).catchError((e) {
       debugPrint('[AudioHandler] play error: $e');
     });
@@ -227,12 +217,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
     final loopMode = const {
-          AudioServiceRepeatMode.none: LoopMode.off,
-          AudioServiceRepeatMode.one: LoopMode.one,
-          AudioServiceRepeatMode.all: LoopMode.all,
-          AudioServiceRepeatMode.group: LoopMode.all,
-        }[repeatMode] ??
-        LoopMode.off;
+      AudioServiceRepeatMode.none: LoopMode.off,
+      AudioServiceRepeatMode.one: LoopMode.one,
+      AudioServiceRepeatMode.all: LoopMode.all,
+      AudioServiceRepeatMode.group: LoopMode.all,
+    }[repeatMode] ?? LoopMode.off;
     await player.setLoopMode(loopMode);
   }
 
@@ -245,29 +234,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await player.setShuffleModeEnabled(enabled);
   }
 
-  @override
   Future<void> updateQueue(List<MediaItem> newQueue) async {
     final start = DateTime.now();
-    debugPrint(
-        '[AudioHandler] updateQueue called with ${newQueue.length} items');
-
+    debugPrint('[AudioHandler] updateQueue called with ${newQueue.length} items');
+    
     if (const ListEquality().equals(queue.value, newQueue)) {
       debugPrint('[AudioHandler] updateQueue: identical, skipping');
       return;
     }
 
     queue.add(newQueue);
-
+    
     // Perform the heavy setAudioSource operation in the background
     // to avoid potential main-thread stalls on emulators.
     _updateSourceInBackground(newQueue, start);
   }
 
-  Future<void> _updateSourceInBackground(
-      List<MediaItem> newQueue, DateTime start) async {
+  Future<void> _updateSourceInBackground(List<MediaItem> newQueue, DateTime start) async {
     try {
-      debugPrint(
-          '[AudioHandler] Background: Preparing ConcatenatingAudioSource...');
+      debugPrint('[AudioHandler] Background: Preparing ConcatenatingAudioSource...');
       final newSource = ConcatenatingAudioSource(
         children: newQueue.map(_createAudioSource).toList(),
         useLazyPreparation: true,
@@ -275,8 +260,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       debugPrint('[AudioHandler] Background: Setting audio source...');
       await player.setAudioSource(newSource, preload: false);
-      debugPrint(
-          '[AudioHandler] Background: Source set in ${DateTime.now().difference(start).inMilliseconds}ms');
+      debugPrint('[AudioHandler] Background: Source set in ${DateTime.now().difference(start).inMilliseconds}ms');
     } catch (e) {
       debugPrint('[AudioHandler] Background Error: $e');
     }
@@ -288,32 +272,29 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Check if it's an online YouTube track that needs JIT fetching.
     if (item.extras?['isOnline'] == true) {
       final videoId = item.extras!['videoId'] as String;
-      debugPrint(
-          '[AudioHandler] Creating YoutubeAudioSource for videoId: $videoId');
+      debugPrint('[AudioHandler] Creating YoutubeAudioSource for videoId: $videoId');
       return YoutubeAudioSource(videoId, _ytHelper);
     }
-
+    
     // Handle content URIs from sources like Android MediaStore.
     if (item.id.startsWith('content://')) {
       debugPrint('[AudioHandler] Source: Content URI: ${item.id}');
       return AudioSource.uri(Uri.parse(item.id), tag: item);
     }
-
+    
     // Handle direct HTTP URLs (e.g., from a previous implementation, not used for YT anymore).
     if (item.id.startsWith('http')) {
       final headers = <String, String>{};
-
+      
       if (item.extras != null && item.extras!.containsKey('user_agent')) {
         headers['User-Agent'] = item.extras!['user_agent'];
       }
-
-      debugPrint(
-          '[AudioHandler] Source: HTTP URL: ${item.id.substring(0, item.id.length > 100 ? 100 : item.id.length)}...');
-
-      return AudioSource.uri(Uri.parse(item.id),
-          tag: item, headers: headers.isEmpty ? null : headers);
+      
+      debugPrint('[AudioHandler] Source: HTTP URL: ${item.id.substring(0, item.id.length > 100 ? 100 : item.id.length)}...');
+      
+      return AudioSource.uri(Uri.parse(item.id), tag: item, headers: headers.isEmpty ? null : headers);
     }
-
+    
     // Default to assuming the ID is a local file path.
     // This handles both regular local files and downloaded YouTube tracks.
     debugPrint('[AudioHandler] Source: File path: ${item.id}');
@@ -330,25 +311,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     final sortedTracks = lastQueueIds
         .map((id) => lastTracks.firstWhereOrNull((t) => t.path == id))
-        .nonNulls
+        .whereNotNull()
         .toList();
 
     if (sortedTracks.isEmpty) return;
 
     final mediaItems = sortedTracks.map((track) {
-      final extras = <String, dynamic>{};
-      if ((track as dynamic).mediaStoreId != null) {
-        extras['mediaStoreId'] = (track as dynamic).mediaStoreId;
-      }
+        final extras = <String, dynamic>{};
+        if ((track as dynamic).mediaStoreId != null) {
+          extras['mediaStoreId'] = (track as dynamic).mediaStoreId;
+        }
 
-      return MediaItem(
-        id: track.path,
-        album: track.album ?? '',
-        title: track.title,
-        artist: track.artist,
-        duration: Duration(milliseconds: track.duration),
-        extras: extras.isEmpty ? null : extras,
-      );
+        return MediaItem(
+          id: track.path,
+          album: track.album ?? '',
+          title: track.title,
+          artist: track.artist,
+          duration: Duration(milliseconds: track.duration),
+          extras: extras.isEmpty ? null : extras,
+        );
     }).toList();
 
     queue.add(mediaItems);

@@ -1,9 +1,10 @@
 import 'dart:io';
-
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:collection/collection.dart'; // For groupBy
 
 part 'app_database.g.dart';
 
@@ -23,8 +24,8 @@ class Tracks extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {path}, // path is unique
-      ];
+    {path}, // path is unique
+  ];
 }
 
 // YouTube track table for caching metadata and offline support
@@ -35,11 +36,10 @@ class YouTubeTracks extends Table {
   TextColumn get artist => text()();
   TextColumn get thumbnailUrl => text()();
   IntColumn get duration => integer()();
-  TextColumn get downloadPath =>
-      text().nullable()(); // Path to downloaded file for offline play
+  TextColumn get downloadPath => text().nullable()(); // Path to downloaded file for offline play
   DateTimeColumn get lastPlayed => dateTime().nullable()();
   DateTimeColumn get cachedAt => dateTime()(); // When metadata was cached
-
+  
   @override
   Set<Column> get primaryKey => {videoId};
 }
@@ -84,34 +84,33 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
-        onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            await m.addColumn(tracks, tracks.folderPath);
-            await m.addColumn(tracks, tracks.artworkUri);
-          }
-          if (from < 3) {
-            await m.addColumn(tracks, tracks.isFavorite);
-          }
-          if (from < 4) {
-            await m.addColumn(tracks, tracks.mediaStoreId);
-          }
-          if (from < 5) {
-            await m.createTable(youTubeTracks);
-          }
-          if (from < 7) {
-            await m.createTable(homeCache);
-          }
-        },
-      );
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(tracks, tracks.folderPath);
+        await m.addColumn(tracks, tracks.artworkUri);
+      }
+      if (from < 3) {
+        await m.addColumn(tracks, tracks.isFavorite);
+      }
+      if (from < 4) {
+        await m.addColumn(tracks, tracks.mediaStoreId);
+      }
+      if (from < 5) {
+        await m.createTable(youTubeTracks);
+      }
+      if (from < 7) {
+        await m.createTable(homeCache);
+      }
+    },
+  );
 
   // --- QUERY METHODS ---
 
   Future<List<AlbumWithArtwork>> getAllAlbums() async {
     // Optimized: Use SQL GROUP BY instead of loading all tracks into memory
     final query = selectOnly(tracks)
-      ..addColumns(
-          [tracks.album, tracks.artist, tracks.path, tracks.mediaStoreId])
+      ..addColumns([tracks.album, tracks.artist, tracks.path, tracks.mediaStoreId])
       ..groupBy([tracks.album]);
 
     final rows = await query.get();
@@ -120,8 +119,7 @@ class AppDatabase extends _$AppDatabase {
       return AlbumWithArtwork(
         title: row.read(tracks.album) ?? 'Unknown Album',
         artist: row.read(tracks.artist),
-        artworkPath: row.read(tracks
-            .path), // SQLite picks one random row's path from the group, which is fine for artwork
+        artworkPath: row.read(tracks.path), // SQLite picks one random row's path from the group, which is fine for artwork
         mediaStoreId: row.read(tracks.mediaStoreId),
       );
     }).toList()
@@ -136,7 +134,9 @@ class AppDatabase extends _$AppDatabase {
 
     final rows = await query.get();
 
-    return rows.map((row) => Artist(name: row.read(tracks.artist)!)).toList()
+    return rows
+        .map((row) => Artist(name: row.read(tracks.artist)!))
+        .toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 
@@ -150,8 +150,7 @@ class AppDatabase extends _$AppDatabase {
 
   // Toggle favorite status
   Future<void> toggleFavorite(String path) async {
-    final track = await (select(tracks)..where((t) => t.path.equals(path)))
-        .getSingleOrNull();
+    final track = await (select(tracks)..where((t) => t.path.equals(path))).getSingleOrNull();
     if (track != null) {
       await (update(tracks)..where((t) => t.path.equals(path))).write(
         TracksCompanion(isFavorite: Value(!track.isFavorite)),
@@ -170,27 +169,23 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertYouTubeTrack(YouTubeTrack track) async {
     await into(youTubeTracks).insertOnConflictUpdate(track);
   }
-
+  
   Future<YouTubeTrack?> getYouTubeTrack(String videoId) {
-    return (select(youTubeTracks)..where((t) => t.videoId.equals(videoId)))
-        .getSingleOrNull();
+    return (select(youTubeTracks)..where((t) => t.videoId.equals(videoId))).getSingleOrNull();
   }
-
+  
   Stream<List<YouTubeTrack>> watchDownloadedTracks() {
-    return (select(youTubeTracks)..where((t) => t.downloadPath.isNotNull()))
-        .watch();
+    return (select(youTubeTracks)..where((t) => t.downloadPath.isNotNull())).watch();
   }
-
+  
   Future<void> updateDownloadPath(String videoId, String? path) async {
-    await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId)))
-        .write(
+    await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId))).write(
       YouTubeTracksCompanion(downloadPath: Value(path)),
     );
   }
-
+  
   Future<void> markAsPlayed(String videoId) async {
-    await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId)))
-        .write(
+    await (update(youTubeTracks)..where((t) => t.videoId.equals(videoId))).write(
       YouTubeTracksCompanion(lastPlayed: Value(DateTime.now())),
     );
   }
