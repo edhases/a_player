@@ -68,6 +68,16 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
   late final GeneratedColumn<DateTime> lastPlayed = GeneratedColumn<DateTime>(
       'last_played', aliasedName, true,
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _isExcludedMeta =
+      const VerificationMeta('isExcluded');
+  @override
+  late final GeneratedColumn<bool> isExcluded = GeneratedColumn<bool>(
+      'is_excluded', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_excluded" IN (0, 1))'),
+      defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         path,
@@ -79,7 +89,8 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
         artworkUri,
         isFavorite,
         mediaStoreId,
-        lastPlayed
+        lastPlayed,
+        isExcluded
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -149,6 +160,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
           lastPlayed.isAcceptableOrUnknown(
               data['last_played']!, _lastPlayedMeta));
     }
+    if (data.containsKey('is_excluded')) {
+      context.handle(
+          _isExcludedMeta,
+          isExcluded.isAcceptableOrUnknown(
+              data['is_excluded']!, _isExcludedMeta));
+    }
     return context;
   }
 
@@ -182,6 +199,8 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
           .read(DriftSqlType.int, data['${effectivePrefix}media_store_id']),
       lastPlayed: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}last_played']),
+      isExcluded: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_excluded'])!,
     );
   }
 
@@ -202,6 +221,7 @@ class Track extends DataClass implements Insertable<Track> {
   final bool isFavorite;
   final int? mediaStoreId;
   final DateTime? lastPlayed;
+  final bool isExcluded;
   const Track(
       {required this.path,
       required this.title,
@@ -212,7 +232,8 @@ class Track extends DataClass implements Insertable<Track> {
       this.artworkUri,
       required this.isFavorite,
       this.mediaStoreId,
-      this.lastPlayed});
+      this.lastPlayed,
+      required this.isExcluded});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -236,6 +257,7 @@ class Track extends DataClass implements Insertable<Track> {
     if (!nullToAbsent || lastPlayed != null) {
       map['last_played'] = Variable<DateTime>(lastPlayed);
     }
+    map['is_excluded'] = Variable<bool>(isExcluded);
     return map;
   }
 
@@ -259,6 +281,7 @@ class Track extends DataClass implements Insertable<Track> {
       lastPlayed: lastPlayed == null && nullToAbsent
           ? const Value.absent()
           : Value(lastPlayed),
+      isExcluded: Value(isExcluded),
     );
   }
 
@@ -276,6 +299,7 @@ class Track extends DataClass implements Insertable<Track> {
       isFavorite: serializer.fromJson<bool>(json['isFavorite']),
       mediaStoreId: serializer.fromJson<int?>(json['mediaStoreId']),
       lastPlayed: serializer.fromJson<DateTime?>(json['lastPlayed']),
+      isExcluded: serializer.fromJson<bool>(json['isExcluded']),
     );
   }
   @override
@@ -292,6 +316,7 @@ class Track extends DataClass implements Insertable<Track> {
       'isFavorite': serializer.toJson<bool>(isFavorite),
       'mediaStoreId': serializer.toJson<int?>(mediaStoreId),
       'lastPlayed': serializer.toJson<DateTime?>(lastPlayed),
+      'isExcluded': serializer.toJson<bool>(isExcluded),
     };
   }
 
@@ -305,7 +330,8 @@ class Track extends DataClass implements Insertable<Track> {
           Value<String?> artworkUri = const Value.absent(),
           bool? isFavorite,
           Value<int?> mediaStoreId = const Value.absent(),
-          Value<DateTime?> lastPlayed = const Value.absent()}) =>
+          Value<DateTime?> lastPlayed = const Value.absent(),
+          bool? isExcluded}) =>
       Track(
         path: path ?? this.path,
         title: title ?? this.title,
@@ -318,28 +344,8 @@ class Track extends DataClass implements Insertable<Track> {
         mediaStoreId:
             mediaStoreId.present ? mediaStoreId.value : this.mediaStoreId,
         lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
+        isExcluded: isExcluded ?? this.isExcluded,
       );
-  Track copyWithCompanion(TracksCompanion data) {
-    return Track(
-      path: data.path.present ? data.path.value : this.path,
-      title: data.title.present ? data.title.value : this.title,
-      artist: data.artist.present ? data.artist.value : this.artist,
-      album: data.album.present ? data.album.value : this.album,
-      duration: data.duration.present ? data.duration.value : this.duration,
-      folderPath:
-          data.folderPath.present ? data.folderPath.value : this.folderPath,
-      artworkUri:
-          data.artworkUri.present ? data.artworkUri.value : this.artworkUri,
-      isFavorite:
-          data.isFavorite.present ? data.isFavorite.value : this.isFavorite,
-      mediaStoreId: data.mediaStoreId.present
-          ? data.mediaStoreId.value
-          : this.mediaStoreId,
-      lastPlayed:
-          data.lastPlayed.present ? data.lastPlayed.value : this.lastPlayed,
-    );
-  }
-
   @override
   String toString() {
     return (StringBuffer('Track(')
@@ -352,14 +358,15 @@ class Track extends DataClass implements Insertable<Track> {
           ..write('artworkUri: $artworkUri, ')
           ..write('isFavorite: $isFavorite, ')
           ..write('mediaStoreId: $mediaStoreId, ')
-          ..write('lastPlayed: $lastPlayed')
+          ..write('lastPlayed: $lastPlayed, ')
+          ..write('isExcluded: $isExcluded')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(path, title, artist, album, duration,
-      folderPath, artworkUri, isFavorite, mediaStoreId, lastPlayed);
+      folderPath, artworkUri, isFavorite, mediaStoreId, lastPlayed, isExcluded);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -373,7 +380,8 @@ class Track extends DataClass implements Insertable<Track> {
           other.artworkUri == this.artworkUri &&
           other.isFavorite == this.isFavorite &&
           other.mediaStoreId == this.mediaStoreId &&
-          other.lastPlayed == this.lastPlayed);
+          other.lastPlayed == this.lastPlayed &&
+          other.isExcluded == this.isExcluded);
 }
 
 class TracksCompanion extends UpdateCompanion<Track> {
@@ -387,6 +395,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
   final Value<bool> isFavorite;
   final Value<int?> mediaStoreId;
   final Value<DateTime?> lastPlayed;
+  final Value<bool> isExcluded;
   final Value<int> rowid;
   const TracksCompanion({
     this.path = const Value.absent(),
@@ -399,6 +408,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     this.isFavorite = const Value.absent(),
     this.mediaStoreId = const Value.absent(),
     this.lastPlayed = const Value.absent(),
+    this.isExcluded = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TracksCompanion.insert({
@@ -412,6 +422,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     this.isFavorite = const Value.absent(),
     this.mediaStoreId = const Value.absent(),
     this.lastPlayed = const Value.absent(),
+    this.isExcluded = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : path = Value(path),
         title = Value(title),
@@ -428,6 +439,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
     Expression<bool>? isFavorite,
     Expression<int>? mediaStoreId,
     Expression<DateTime>? lastPlayed,
+    Expression<bool>? isExcluded,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -441,6 +453,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       if (isFavorite != null) 'is_favorite': isFavorite,
       if (mediaStoreId != null) 'media_store_id': mediaStoreId,
       if (lastPlayed != null) 'last_played': lastPlayed,
+      if (isExcluded != null) 'is_excluded': isExcluded,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -456,6 +469,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       Value<bool>? isFavorite,
       Value<int?>? mediaStoreId,
       Value<DateTime?>? lastPlayed,
+      Value<bool>? isExcluded,
       Value<int>? rowid}) {
     return TracksCompanion(
       path: path ?? this.path,
@@ -468,6 +482,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
       isFavorite: isFavorite ?? this.isFavorite,
       mediaStoreId: mediaStoreId ?? this.mediaStoreId,
       lastPlayed: lastPlayed ?? this.lastPlayed,
+      isExcluded: isExcluded ?? this.isExcluded,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -505,6 +520,9 @@ class TracksCompanion extends UpdateCompanion<Track> {
     if (lastPlayed.present) {
       map['last_played'] = Variable<DateTime>(lastPlayed.value);
     }
+    if (isExcluded.present) {
+      map['is_excluded'] = Variable<bool>(isExcluded.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -524,6 +542,7 @@ class TracksCompanion extends UpdateCompanion<Track> {
           ..write('isFavorite: $isFavorite, ')
           ..write('mediaStoreId: $mediaStoreId, ')
           ..write('lastPlayed: $lastPlayed, ')
+          ..write('isExcluded: $isExcluded, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -789,24 +808,6 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
         lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
         cachedAt: cachedAt ?? this.cachedAt,
       );
-  YouTubeTrack copyWithCompanion(YouTubeTracksCompanion data) {
-    return YouTubeTrack(
-      videoId: data.videoId.present ? data.videoId.value : this.videoId,
-      title: data.title.present ? data.title.value : this.title,
-      artist: data.artist.present ? data.artist.value : this.artist,
-      thumbnailUrl: data.thumbnailUrl.present
-          ? data.thumbnailUrl.value
-          : this.thumbnailUrl,
-      duration: data.duration.present ? data.duration.value : this.duration,
-      downloadPath: data.downloadPath.present
-          ? data.downloadPath.value
-          : this.downloadPath,
-      lastPlayed:
-          data.lastPlayed.present ? data.lastPlayed.value : this.lastPlayed,
-      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
-    );
-  }
-
   @override
   String toString() {
     return (StringBuffer('YouTubeTrack(')
@@ -1098,14 +1099,6 @@ class HomeCacheEntry extends DataClass implements Insertable<HomeCacheEntry> {
         data: data ?? this.data,
         timestamp: timestamp ?? this.timestamp,
       );
-  HomeCacheEntry copyWithCompanion(HomeCacheCompanion data) {
-    return HomeCacheEntry(
-      id: data.id.present ? data.id.value : this.id,
-      data: data.data.present ? data.data.value : this.data,
-      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
-    );
-  }
-
   @override
   String toString() {
     return (StringBuffer('HomeCacheEntry(')
@@ -1191,7 +1184,6 @@ class HomeCacheCompanion extends UpdateCompanion<HomeCacheEntry> {
 
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
-  $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $TracksTable tracks = $TracksTable(this);
   late final $YouTubeTracksTable youTubeTracks = $YouTubeTracksTable(this);
   late final $HomeCacheTable homeCache = $HomeCacheTable(this);
@@ -1201,612 +1193,4 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
       [tracks, youTubeTracks, homeCache];
-}
-
-typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
-  required String path,
-  required String title,
-  Value<String?> artist,
-  Value<String?> album,
-  required int duration,
-  required String folderPath,
-  Value<String?> artworkUri,
-  Value<bool> isFavorite,
-  Value<int?> mediaStoreId,
-  Value<DateTime?> lastPlayed,
-  Value<int> rowid,
-});
-typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
-  Value<String> path,
-  Value<String> title,
-  Value<String?> artist,
-  Value<String?> album,
-  Value<int> duration,
-  Value<String> folderPath,
-  Value<String?> artworkUri,
-  Value<bool> isFavorite,
-  Value<int?> mediaStoreId,
-  Value<DateTime?> lastPlayed,
-  Value<int> rowid,
-});
-
-class $$TracksTableFilterComposer
-    extends Composer<_$AppDatabase, $TracksTable> {
-  $$TracksTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get path => $composableBuilder(
-      column: $table.path, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get title => $composableBuilder(
-      column: $table.title, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get artist => $composableBuilder(
-      column: $table.artist, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get album => $composableBuilder(
-      column: $table.album, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<int> get duration => $composableBuilder(
-      column: $table.duration, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get folderPath => $composableBuilder(
-      column: $table.folderPath, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get artworkUri => $composableBuilder(
-      column: $table.artworkUri, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<bool> get isFavorite => $composableBuilder(
-      column: $table.isFavorite, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<int> get mediaStoreId => $composableBuilder(
-      column: $table.mediaStoreId, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get lastPlayed => $composableBuilder(
-      column: $table.lastPlayed, builder: (column) => ColumnFilters(column));
-}
-
-class $$TracksTableOrderingComposer
-    extends Composer<_$AppDatabase, $TracksTable> {
-  $$TracksTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get path => $composableBuilder(
-      column: $table.path, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get title => $composableBuilder(
-      column: $table.title, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get artist => $composableBuilder(
-      column: $table.artist, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get album => $composableBuilder(
-      column: $table.album, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<int> get duration => $composableBuilder(
-      column: $table.duration, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get folderPath => $composableBuilder(
-      column: $table.folderPath, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get artworkUri => $composableBuilder(
-      column: $table.artworkUri, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<bool> get isFavorite => $composableBuilder(
-      column: $table.isFavorite, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<int> get mediaStoreId => $composableBuilder(
-      column: $table.mediaStoreId,
-      builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get lastPlayed => $composableBuilder(
-      column: $table.lastPlayed, builder: (column) => ColumnOrderings(column));
-}
-
-class $$TracksTableAnnotationComposer
-    extends Composer<_$AppDatabase, $TracksTable> {
-  $$TracksTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get path =>
-      $composableBuilder(column: $table.path, builder: (column) => column);
-
-  GeneratedColumn<String> get title =>
-      $composableBuilder(column: $table.title, builder: (column) => column);
-
-  GeneratedColumn<String> get artist =>
-      $composableBuilder(column: $table.artist, builder: (column) => column);
-
-  GeneratedColumn<String> get album =>
-      $composableBuilder(column: $table.album, builder: (column) => column);
-
-  GeneratedColumn<int> get duration =>
-      $composableBuilder(column: $table.duration, builder: (column) => column);
-
-  GeneratedColumn<String> get folderPath => $composableBuilder(
-      column: $table.folderPath, builder: (column) => column);
-
-  GeneratedColumn<String> get artworkUri => $composableBuilder(
-      column: $table.artworkUri, builder: (column) => column);
-
-  GeneratedColumn<bool> get isFavorite => $composableBuilder(
-      column: $table.isFavorite, builder: (column) => column);
-
-  GeneratedColumn<int> get mediaStoreId => $composableBuilder(
-      column: $table.mediaStoreId, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get lastPlayed => $composableBuilder(
-      column: $table.lastPlayed, builder: (column) => column);
-}
-
-class $$TracksTableTableManager extends RootTableManager<
-    _$AppDatabase,
-    $TracksTable,
-    Track,
-    $$TracksTableFilterComposer,
-    $$TracksTableOrderingComposer,
-    $$TracksTableAnnotationComposer,
-    $$TracksTableCreateCompanionBuilder,
-    $$TracksTableUpdateCompanionBuilder,
-    (Track, BaseReferences<_$AppDatabase, $TracksTable, Track>),
-    Track,
-    PrefetchHooks Function()> {
-  $$TracksTableTableManager(_$AppDatabase db, $TracksTable table)
-      : super(TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$TracksTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$TracksTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$TracksTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback: ({
-            Value<String> path = const Value.absent(),
-            Value<String> title = const Value.absent(),
-            Value<String?> artist = const Value.absent(),
-            Value<String?> album = const Value.absent(),
-            Value<int> duration = const Value.absent(),
-            Value<String> folderPath = const Value.absent(),
-            Value<String?> artworkUri = const Value.absent(),
-            Value<bool> isFavorite = const Value.absent(),
-            Value<int?> mediaStoreId = const Value.absent(),
-            Value<DateTime?> lastPlayed = const Value.absent(),
-            Value<int> rowid = const Value.absent(),
-          }) =>
-              TracksCompanion(
-            path: path,
-            title: title,
-            artist: artist,
-            album: album,
-            duration: duration,
-            folderPath: folderPath,
-            artworkUri: artworkUri,
-            isFavorite: isFavorite,
-            mediaStoreId: mediaStoreId,
-            lastPlayed: lastPlayed,
-            rowid: rowid,
-          ),
-          createCompanionCallback: ({
-            required String path,
-            required String title,
-            Value<String?> artist = const Value.absent(),
-            Value<String?> album = const Value.absent(),
-            required int duration,
-            required String folderPath,
-            Value<String?> artworkUri = const Value.absent(),
-            Value<bool> isFavorite = const Value.absent(),
-            Value<int?> mediaStoreId = const Value.absent(),
-            Value<DateTime?> lastPlayed = const Value.absent(),
-            Value<int> rowid = const Value.absent(),
-          }) =>
-              TracksCompanion.insert(
-            path: path,
-            title: title,
-            artist: artist,
-            album: album,
-            duration: duration,
-            folderPath: folderPath,
-            artworkUri: artworkUri,
-            isFavorite: isFavorite,
-            mediaStoreId: mediaStoreId,
-            lastPlayed: lastPlayed,
-            rowid: rowid,
-          ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ));
-}
-
-typedef $$TracksTableProcessedTableManager = ProcessedTableManager<
-    _$AppDatabase,
-    $TracksTable,
-    Track,
-    $$TracksTableFilterComposer,
-    $$TracksTableOrderingComposer,
-    $$TracksTableAnnotationComposer,
-    $$TracksTableCreateCompanionBuilder,
-    $$TracksTableUpdateCompanionBuilder,
-    (Track, BaseReferences<_$AppDatabase, $TracksTable, Track>),
-    Track,
-    PrefetchHooks Function()>;
-typedef $$YouTubeTracksTableCreateCompanionBuilder = YouTubeTracksCompanion
-    Function({
-  required String videoId,
-  required String title,
-  required String artist,
-  required String thumbnailUrl,
-  required int duration,
-  Value<String?> downloadPath,
-  Value<DateTime?> lastPlayed,
-  required DateTime cachedAt,
-  Value<int> rowid,
-});
-typedef $$YouTubeTracksTableUpdateCompanionBuilder = YouTubeTracksCompanion
-    Function({
-  Value<String> videoId,
-  Value<String> title,
-  Value<String> artist,
-  Value<String> thumbnailUrl,
-  Value<int> duration,
-  Value<String?> downloadPath,
-  Value<DateTime?> lastPlayed,
-  Value<DateTime> cachedAt,
-  Value<int> rowid,
-});
-
-class $$YouTubeTracksTableFilterComposer
-    extends Composer<_$AppDatabase, $YouTubeTracksTable> {
-  $$YouTubeTracksTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get videoId => $composableBuilder(
-      column: $table.videoId, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get title => $composableBuilder(
-      column: $table.title, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get artist => $composableBuilder(
-      column: $table.artist, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get thumbnailUrl => $composableBuilder(
-      column: $table.thumbnailUrl, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<int> get duration => $composableBuilder(
-      column: $table.duration, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get downloadPath => $composableBuilder(
-      column: $table.downloadPath, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get lastPlayed => $composableBuilder(
-      column: $table.lastPlayed, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
-      column: $table.cachedAt, builder: (column) => ColumnFilters(column));
-}
-
-class $$YouTubeTracksTableOrderingComposer
-    extends Composer<_$AppDatabase, $YouTubeTracksTable> {
-  $$YouTubeTracksTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get videoId => $composableBuilder(
-      column: $table.videoId, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get title => $composableBuilder(
-      column: $table.title, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get artist => $composableBuilder(
-      column: $table.artist, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get thumbnailUrl => $composableBuilder(
-      column: $table.thumbnailUrl,
-      builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<int> get duration => $composableBuilder(
-      column: $table.duration, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get downloadPath => $composableBuilder(
-      column: $table.downloadPath,
-      builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get lastPlayed => $composableBuilder(
-      column: $table.lastPlayed, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
-      column: $table.cachedAt, builder: (column) => ColumnOrderings(column));
-}
-
-class $$YouTubeTracksTableAnnotationComposer
-    extends Composer<_$AppDatabase, $YouTubeTracksTable> {
-  $$YouTubeTracksTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get videoId =>
-      $composableBuilder(column: $table.videoId, builder: (column) => column);
-
-  GeneratedColumn<String> get title =>
-      $composableBuilder(column: $table.title, builder: (column) => column);
-
-  GeneratedColumn<String> get artist =>
-      $composableBuilder(column: $table.artist, builder: (column) => column);
-
-  GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
-      column: $table.thumbnailUrl, builder: (column) => column);
-
-  GeneratedColumn<int> get duration =>
-      $composableBuilder(column: $table.duration, builder: (column) => column);
-
-  GeneratedColumn<String> get downloadPath => $composableBuilder(
-      column: $table.downloadPath, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get lastPlayed => $composableBuilder(
-      column: $table.lastPlayed, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get cachedAt =>
-      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
-}
-
-class $$YouTubeTracksTableTableManager extends RootTableManager<
-    _$AppDatabase,
-    $YouTubeTracksTable,
-    YouTubeTrack,
-    $$YouTubeTracksTableFilterComposer,
-    $$YouTubeTracksTableOrderingComposer,
-    $$YouTubeTracksTableAnnotationComposer,
-    $$YouTubeTracksTableCreateCompanionBuilder,
-    $$YouTubeTracksTableUpdateCompanionBuilder,
-    (
-      YouTubeTrack,
-      BaseReferences<_$AppDatabase, $YouTubeTracksTable, YouTubeTrack>
-    ),
-    YouTubeTrack,
-    PrefetchHooks Function()> {
-  $$YouTubeTracksTableTableManager(_$AppDatabase db, $YouTubeTracksTable table)
-      : super(TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$YouTubeTracksTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$YouTubeTracksTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$YouTubeTracksTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback: ({
-            Value<String> videoId = const Value.absent(),
-            Value<String> title = const Value.absent(),
-            Value<String> artist = const Value.absent(),
-            Value<String> thumbnailUrl = const Value.absent(),
-            Value<int> duration = const Value.absent(),
-            Value<String?> downloadPath = const Value.absent(),
-            Value<DateTime?> lastPlayed = const Value.absent(),
-            Value<DateTime> cachedAt = const Value.absent(),
-            Value<int> rowid = const Value.absent(),
-          }) =>
-              YouTubeTracksCompanion(
-            videoId: videoId,
-            title: title,
-            artist: artist,
-            thumbnailUrl: thumbnailUrl,
-            duration: duration,
-            downloadPath: downloadPath,
-            lastPlayed: lastPlayed,
-            cachedAt: cachedAt,
-            rowid: rowid,
-          ),
-          createCompanionCallback: ({
-            required String videoId,
-            required String title,
-            required String artist,
-            required String thumbnailUrl,
-            required int duration,
-            Value<String?> downloadPath = const Value.absent(),
-            Value<DateTime?> lastPlayed = const Value.absent(),
-            required DateTime cachedAt,
-            Value<int> rowid = const Value.absent(),
-          }) =>
-              YouTubeTracksCompanion.insert(
-            videoId: videoId,
-            title: title,
-            artist: artist,
-            thumbnailUrl: thumbnailUrl,
-            duration: duration,
-            downloadPath: downloadPath,
-            lastPlayed: lastPlayed,
-            cachedAt: cachedAt,
-            rowid: rowid,
-          ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ));
-}
-
-typedef $$YouTubeTracksTableProcessedTableManager = ProcessedTableManager<
-    _$AppDatabase,
-    $YouTubeTracksTable,
-    YouTubeTrack,
-    $$YouTubeTracksTableFilterComposer,
-    $$YouTubeTracksTableOrderingComposer,
-    $$YouTubeTracksTableAnnotationComposer,
-    $$YouTubeTracksTableCreateCompanionBuilder,
-    $$YouTubeTracksTableUpdateCompanionBuilder,
-    (
-      YouTubeTrack,
-      BaseReferences<_$AppDatabase, $YouTubeTracksTable, YouTubeTrack>
-    ),
-    YouTubeTrack,
-    PrefetchHooks Function()>;
-typedef $$HomeCacheTableCreateCompanionBuilder = HomeCacheCompanion Function({
-  Value<int> id,
-  required String data,
-  required DateTime timestamp,
-});
-typedef $$HomeCacheTableUpdateCompanionBuilder = HomeCacheCompanion Function({
-  Value<int> id,
-  Value<String> data,
-  Value<DateTime> timestamp,
-});
-
-class $$HomeCacheTableFilterComposer
-    extends Composer<_$AppDatabase, $HomeCacheTable> {
-  $$HomeCacheTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<int> get id => $composableBuilder(
-      column: $table.id, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get data => $composableBuilder(
-      column: $table.data, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get timestamp => $composableBuilder(
-      column: $table.timestamp, builder: (column) => ColumnFilters(column));
-}
-
-class $$HomeCacheTableOrderingComposer
-    extends Composer<_$AppDatabase, $HomeCacheTable> {
-  $$HomeCacheTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<int> get id => $composableBuilder(
-      column: $table.id, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get data => $composableBuilder(
-      column: $table.data, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get timestamp => $composableBuilder(
-      column: $table.timestamp, builder: (column) => ColumnOrderings(column));
-}
-
-class $$HomeCacheTableAnnotationComposer
-    extends Composer<_$AppDatabase, $HomeCacheTable> {
-  $$HomeCacheTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<int> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get data =>
-      $composableBuilder(column: $table.data, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get timestamp =>
-      $composableBuilder(column: $table.timestamp, builder: (column) => column);
-}
-
-class $$HomeCacheTableTableManager extends RootTableManager<
-    _$AppDatabase,
-    $HomeCacheTable,
-    HomeCacheEntry,
-    $$HomeCacheTableFilterComposer,
-    $$HomeCacheTableOrderingComposer,
-    $$HomeCacheTableAnnotationComposer,
-    $$HomeCacheTableCreateCompanionBuilder,
-    $$HomeCacheTableUpdateCompanionBuilder,
-    (
-      HomeCacheEntry,
-      BaseReferences<_$AppDatabase, $HomeCacheTable, HomeCacheEntry>
-    ),
-    HomeCacheEntry,
-    PrefetchHooks Function()> {
-  $$HomeCacheTableTableManager(_$AppDatabase db, $HomeCacheTable table)
-      : super(TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$HomeCacheTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$HomeCacheTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$HomeCacheTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback: ({
-            Value<int> id = const Value.absent(),
-            Value<String> data = const Value.absent(),
-            Value<DateTime> timestamp = const Value.absent(),
-          }) =>
-              HomeCacheCompanion(
-            id: id,
-            data: data,
-            timestamp: timestamp,
-          ),
-          createCompanionCallback: ({
-            Value<int> id = const Value.absent(),
-            required String data,
-            required DateTime timestamp,
-          }) =>
-              HomeCacheCompanion.insert(
-            id: id,
-            data: data,
-            timestamp: timestamp,
-          ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ));
-}
-
-typedef $$HomeCacheTableProcessedTableManager = ProcessedTableManager<
-    _$AppDatabase,
-    $HomeCacheTable,
-    HomeCacheEntry,
-    $$HomeCacheTableFilterComposer,
-    $$HomeCacheTableOrderingComposer,
-    $$HomeCacheTableAnnotationComposer,
-    $$HomeCacheTableCreateCompanionBuilder,
-    $$HomeCacheTableUpdateCompanionBuilder,
-    (
-      HomeCacheEntry,
-      BaseReferences<_$AppDatabase, $HomeCacheTable, HomeCacheEntry>
-    ),
-    HomeCacheEntry,
-    PrefetchHooks Function()>;
-
-class $AppDatabaseManager {
-  final _$AppDatabase _db;
-  $AppDatabaseManager(this._db);
-  $$TracksTableTableManager get tracks =>
-      $$TracksTableTableManager(_db, _db.tracks);
-  $$YouTubeTracksTableTableManager get youTubeTracks =>
-      $$YouTubeTracksTableTableManager(_db, _db.youTubeTracks);
-  $$HomeCacheTableTableManager get homeCache =>
-      $$HomeCacheTableTableManager(_db, _db.homeCache);
 }

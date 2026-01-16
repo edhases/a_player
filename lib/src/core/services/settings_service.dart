@@ -12,6 +12,7 @@ const String kQueueKey = 'queue';
 const String kMinTrackDurationKey = 'min_track_duration'; // in seconds
 const String kMaxTrackDurationKey =
     'max_track_duration'; // in seconds (0 = no limit)
+const String kMaxCacheSizeKey = 'max_cache_size';
 const String kExcludedFoldersKey = 'excluded_folders';
 
 class SettingsService {
@@ -118,6 +119,17 @@ class SettingsService {
 
   List<String> loadExcludedFolders() {
     return _prefs.getStringList(kExcludedFoldersKey) ?? [];
+  }
+
+  // --- Cache Limit ---
+  Future<void> saveMaxCacheSize(int bytes) async {
+    await _prefs.setInt(kMaxCacheSizeKey, bytes);
+    _notify();
+  }
+
+  int loadMaxCacheSize() {
+    return _prefs.getInt(kMaxCacheSizeKey) ??
+        500 * 1024 * 1024; // Default 500MB
   }
 
   // --- Generic Storage ---

@@ -6,6 +6,8 @@ import '../../data/datasources/app_database.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/common_artwork.dart';
 
+import '../widgets/track_list_tile.dart';
+
 enum DetailScreenType { album, artist }
 
 /// Detail screen for albums and artists with track listings.
@@ -43,9 +45,9 @@ class DetailScreen extends StatelessWidget {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
-          
-          final tracks = snapshot.data ?? [];
-          
+
+          final List<Track> tracks = snapshot.data ?? <Track>[];
+
           if (tracks.isEmpty) {
             return Scaffold(
               appBar: AppBar(title: Text(title)),
@@ -57,7 +59,7 @@ class DetailScreen extends StatelessWidget {
           final firstTrack = tracks.first;
           int? firstMediaStoreId;
           try {
-             firstMediaStoreId = (firstTrack as dynamic).mediaStoreId;
+            firstMediaStoreId = (firstTrack as dynamic).mediaStoreId;
           } catch (_) {}
 
           return CustomScrollView(
@@ -82,7 +84,9 @@ class DetailScreen extends StatelessWidget {
                         path: firstTrack.path,
                         size: 300,
                         radius: 0,
-                        placeholderIcon: type == DetailScreenType.album ? Icons.album : Icons.person,
+                        placeholderIcon: type == DetailScreenType.album
+                            ? Icons.album
+                            : Icons.person,
                       ),
                       // Gradient overlay
                       Container(
@@ -135,9 +139,10 @@ class DetailScreen extends StatelessWidget {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final track = tracks[index];
-                    final isCurrentTrack = audioHandler.mediaItem.value?.id == track.path;
+                    final isCurrentTrack =
+                        audioHandler.mediaItem.value?.id == track.path;
 
-                    return _TrackListTile(
+                    return TrackListTile(
                       track: track,
                       trackNumber: index + 1,
                       isCurrentTrack: isCurrentTrack,
@@ -158,7 +163,8 @@ class DetailScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _playQueue(MyAudioHandler audioHandler, List<Track> tracks, int startIndex) async {
+  Future<void> _playQueue(
+      MyAudioHandler audioHandler, List<Track> tracks, int startIndex) async {
     final mediaItems = tracks.map((track) {
       int? mId;
       try {
@@ -177,71 +183,5 @@ class DetailScreen extends StatelessWidget {
 
     await audioHandler.updateQueue(mediaItems);
     await audioHandler.skipToQueueItem(startIndex);
-  }
-}
-
-class _TrackListTile extends StatelessWidget {
-  final Track track;
-  final int trackNumber;
-  final bool isCurrentTrack;
-  final VoidCallback onTap;
-
-  const _TrackListTile({
-    required this.track,
-    required this.trackNumber,
-    required this.isCurrentTrack,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      leading: SizedBox(
-        width: 32,
-        child: Text(
-          trackNumber.toString(),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: isCurrentTrack ? colorScheme.primary : Colors.grey[500],
-            fontWeight: isCurrentTrack ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-      title: Text(
-        track.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isCurrentTrack ? FontWeight.bold : FontWeight.normal,
-          color: isCurrentTrack ? colorScheme.primary : null,
-        ),
-      ),
-      subtitle: Text(
-        track.artist ?? 'Unknown Artist',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 12,
-          color: isCurrentTrack ? colorScheme.primary.withValues(alpha: 0.7) : Colors.grey[500],
-        ),
-      ),
-      trailing: Text(
-        _formatDuration(Duration(milliseconds: track.duration)),
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.grey[500],
-        ),
-      ),
-      onTap: onTap,
-    );
-  }
-
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
   }
 }

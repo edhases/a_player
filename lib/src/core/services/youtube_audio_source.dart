@@ -13,7 +13,8 @@ class YoutubeAudioSource extends StreamAudioSource {
   String? _cachedUrl;
   DateTime? _cacheTime;
 
-  YoutubeAudioSource(this.videoId, this._ytHelper) : super(tag: videoId);
+  YoutubeAudioSource(this.videoId, this._ytHelper, {dynamic tag})
+      : super(tag: tag ?? videoId);
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {

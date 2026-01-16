@@ -27,15 +27,18 @@ subprojects {
     val targetProject = this
 
     fun applyFixes() {
-        if (targetProject.name == "on_audio_query_android" || targetProject.name == "equalizer_flutter") {
-            val ns = if (targetProject.name == "on_audio_query_android") 
-                "com.lucasferreira.on_audio_query_android" 
-            else 
-                "com.equalizer.flutter.equalizer_flutter"
+        if (targetProject.name == "on_audio_query_android" || targetProject.name == "equalizer_flutter" || targetProject.name == "isar_flutter_libs") {
+            val ns = when (targetProject.name) {
+                "on_audio_query_android" -> "com.lucasferreira.on_audio_query_android"
+                "equalizer_flutter" -> "com.equalizer.flutter.equalizer_flutter"
+                "isar_flutter_libs" -> "dev.isar.isar_flutter_libs"
+                else -> "com.example.unknown"
+            }
 
             targetProject.pluginManager.withPlugin("com.android.library") {
                 targetProject.extensions.configure<LibraryExtension> {
                     namespace = ns
+                    compileSdk = 36
                     compileOptions {
                         sourceCompatibility = JavaVersion.VERSION_17
                         targetCompatibility = JavaVersion.VERSION_17

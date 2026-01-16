@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import 'package:audio_service/audio_service.dart';
+import '../widgets/square_song_card.dart';
 import '../../core/services/innertube_service.dart';
 import '../../core/services/google_auth_service.dart';
-import '../../core/services/youtube_helper.dart';
+import '../../core/utils/localization.dart';
 import '../../core/services/audio_handler.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../widgets/common_artwork.dart';
 import 'login_screen.dart';
 import 'playlist_tracks_screen.dart';
+import 'last_played_screen.dart';
+import 'liked_songs_screen.dart';
 
 class YouTubeHubScreen extends StatefulWidget {
   const YouTubeHubScreen({super.key});
@@ -20,7 +23,6 @@ class YouTubeHubScreen extends StatefulWidget {
 class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   final _innerTube = GetIt.I<InnerTubeService>();
   final _authService = GetIt.I<GoogleAuthService>();
-  final _ytHelper = GetIt.I<YouTubeHelper>();
   final _audioHandler = GetIt.I<MyAudioHandler>();
 
   bool _isLoggedIn = false;
@@ -29,10 +31,35 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   List<Map<String, dynamic>> _playlists = []; // Added playlists variable
   String? _error;
 
+  StreamSubscription<bool>? _loginStatusSubscription;
+
   @override
   void initState() {
     super.initState();
     _checkLoginStatus();
+    _loginStatusSubscription =
+        _authService.onLoginStatusChanged.listen((isLoggedIn) {
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = isLoggedIn;
+        });
+        if (isLoggedIn) {
+          _loadData();
+        } else {
+          setState(() {
+            _isLoading = false;
+            _sections = [];
+            _playlists = [];
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _loginStatusSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkLoginStatus() async {
@@ -80,20 +107,31 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   }
 
   void _playSong(YouTubeSong song) async {
+    // If it's a container (Album/Playlist/Single), navigate to it instead of trying to play the container ID
+    if (song.isPlaylist && song.playlistId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PlaylistTracksScreen(
+            playlistId: song.playlistId!,
+            title: song.title,
+            knownArtist: song.artist,
+            knownThumbnail: song.thumbnailUrl,
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text('Loading ${song.title}...'),
+          content: Text('Playing ${song.title}...'),
           duration: const Duration(seconds: 1)),
     );
 
-    final url = await _ytHelper.getAudioUrl(song.videoId);
-    if (url != null) {
-      final mediaItem = await _ytHelper.createMediaItem(song.videoId,
-          customTitle: song.title, customArtist: song.artist);
-
-      await _audioHandler.updateQueue([mediaItem]);
-      _audioHandler.play();
-    }
+    // Use centralized player logic
+    await _audioHandler.playYouTubeSong(song);
   }
 
   @override
@@ -122,6 +160,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   }
 
   Widget _buildBody() {
+    final loc = AppLocalizations.of(context);
     if (!_isLoggedIn) {
       return Center(
         child: Column(
@@ -129,10 +168,10 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
           children: [
             const Icon(Icons.account_circle, size: 80, color: Colors.grey),
             const SizedBox(height: 16),
-            const Text(
-              'Sign in to YouTube Music\nfor a personalized experience',
+            Text(
+              loc.signInMessage,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18),
+              style: const TextStyle(fontSize: 18),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -144,7 +183,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
                 if (success == true) _loadData();
               },
               icon: const Icon(Icons.login),
-              label: const Text('Login'),
+              label: Text(loc.login),
             ),
           ],
         ),
@@ -157,40 +196,43 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // Quick access shortcuts
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
+          // Quick access shortcuts
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              'Quick Access',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              loc.quickAccess,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
           ),
           Row(
             children: [
               Expanded(
-                child: _buildShortcut(
-                  icon: Icons.favorite,
-                  label: 'Liked Songs',
-                  color: Colors.redAccent,
-                  onTap: () => Navigator.push(
+                child: FilledButton.tonalIcon(
+                  onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const PlaylistTracksScreen(
-                        playlistId: 'LM',
-                        title: 'Liked Songs',
-                      ),
+                      builder: (_) => const LikedSongsScreen(),
                     ),
+                  ),
+                  icon: const Icon(Icons.favorite),
+                  label: Text(loc.likedSongs),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildShortcut(
-                  icon: Icons.history,
-                  label: 'Last Played',
-                  color: Colors.blueAccent,
-                  onTap: () {
-                    // History logic could go here
-                  },
+                child: FilledButton.tonalIcon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LastPlayedScreen()),
+                  ),
+                  icon: const Icon(Icons.history),
+                  label: Text(loc.lastPlayedTitle),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ),
             ],
@@ -225,11 +267,12 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
           ..._sections.map((section) => _buildSection(section)),
 
           if (_playlists.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.only(top: 24, bottom: 16),
+            Padding(
+              padding: const EdgeInsets.only(top: 24, bottom: 16),
               child: Text(
-                'Your Library',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                loc.yourLibrary,
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
             ),
             GridView.builder(
@@ -276,7 +319,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        'Playlist',
+                        loc.playlistType,
                         style: TextStyle(color: Colors.grey[400], fontSize: 12),
                       ),
                     ],
@@ -330,81 +373,15 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
             clipBehavior: Clip.none,
             itemBuilder: (context, index) {
               final song = items[index];
-              return GestureDetector(
+              return SquareSongCard(
+                song: song,
+                width: 150,
                 onTap: () => _playSong(song),
-                child: Container(
-                  width: 150,
-                  margin: const EdgeInsets.only(right: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CommonArtwork(
-                          url: song.thumbnailUrl,
-                          size: 150,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        song.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        song.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               );
             },
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildShortcut({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

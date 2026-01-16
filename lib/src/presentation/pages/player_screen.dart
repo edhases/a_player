@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
@@ -8,7 +7,10 @@ import '../../core/services/audio_handler.dart';
 import '../../data/datasources/app_database.dart';
 import 'equalizer_screen.dart';
 import '../widgets/common_artwork.dart';
-import 'package:metadata_god/metadata_god.dart';
+import '../../core/services/sleep_timer_service.dart';
+import '../../core/utils/localization.dart';
+import '../../core/services/cache_service.dart';
+import '../../core/services/youtube_helper.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -423,6 +425,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _showOptionsSheet(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.grey[900],
@@ -430,19 +433,126 @@ class _PlayerScreenState extends State<PlayerScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
+            leading: const Icon(Icons.download, color: Colors.white),
+            title:
+                const Text('Download', style: TextStyle(color: Colors.white)),
+            onTap: () async {
+              Navigator.pop(context); // Close sheet
+
+              final mediaItem = _audioHandler.mediaItem.value;
+              if (mediaItem == null || mediaItem.extras?['videoId'] == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cannot download this track')),
+                );
+                return;
+              }
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Starting download...')),
+              );
+
+              try {
+                final videoId = mediaItem.extras!['videoId'] as String;
+                final ytHelper = GetIt.I<YouTubeHelper>();
+                final url = await ytHelper.getAudioUrl(videoId);
+
+                if (url != null) {
+                  await GetIt.I<CacheService>().cacheTrack(
+                    videoId: videoId,
+                    url: url,
+                    title: mediaItem.title,
+                    artist: mediaItem.artist ?? 'Unknown',
+                    thumbnailUrl: mediaItem.artUri?.toString() ?? '',
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Downloaded: ${mediaItem.title}')),
+                    );
+                  }
+                } else {
+                  throw Exception('Could not get audio URL');
+                }
+              } catch (e) {
+                debugPrint('Download error: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Download failed: $e')),
+                  );
+                }
+              }
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.timer, color: Colors.white),
-            title: const Text('Sleep Timer',
-                style: TextStyle(color: Colors.white)),
-            onTap: () => Navigator.pop(context),
+            title: Text(loc.sleepTimer,
+                style: const TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context); // Close options sheet first
+              _showSleepTimerDialog(context);
+            },
           ),
           ListTile(
             leading: const Icon(Icons.share, color: Colors.white),
-            title: const Text('Share Track',
-                style: TextStyle(color: Colors.white)),
+            title: Text(loc.shareTrack,
+                style: const TextStyle(color: Colors.white)),
             onTap: () => Navigator.pop(context),
           ),
         ],
       ),
+    );
+  }
+
+  void _showSleepTimerDialog(BuildContext context) {
+    final sleepTimer = GetIt.I<SleepTimerService>();
+    final loc = AppLocalizations.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => ValueListenableBuilder<Duration?>(
+          valueListenable: sleepTimer.remainingTime,
+          builder: (context, remaining, child) {
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                        remaining != null
+                            ? '${loc.sleepTimer}: ${_formatDuration(remaining)}'
+                            : loc.setSleepTimer,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                  if (remaining != null)
+                    ListTile(
+                        title: Text(loc.stopTimer,
+                            style: const TextStyle(color: Colors.red)),
+                        leading: const Icon(Icons.timer_off, color: Colors.red),
+                        onTap: () {
+                          sleepTimer.cancelTimer();
+                          Navigator.pop(context);
+                        }),
+                  ...[15, 30, 45, 60].map((minutes) => ListTile(
+                        leading: const Icon(Icons.access_time,
+                            color: Colors.white70),
+                        title: Text('$minutes ${loc.minutesSuffix}',
+                            style: const TextStyle(color: Colors.white)),
+                        onTap: () {
+                          sleepTimer.startTimer(Duration(minutes: minutes));
+                          Navigator.pop(context);
+                        },
+                      )),
+                  // Optional: Custom Time? Keeping it simple for now as requested.
+                ],
+              ),
+            );
+          }),
     );
   }
 

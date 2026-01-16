@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import '../../domain/repositories/music_repository.dart';
-import '../../core/utils/localization.dart';
-import '../../data/datasources/app_database.dart';
-import '../../domain/entities/youtube_song.dart';
+
+import '../widgets/square_song_card.dart';
+import '../widgets/paged_song_grid.dart';
+import '../widgets/compact_song_tile.dart';
+import '../widgets/song_card.dart';
+import '../../domain/entities/home_section.dart';
+import '../../core/services/recommendation_service.dart';
 import '../../core/services/audio_handler.dart';
-import '../widgets/common_artwork.dart';
-import 'dart:math';
+import '../../domain/entities/youtube_song.dart';
+import 'playlist_tracks_screen.dart';
+
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/services/favorites_service.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -16,377 +22,296 @@ class HomeFeedScreen extends StatefulWidget {
 }
 
 class _HomeFeedScreenState extends State<HomeFeedScreen> {
-  final _repository = GetIt.I<MusicRepository>();
-  final _audioHandler = GetIt.I<MyAudioHandler>();
+  final RecommendationService _recommendationService =
+      GetIt.I<RecommendationService>();
 
-  List<Track> _recentLocalTracks = [];
-  List<Track> _shuffledLocalTracks = [];
-  List<Map<String, dynamic>> _youtubeSections = [];
+  List<HomeSection> _sections = [];
   bool _isLoading = true;
   String? _error;
-  String? _youtubeError;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadRecommendations();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadRecommendations() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
-      // 1. Fetch Local Recents
-      final recents = await _repository.getRecentLocalTracks(limit: 10);
-
-      // 1.5 Fetch shuffled local tracks for "Your Library" section
-      final db = GetIt.I<AppDatabase>();
-      final allTracks = await db.getFilteredTracks();
-      final shuffled = List<Track>.from(allTracks)..shuffle(Random());
-
-      // 2. Fetch YouTube Home Data
-      final ytResult = await _repository.getHomeFeed();
+      final sections = await _recommendationService.getPersonalizedFeed();
 
       if (mounted) {
         setState(() {
-          _recentLocalTracks = recents;
-          _shuffledLocalTracks = shuffled.take(15).toList();
-          if (ytResult.isSuccess) {
-            _youtubeSections = ytResult.data!;
-          } else {
-            _youtubeError = ytResult.error;
-            debugPrint('HomeFeed YouTube Error: ${ytResult.error}');
-          }
+          _sections = sections;
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('[HomeFeed] Error loading data: $e');
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = 'Failed to load recommendations: $e';
           _isLoading = false;
         });
       }
     }
   }
 
-  String _getGreeting(AppLocalizations loc) {
-    final hour = DateTime.now().hour;
-    if (hour < 12)
-      return 'Good morning'; // TODO: Localize these specifically if desired
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+  void _onSongTap(YouTubeSong song) {
+    if (song.isPlaylist && song.playlistId != null) {
+      // Navigate to Playlist Detail
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PlaylistTracksScreen(
+            playlistId: song.playlistId!,
+            title: song.title,
+            knownArtist: song.artist,
+            knownThumbnail: song.thumbnailUrl,
+          ),
+        ),
+      );
+    } else {
+      // Play Song
+      GetIt.I<MyAudioHandler>().playYouTubeSong(song);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Playing ${song.title}')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showSongContextMenu(
+      BuildContext context, YouTubeSong song) async {
+    final audioHandler = GetIt.I<MyAudioHandler>();
+    final isLiked = await GetIt.I<FavoritesService>().isLiked(song.videoId);
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: CachedNetworkImage(
+                    imageUrl: song.thumbnailUrl,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                title: Text(
+                  song.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(song.artist),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.queue_music),
+                title: const Text('Add to Queue'),
+                onTap: () {
+                  audioHandler.addYouTubeToQueue(song);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Added to Queue'),
+                        duration: Duration(seconds: 1)),
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
+                title: Text(
+                    isLiked ? 'Remove from Favorites' : 'Add to Favorites'),
+                onTap: () {
+                  GetIt.I<FavoritesService>().toggleFavorite(
+                    videoId: song.videoId,
+                    title: song.title,
+                    artist: song.artist,
+                    thumbnailUrl: song.thumbnailUrl,
+                  );
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of(context);
-
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 16),
-            Text('Error loading home feed',
-                style: Theme.of(context).textTheme.titleMedium),
-            Text(_error!, style: Theme.of(context).textTheme.bodySmall),
-            TextButton(
-              onPressed: _loadData,
-              child: const Text('Retry'),
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _loadRecommendations,
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              floating: true,
+              pinned: false,
+              snap: true,
+              title: const Text('Made for You'),
+              centerTitle: false,
+              automaticallyImplyLeading: false,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              elevation: 0,
             ),
+            if (_isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('Oops!',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const SizedBox(height: 8),
+                      Text('Could not load your feed.',
+                          style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadRecommendations,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (_sections.isEmpty)
+              const SliverFillRemaining(
+                child: Center(child: Text('No recommendations found.')),
+              )
+            else
+              ..._sections.expand(_buildSectionSlivers),
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 80),
+            )
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        children: [
-          // Greeting
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              _getGreeting(loc),
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
+  List<Widget> _buildSectionSlivers(HomeSection section) {
+    if (section.songs.isEmpty) return [];
+
+    final slivers = <Widget>[];
+
+    // Section Header
+    slivers.add(
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+          child: Text(
+            section.title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                ),
           ),
+        ),
+      ),
+    );
 
-          // 1. Listen Again (Local Recents)
-          if (_recentLocalTracks.isNotEmpty) ...[
-            _buildSectionHeader(
-                context, loc.listenAgain), // Use localized "Listen Again"
-            SizedBox(
-              height: 195,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: _recentLocalTracks.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final track = _recentLocalTracks[index];
-                  return _buildLocalTrackCard(context, track);
-                },
+    // Section Content
+    if (section.type == SectionType.vertical) {
+      // List View (Vertical) - For "Listen Again"
+      slivers.add(SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: CompactSongTile(
+                song: section.songs[index],
+                onTap: () => _onSongTap(section.songs[index]),
+                onMenuTap: () =>
+                    _showSongContextMenu(context, section.songs[index]),
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // 1.5. Your Library (Shuffled Local Tracks)
-          if (_shuffledLocalTracks.isNotEmpty) ...[
-            _buildSectionHeader(context, 'Your Library'), // TODO: Localize
-            SizedBox(
-              height: 195,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: _shuffledLocalTracks.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final track = _shuffledLocalTracks[index];
-                  return _buildLocalTrackCard(context, track);
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // 2. YouTube Error Banner
-          if (_youtubeError != null)
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Text('YouTube Error: $_youtubeError',
-                            style: const TextStyle(color: Colors.red))),
-                  ],
-                ),
-              ),
-            ),
-
-          // 3. YouTube Sections (Mixes, Recents, Community etc.)
-          ..._youtubeSections.map((section) {
-            final title = section['title'] as String? ?? '';
-            final items = section['items'] as List<dynamic>? ?? [];
-
-            if (items.isEmpty) return const SizedBox.shrink();
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionHeader(context, title),
-                SizedBox(
-                  height: 200,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      // Determine type: Song, Video, Playlist...
-                      // For simplicity, treating as Song or Playlist card
-                      return _buildYouTubeCard(context, item);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
             );
-          }),
-
-          // Bottom padding for MiniPlayer
-          const SizedBox(height: 80),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-      ),
-    );
-  }
-
-  Widget _buildLocalTrackCard(BuildContext context, Track track) {
-    return GestureDetector(
-      onTap: () async {
-        await _audioHandler.playLocalTrack(track);
-      },
-      child: SizedBox(
-        width: 140,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Artwork using CommonArtwork for proper local file artwork
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: CommonArtwork(
-                mediaStoreId: track.mediaStoreId,
-                path: track.path,
-                url: track.artworkUri,
-                size: 140,
-                radius: 0,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              track.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            Text(
-              track.artist ?? 'Unknown Artist',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+          },
+          childCount: section.songs.length,
         ),
-      ),
-    );
-  }
-
-  Widget _buildYouTubeCard(BuildContext context, dynamic item) {
-    // Handle YouTubeSong objects from the parser
-    if (item is YouTubeSong) {
-      return GestureDetector(
-        onTap: () async {
-          await _audioHandler.playYouTubeSong(item);
-        },
-        child: SizedBox(
-          width: 140,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: 1,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[800],
-                    image: item.thumbnailUrl.isNotEmpty
-                        ? DecorationImage(
-                            image: NetworkImage(item.thumbnailUrl),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
-                  child: item.thumbnailUrl.isEmpty
-                      ? const Icon(Icons.music_note,
-                          size: 48, color: Colors.grey)
-                      : null,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              Text(
-                item.artist,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+      ));
+    } else if (section.type == SectionType.grid) {
+      // Grid View (Tiles) - For Albums/Mixes
+      slivers.add(SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.75,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return SquareSongCard(
+                song: section.songs[index],
+                width: double.infinity,
+                onTap: () => _onSongTap(section.songs[index]),
+              );
+            },
+            childCount: section.songs.length,
           ),
         ),
-      );
+      ));
+    } else {
+      // Horizontal (Paged Grid or Carousel)
+      // Check if it's "Quick Picks" -> Use Paged Grid
+      // User requested "List or Tiles", so we should try to honor that for main sections.
+      // But Quick Picks is special.
+
+      Widget content;
+      if (section.title.toLowerCase().contains('quick picks') ||
+          section.title.toLowerCase().contains('швидкий вибір') ||
+          section.title.toLowerCase().contains('start radio')) {
+        content = PagedSongGrid(
+          songs: section.songs,
+          onSongTap: _onSongTap,
+        );
+      } else {
+        // Fallback for generic horizontal sections if any
+        content = SizedBox(
+          height: 220,
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: section.songs.length,
+            itemBuilder: (context, index) {
+              return SquareSongCard(
+                song: section.songs[index],
+                onTap: () => _onSongTap(section.songs[index]),
+              );
+            },
+          ),
+        );
+      }
+
+      slivers.add(SliverToBoxAdapter(child: content));
     }
 
-    // Fallback for Map-based items (legacy compatibility)
-    final Map<String, dynamic> mapItem = item as Map<String, dynamic>;
-    final title = mapItem['title']?.toString() ?? '';
-    final subtitle = mapItem['subtitle']?.toString() ?? '';
-    final thumb = mapItem['thumbnail']?.toString() ?? '';
-    final videoId = mapItem['videoId']?.toString();
-    final playlistId = mapItem['playlistId']?.toString();
-
-    return GestureDetector(
-      onTap: () async {
-        if (videoId != null) {
-          final song = YouTubeSong(
-            videoId: videoId,
-            title: title,
-            artist: subtitle,
-            thumbnailUrl: thumb,
-          );
-          await _audioHandler.playYouTubeSong(song);
-        } else if (playlistId != null) {
-          debugPrint('Open playlist: $playlistId');
-        }
-      },
-      child: SizedBox(
-        width: 140,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.grey[800],
-                  image: thumb.isNotEmpty
-                      ? DecorationImage(
-                          image: NetworkImage(thumb),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: thumb.isEmpty
-                    ? const Icon(Icons.music_note, size: 48, color: Colors.grey)
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
-    );
+    return slivers;
   }
 }

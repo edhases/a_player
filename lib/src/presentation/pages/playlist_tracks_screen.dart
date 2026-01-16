@@ -11,11 +11,15 @@ import '../widgets/common_artwork.dart';
 class PlaylistTracksScreen extends StatefulWidget {
   final String playlistId;
   final String title;
+  final String? knownArtist; // Pass artist if known from previous screen
+  final String? knownThumbnail; // Pass thumbnail if known from previous screen
 
   const PlaylistTracksScreen({
     super.key,
     required this.playlistId,
     required this.title,
+    this.knownArtist,
+    this.knownThumbnail,
   });
 
   @override
@@ -38,42 +42,57 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
 
   Future<void> _loadTracks() async {
     setState(() => _isLoading = true);
-    _tracks = await _innerTube.getPlaylistTracks(widget.playlistId);
+    var fetchedTracks = await _innerTube.getPlaylistTracks(widget.playlistId);
+
+    // Patch missing artist/thumbnail data using knownMetadata
+    fetchedTracks = fetchedTracks.map((song) {
+      var updatedSong = song;
+
+      // Apply Artist Fallback
+      if ((updatedSong.artist == 'Unknown' || updatedSong.artist.isEmpty) &&
+          widget.knownArtist != null &&
+          widget.knownArtist != 'Unknown') {
+        updatedSong = updatedSong.copyWith(artist: widget.knownArtist);
+      }
+
+      // Apply Thumbnail Fallback
+      // Checks if empty or if it's a generic default if we had one (usually empty)
+      if (updatedSong.thumbnailUrl.isEmpty && widget.knownThumbnail != null) {
+        updatedSong = updatedSong.copyWith(thumbnailUrl: widget.knownThumbnail);
+      }
+
+      return updatedSong;
+    }).toList();
+
+    _tracks = fetchedTracks;
+
     if (mounted) {
       setState(() => _isLoading = false);
     }
   }
 
   void _playSong(YouTubeSong song) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text('Loading ${song.title}...'),
-          duration: const Duration(seconds: 1)),
-    );
+    final index = _tracks.indexOf(song);
+    if (index == -1) return;
 
-    final url = await _ytHelper.getAudioUrl(song.videoId);
-    if (url != null) {
-      final duration =
-          (await _ytHelper.getVideoDetails(song.videoId))?.duration;
-      final desktopUA =
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
-
-      final mediaItem = MediaItem(
-        id: url,
-        title: song.title,
-        artist: song.artist,
-        duration: duration,
-        artUri: Uri.parse(song.thumbnailUrl),
+    // Convert all tracks to MediaItems for lazy loading
+    final queue = _tracks.map((track) {
+      return MediaItem(
+        id: track.videoId, // Use videoId as ID for uniqueness/matching
+        title: track.title,
+        artist: track.artist,
+        artUri: Uri.parse(track.thumbnailUrl),
         extras: {
           'isOnline': true,
-          'videoId': song.videoId,
-          'user_agent': desktopUA,
+          'videoId': track.videoId,
         },
       );
+    }).toList();
 
-      await _audioHandler.updateQueue([mediaItem]);
-      _audioHandler.play();
-    }
+    // Update queue and skip to the selected song
+    await _audioHandler.updateQueue(queue);
+    await _audioHandler.skipToQueueItem(index);
+    _audioHandler.play();
   }
 
   @override
@@ -82,20 +101,44 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
       appBar: AppBar(title: Text(widget.title)),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: _tracks.length,
-              itemBuilder: (context, index) {
-                final song = _tracks[index];
-                return ListTile(
-                  leading: CommonArtwork(url: song.thumbnailUrl, size: 50),
-                  title: Text(song.title,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(song.artist,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  onTap: () => _playSong(song),
-                );
-              },
-            ),
+          : _tracks.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.music_off, size: 64, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No tracks found',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'This playlist might be empty or restricted.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadTracks,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _tracks.length,
+                  itemBuilder: (context, index) {
+                    final song = _tracks[index];
+                    return ListTile(
+                      leading: CommonArtwork(url: song.thumbnailUrl, size: 50),
+                      title: Text(song.title,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(song.artist,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      onTap: () => _playSong(song),
+                    );
+                  },
+                ),
     );
   }
 }

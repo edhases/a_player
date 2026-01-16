@@ -8,6 +8,8 @@ import '../../core/services/audio_handler.dart';
 import '../../core/services/settings_service.dart';
 import '../widgets/common_artwork.dart';
 
+import '../widgets/track_list_tile.dart';
+
 /// Screen displaying all tracks with album art thumbnails.
 /// Poweramp-inspired design with smooth aesthetics.
 class AllTracksScreen extends StatelessWidget {
@@ -83,7 +85,7 @@ class AllTracksScreen extends StatelessWidget {
                   final isCurrentTrack =
                       audioHandler.mediaItem.value?.id == track.path;
 
-                  return _TrackListTile(
+                  return TrackListTile(
                     track: track,
                     isCurrentTrack: isCurrentTrack,
                     onTap: () => _playQueue(audioHandler, tracks, index),
@@ -127,70 +129,5 @@ class AllTracksScreen extends StatelessWidget {
 
     await audioHandler.updateQueue(mediaItems);
     await audioHandler.skipToQueueItem(relativeIndex);
-  }
-}
-
-/// A single track list tile with album art thumbnail.
-class _TrackListTile extends StatelessWidget {
-  final Track track;
-  final bool isCurrentTrack;
-  final VoidCallback onTap;
-
-  const _TrackListTile({
-    required this.track,
-    required this.isCurrentTrack,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SizedBox(
-        width: 50,
-        height: 50,
-        child: CommonArtwork(
-          mediaStoreId: track.mediaStoreId,
-          path: track.path,
-          size: 50,
-        ),
-      ),
-      title: Text(
-        track.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isCurrentTrack ? FontWeight.bold : FontWeight.normal,
-          color: isCurrentTrack ? colorScheme.primary : null,
-        ),
-      ),
-      subtitle: Text(
-        '${track.artist ?? 'Unknown Artist'} • ${track.album ?? 'Unknown Album'}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 12,
-          color: isCurrentTrack
-              ? colorScheme.primary.withValues(alpha: 0.7)
-              : Colors.grey[500],
-        ),
-      ),
-      trailing: Text(
-        _formatDuration(Duration(milliseconds: track.duration)),
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.grey[500],
-        ),
-      ),
-      onTap: onTap,
-    );
-  }
-
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
   }
 }

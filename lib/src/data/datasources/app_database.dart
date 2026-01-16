@@ -21,6 +21,7 @@ class Tracks extends Table {
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
   IntColumn get mediaStoreId => integer().nullable()();
   DateTimeColumn get lastPlayed => dateTime().nullable()();
+  BoolColumn get isExcluded => boolean().withDefault(const Constant(false))();
 
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -81,7 +82,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -107,12 +108,14 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(tracks, tracks.lastPlayed);
           }
           if (from < 9) {
-            // Defensive migration: ensure lastPlayed exists for broken v8 states
             try {
               await m.addColumn(tracks, tracks.lastPlayed);
             } catch (e) {
-              // Ignore if column already exists (valid v8 state)
+              // Ignore if column already exists
             }
+          }
+          if (from < 10) {
+            await m.addColumn(tracks, tracks.isExcluded);
           }
         },
       );
@@ -191,7 +194,10 @@ class AppDatabase extends _$AppDatabase {
 
             return predicate;
           })
-          ..orderBy([(t) => OrderingTerm(expression: t.title)]))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.isExcluded),
+            (t) => OrderingTerm(expression: t.title)
+          ]))
         .get();
   }
 
@@ -219,7 +225,10 @@ class AppDatabase extends _$AppDatabase {
 
             return predicate;
           })
-          ..orderBy([(t) => OrderingTerm(expression: t.title)]))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.isExcluded),
+            (t) => OrderingTerm(expression: t.title)
+          ]))
         .watch();
   }
 
@@ -308,6 +317,17 @@ class AppDatabase extends _$AppDatabase {
 
   Future<HomeCacheEntry?> getCachedHomeData() {
     return select(homeCache).getSingleOrNull();
+  }
+
+  // --- DELETE / EXCLUDE METHODS ---
+  Future<void> setExcluded(String path, bool excluded) async {
+    await (update(tracks)..where((t) => t.path.equals(path))).write(
+      TracksCompanion(isExcluded: Value(excluded)),
+    );
+  }
+
+  Future<void> deleteTrack(String path) async {
+    await (delete(tracks)..where((t) => t.path.equals(path))).go();
   }
 }
 

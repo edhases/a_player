@@ -3,21 +3,36 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'youtube_helper.dart';
 import 'youtube_audio_source.dart';
+import 'cache_service.dart';
 
 class AudioSourceFactory {
   final YouTubeHelper _ytHelper;
+  final CacheService _cacheService;
 
-  AudioSourceFactory(this._ytHelper);
+  AudioSourceFactory(this._ytHelper, this._cacheService);
 
-  AudioSource createSource(MediaItem item) {
+  Future<AudioSource> createSource(MediaItem item) async {
     debugPrint('[AudioSourceFactory] Creating AudioSource for ${item.title}');
 
     // Check if it's an online YouTube track that needs JIT fetching.
     if (item.extras?['isOnline'] == true) {
       final videoId = item.extras!['videoId'] as String;
+
+      // Check cache first
+      if (await _cacheService.isCached(videoId)) {
+        final path = await _cacheService.getCachedFilePath(videoId);
+        if (path != null) {
+          debugPrint('[AudioSourceFactory] Playing from cache: $path');
+          // Update last played in cache service if needed?
+          // Maybe better in AudioHandler when playback starts, but here is fine for now.
+          _cacheService.updateLastPlayed(videoId);
+          return AudioSource.uri(Uri.file(path), tag: item);
+        }
+      }
+
       debugPrint(
           '[AudioSourceFactory] Creating YoutubeAudioSource for videoId: $videoId');
-      return YoutubeAudioSource(videoId, _ytHelper);
+      return YoutubeAudioSource(videoId, _ytHelper, tag: item);
     }
 
     // Handle content URIs from sources like Android MediaStore.

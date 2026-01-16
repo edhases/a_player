@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart'; // Import for SAPISID hash generation
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,10 @@ class GoogleAuthService {
   final GoogleSignIn _googleSignIn;
   static const String _cookieKey = 'auth_cookie';
   static const String _userEmailKey = 'user_email';
+
+  // Stream to broadcast login status changes (true = logged in, false = logged out)
+  final _loginStatusController = StreamController<bool>.broadcast();
+  Stream<bool> get onLoginStatusChanged => _loginStatusController.stream;
 
   GoogleAuthService({FlutterSecureStorage? storage, GoogleSignIn? googleSignIn})
       : _storage = storage ?? const FlutterSecureStorage(),
@@ -23,6 +28,7 @@ class GoogleAuthService {
   /// Зберегти cookies після WebView логіну
   Future<void> saveCookies(String cookieHeader) async {
     await _storage.write(key: _cookieKey, value: cookieHeader);
+    _loginStatusController.add(true); // Added this line
     debugPrint('[GoogleAuthService] Cookies saved');
   }
 
@@ -57,12 +63,13 @@ class GoogleAuthService {
   /// Parsing SAPISID from cookie string
   String? _extractSapisid(String cookieHeader) {
     try {
-      final cookies = cookieHeader.split(';');
-      for (final c in cookies) {
-        final pair = c.trim().split('=');
-        if (pair.length == 2 && pair[0] == 'SAPISID') {
-          return pair[1];
-        }
+      // Use regex to find SAPISID value safely, handling optional quotes and semicolons
+      // Matches: SAPISID=Value; or SAPISID=Value at end of string
+      final regex = RegExp(r'(?:^|;\s*)SAPISID=([^;]+)');
+      final match = regex.firstMatch(cookieHeader);
+
+      if (match != null) {
+        return match.group(1)?.trim();
       }
     } catch (e) {
       debugPrint('[GoogleAuthService] Error extracting SAPISID: $e');
@@ -99,6 +106,7 @@ class GoogleAuthService {
   Future<void> signOut() async {
     await _storage.delete(key: _cookieKey);
     await _storage.delete(key: _userEmailKey);
+    _loginStatusController.add(false); // Added this line
     debugPrint('[GoogleAuthService] User signed out');
   }
 

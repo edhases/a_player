@@ -15,6 +15,7 @@ import '../../../domain/entities/youtube_song.dart';
 import '../common_artwork.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../../core/utils/result.dart';
+import '../../pages/playlist_tracks_screen.dart';
 
 class MusicSearchDelegate extends SearchDelegate<Track?> {
   final AppDatabase db;
@@ -287,6 +288,22 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
   }
 
   Future<void> _playYouTubeTrack(BuildContext context, YouTubeSong song) async {
+    // 1. If it's a playlist/album, navigate to details
+    if (song.isPlaylist && song.playlistId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PlaylistTracksScreen(
+            playlistId: song.playlistId!,
+            title: song.title,
+            knownArtist: song.artist,
+            knownThumbnail: song.thumbnailUrl,
+          ),
+        ),
+      );
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Fetching audio stream...'),
         duration: Duration(seconds: 1)));

@@ -10,10 +10,14 @@ import '../../data/datasources/app_database.dart';
 import 'settings_service.dart';
 import 'equalizer_service.dart';
 // Add import for YouTubeHelper
-import 'youtube_helper.dart';
+// Add import for YouTubeHelper
+
 import '../../domain/entities/youtube_song.dart';
 import '../utils/media_item_adapter.dart';
 import 'audio_source_factory.dart';
+import '../../core/services/recommendation_service.dart';
+import '../../core/services/metadata_matching_service.dart';
+import '../../data/models/local_track_override.dart';
 
 /// The main audio handler that bridges just_audio with audio_service.
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -22,10 +26,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final _settingsService = GetIt.I<SettingsService>();
   final AppDatabase _db;
   // Add YouTubeHelper reference
-  late final YouTubeHelper _ytHelper;
   late final AudioSourceFactory _audioSourceFactory;
+  late final RecommendationService _recommendationService;
+  late final MetadataMatchingService _metadataService;
 
   StreamSubscription<int?>? _audioSessionIdSubscription;
+  StreamSubscription<LocalTrackOverride?>? _currentOverrideSubscription;
   bool _isInitialized = false;
 
   MyAudioHandler(this._db) {
@@ -41,11 +47,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Initialize YouTubeHelper if not already registered
     try {
-      _ytHelper = GetIt.I<YouTubeHelper>();
-      _audioSourceFactory = AudioSourceFactory(_ytHelper);
+      _audioSourceFactory = GetIt.I<AudioSourceFactory>();
+      _recommendationService = GetIt.I<RecommendationService>();
+      _metadataService = GetIt.I<MetadataMatchingService>();
     } catch (e) {
       debugPrint(
-          '[AudioHandler] YouTubeHelper not yet registered, will be lazy-loaded');
+          '[AudioHandler] Dependencies not yet registered, will be lazy-loaded: $e');
     }
 
     // Enable AudioSession configuration safely
@@ -83,6 +90,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         debugPrint(
             '[AudioHandler] Current index changed to: $index (${item.title})');
         mediaItem.add(item);
+
+        // Setup watcher for this new track
+        _setupOverrideWatcher(item.id);
+      } else {
+        _currentOverrideSubscription?.cancel();
       }
     });
 
@@ -100,6 +112,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
       }
     });
+
+    // ... rest of init
 
     // Save state persistence
     mediaItem.stream.listen((item) {
@@ -181,6 +195,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       GetIt.I.unregister<EqualizerService>();
     }
     _audioSessionIdSubscription?.cancel();
+    _currentOverrideSubscription?.cancel();
     await player.stop();
     await super.stop();
   }
@@ -238,7 +253,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> updateQueue(List<MediaItem> queue) async {
-    final start = DateTime.now();
     debugPrint('[AudioHandler] updateQueue called with ${queue.length} items');
 
     if (const ListEquality().equals(this.queue.value, queue)) {
@@ -248,28 +262,93 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     this.queue.add(queue);
 
-    // Perform the heavy setAudioSource operation in the background
-    // to avoid potential main-thread stalls on emulators.
-    _updateSourceInBackground(queue, start);
+    // Reuse the existing _playlist instance to ensure future queue modifications (like playNext)
+    // affect the active player source.
+    try {
+      await _playlist.clear();
+      final sources = await Future.wait(
+          queue.map((item) => _audioSourceFactory.createSource(item)));
+      await _playlist.addAll(sources);
+      debugPrint('[AudioHandler] updateQueue: _playlist updated');
+    } catch (e) {
+      debugPrint('[AudioHandler] updateQueue error: $e');
+    }
+  }
+
+  Future<LocalTrackOverride?> _getOverride(String path) async {
+    try {
+      if (GetIt.I.isRegistered<MetadataMatchingService>()) {
+        return await GetIt.I<MetadataMatchingService>().getTrackOverride(path);
+      }
+    } catch (e) {
+      // Service might not be ready
+    }
+    return null;
+  }
+
+  @override
+  Future<void> addQueueItem(MediaItem mediaItem) async {
+    await super.addQueueItem(mediaItem);
+    try {
+      final source = await _audioSourceFactory.createSource(mediaItem);
+      await _playlist.add(source);
+      debugPrint(
+          '[AudioHandler] addQueueItem: Added ${mediaItem.title} to _playlist');
+    } catch (e) {
+      debugPrint('[AudioHandler] addQueueItem error: $e');
+    }
+  }
+
+  Future<void> addToQueue(Track track) async {
+    final override = await _getOverride(track.path);
+    final item = MediaItemAdapter.fromTrack(track, override);
+
+    // Use the overridden addQueueItem to ensure both queue and playlist are updated
+    await addQueueItem(item);
+
+    debugPrint(
+        '[AudioHandler] Added to queue: ${track.title} (Override: ${override != null})');
+  }
+
+  Future<void> playNext(Track track) async {
+    final override = await _getOverride(track.path);
+    final item = MediaItemAdapter.fromTrack(track, override);
+    final index = player.currentIndex ?? 0;
+
+    // Insert after current item
+    await insertQueueItem(index + 1, item);
+
+    // Manually update the playlist source since insertQueueItem default implementation
+    // only updates the queue stream.
+    try {
+      final source = await _audioSourceFactory.createSource(item);
+      await _playlist.insert(index + 1, source);
+      debugPrint(
+          '[AudioHandler] Playing next: ${track.title} (Override: ${override != null})');
+    } catch (e) {
+      debugPrint('[AudioHandler] playNext error: $e');
+    }
   }
 
   Future<void> playLocalTrack(Track track) async {
-    final mediaItem = MediaItemAdapter.fromTrack(track);
+    final override = await _getOverride(track.path);
+    final mediaItem = MediaItemAdapter.fromTrack(track, override);
 
-    debugPrint('[AudioHandler] playLocalTrack: ${track.title}');
+    debugPrint(
+        '[AudioHandler] playLocalTrack: ${mediaItem.title} (Override: ${override != null})');
 
     // Clear and set new queue to bypass "identical" check
     queue.add([mediaItem]);
 
-    // Create and set audio source directly
-    final source = _audioSourceFactory.createSource(mediaItem);
-    final concatenatingSource = ConcatenatingAudioSource(
-      children: [source],
-      useLazyPreparation: false,
-    );
-
     try {
-      await player.setAudioSource(concatenatingSource, preload: true);
+      // CLEAR and REFILL the existing _playlist instead of setting a new source.
+      // This keeps _playlist connected to the player.
+      await _playlist.clear();
+      final source = await _audioSourceFactory.createSource(mediaItem);
+      await _playlist.add(source);
+
+      // Seek to beginning and play
+      await player.seek(Duration.zero, index: 0);
       await player.play();
       debugPrint(
           '[AudioHandler] playLocalTrack: Started playing ${track.title}');
@@ -278,23 +357,39 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<void> addYouTubeToQueue(YouTubeSong song) async {
+    final mediaItem = MediaItemAdapter.fromYouTubeSong(song);
+    debugPrint('[AudioHandler] addYouTubeToQueue: ${song.title}');
+    await addQueueItem(mediaItem);
+  }
+
   Future<void> playYouTubeSong(YouTubeSong song) async {
     final mediaItem = MediaItemAdapter.fromYouTubeSong(song);
 
     debugPrint('[AudioHandler] playYouTubeSong: ${song.title}');
 
+    // Record history
+    _recommendationService
+        .addToHistoryManual(
+      videoId: song.videoId,
+      title: song.title,
+      artist: song.artist,
+      thumbnailUrl: song.thumbnailUrl,
+    )
+        .catchError((e) {
+      debugPrint('[AudioHandler] Error adding to history: $e');
+    });
+
     // Clear and set new queue to bypass "identical" check
     queue.add([mediaItem]);
 
-    // Create and set audio source directly
-    final source = _audioSourceFactory.createSource(mediaItem);
-    final concatenatingSource = ConcatenatingAudioSource(
-      children: [source],
-      useLazyPreparation: false, // Start loading immediately
-    );
-
     try {
-      await player.setAudioSource(concatenatingSource, preload: true);
+      // Mutate existing _playlist
+      await _playlist.clear();
+      final source = await _audioSourceFactory.createSource(mediaItem);
+      await _playlist.add(source);
+
+      await player.seek(Duration.zero, index: 0);
       await player.play();
       debugPrint(
           '[AudioHandler] playYouTubeSong: Started playing ${song.title}');
@@ -303,22 +398,60 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
-  Future<void> _updateSourceInBackground(
-      List<MediaItem> newQueue, DateTime start) async {
-    try {
-      debugPrint(
-          '[AudioHandler] Background: Preparing ConcatenatingAudioSource...');
-      final newSource = ConcatenatingAudioSource(
-        children: newQueue.map(_audioSourceFactory.createSource).toList(),
-        useLazyPreparation: true,
-      );
+  void _setupOverrideWatcher(String trackPath) {
+    _currentOverrideSubscription?.cancel();
 
-      debugPrint('[AudioHandler] Background: Setting audio source...');
-      await player.setAudioSource(newSource, preload: false);
-      debugPrint(
-          '[AudioHandler] Background: Source set in ${DateTime.now().difference(start).inMilliseconds}ms');
-    } catch (e) {
-      debugPrint('[AudioHandler] Background Error: $e');
+    final currentItem = mediaItem.value;
+    // CRITICAL FIX: Do not look up overrides for online tracks (YouTube).
+    // They already have correct metadata and shouldn't valid against local DB.
+    if (currentItem?.extras?['isOnline'] == true) {
+      debugPrint('[AudioHandler] Skipping override watcher for online track');
+      return;
+    }
+
+    // Only watch if we have the service and it's a local path
+    if (GetIt.I.isRegistered<MetadataMatchingService>()) {
+      _currentOverrideSubscription = GetIt.I<MetadataMatchingService>()
+          .watchTrackOverride(trackPath)
+          .listen((override) {
+        if (override == null) return;
+
+        final currentItem = mediaItem.value;
+        if (currentItem?.id == trackPath) {
+          debugPrint(
+              '[AudioHandler] Live override update for ${currentItem?.title}. Override: ${override.correctArtist} / ${override.thumbnailUrl}');
+
+          // Defensive check: Don't downgrade metadata to "Unknown"
+          String? newArtist = override.correctArtist;
+          if ((newArtist == 'Unknown' ||
+                  newArtist == null ||
+                  newArtist.isEmpty) &&
+              currentItem?.artist != null &&
+              currentItem!.artist != 'Unknown') {
+            debugPrint(
+                '[AudioHandler] Ignoring override artist "$newArtist" because current is "${currentItem.artist}"');
+            newArtist = currentItem.artist;
+          }
+
+          final newItem = currentItem!.copyWith(
+            title: override.correctTitle ?? currentItem.title,
+            artist: newArtist ?? currentItem.artist,
+            artUri: override.thumbnailUrl != null &&
+                    override.thumbnailUrl!.isNotEmpty
+                ? Uri.parse(override.thumbnailUrl!)
+                : currentItem.artUri,
+          );
+          mediaItem.add(newItem);
+
+          // Also update in queue
+          final index = queue.value.indexWhere((i) => i.id == trackPath);
+          if (index != -1) {
+            final newQueue = List<MediaItem>.from(queue.value);
+            newQueue[index] = newItem;
+            queue.add(newQueue);
+          }
+        }
+      });
     }
   }
 
@@ -337,36 +470,22 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (sortedTracks.isEmpty) return;
 
-    final mediaItems = sortedTracks.map((track) {
-      final extras = <String, dynamic>{};
-      if ((track as dynamic).mediaStoreId != null) {
-        extras['mediaStoreId'] = (track as dynamic).mediaStoreId;
-      }
+    // Load overrides for all tracks in parallel
+    final overrides = await Future.wait(
+      sortedTracks.map((t) => _getOverride(t.path)),
+    );
 
-      return MediaItem(
-        id: track.path,
-        album: track.album ?? '',
-        title: track.title,
-        artist: track.artist,
-        duration: Duration(milliseconds: track.duration),
-        extras: extras.isEmpty ? null : extras,
-      );
-    }).toList();
+    final mediaItems = List<MediaItem>.generate(sortedTracks.length, (index) {
+      return MediaItemAdapter.fromTrack(sortedTracks[index], overrides[index]);
+    });
 
     queue.add(mediaItems);
     try {
       if (mediaItems.isNotEmpty) {
-        // Ensure factory is initialized if we have items
-        if (!_isInitialized)
-          await _init(); // Should be init by now but safe check
-        // Or if helper not registered, we can't create online sources
-        // Assuming persistence primarily for local tracks or YT logic handles lazy loading
-
-        // If factory exists (init called and passed try/catch)
-        // Actually _init is called in constructor.
-
-        await _playlist
-            .addAll(mediaItems.map(_audioSourceFactory.createSource).toList());
+        if (!_isInitialized) await _init();
+        final sources = await Future.wait(
+            mediaItems.map((item) => _audioSourceFactory.createSource(item)));
+        await _playlist.addAll(sources);
       }
     } catch (e) {
       debugPrint('[AudioHandler] Error loading initial playlist: $e');

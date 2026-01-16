@@ -4,6 +4,12 @@ class YouTubeSong {
   final String artist;
   final String thumbnailUrl;
   final int duration; // Duration in seconds
+  final bool isLive;
+
+  // New fields for mixed content
+  final String? playlistId;
+  final bool isPlaylist;
+  final String category; // e.g. "Single", "Album", "Playlist", "Song"
 
   YouTubeSong({
     required this.videoId,
@@ -11,10 +17,42 @@ class YouTubeSong {
     required this.artist,
     required this.thumbnailUrl,
     this.duration = 0,
+    this.isLive = false,
+    this.playlistId,
+    this.isPlaylist = false,
+    this.category = '',
   });
 
+  YouTubeSong copyWith({
+    String? videoId,
+    String? title,
+    String? artist,
+    String? thumbnailUrl,
+    int? duration,
+    bool? isLive,
+    String? playlistId,
+    bool? isPlaylist,
+    String? category,
+  }) {
+    return YouTubeSong(
+      videoId: videoId ?? this.videoId,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      duration: duration ?? this.duration,
+      isLive: isLive ?? this.isLive,
+      playlistId: playlistId ?? this.playlistId,
+      isPlaylist: isPlaylist ?? this.isPlaylist,
+      category: category ?? this.category,
+    );
+  }
+
+  // Helper to identify functionality
+  bool get isMix => isPlaylist || (playlistId != null && videoId.isNotEmpty);
+
   @override
-  String toString() => '$title - $artist ($videoId)';
+  String toString() =>
+      'YouTubeSong(title: $title, id: $videoId, isPlaylist: $isPlaylist)';
 
   Map<String, dynamic> toJson() => {
         'videoId': videoId,
@@ -22,5 +60,8 @@ class YouTubeSong {
         'artist': artist,
         'thumbnailUrl': thumbnailUrl,
         'duration': duration,
+        'isLive': isLive,
+        'playlistId': playlistId,
+        'isPlaylist': isPlaylist,
       };
 }

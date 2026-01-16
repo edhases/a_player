@@ -28,6 +28,7 @@ class AppLocalizations {
       'equalizer': 'Equalizer',
       'sleep_timer': 'Sleep Timer',
       'quick_picks': 'Quick Picks',
+      'quick_access': 'Quick Access',
       'listen_again': 'Listen Again',
       'community': 'Community',
       'local_albums': 'Local Albums',
@@ -54,6 +55,25 @@ class AppLocalizations {
       'reauth': 'Re-authenticate',
       'reauth_desc': 'Update cookies for YouTube Music',
       'cookies_updated': 'Cookies updated successfully!',
+      'single': 'Single',
+      'song_type': 'Song',
+      'playlist_type': 'Playlist',
+      'album_type': 'Album',
+      'ep_type': 'EP',
+      'unknown_artist': 'Unknown Artist',
+      'recommended_for_you': 'Recommended for You',
+      'trending_now': 'Trending Now',
+      'made_for_you': 'Made for You',
+      'share_track': 'Share Track',
+      'stop_timer': 'Stop Timer',
+      'set_sleep_timer': 'Set Sleep Timer',
+      'minutes_suffix': 'minutes',
+      'no_history': 'No history yet',
+      'add_to_queue': 'Add to Queue',
+      'play_now': 'Play Now',
+      'queue_added': 'Added to queue',
+      'your_library': 'Your Library',
+      'last_played_title': 'Last Played',
     },
     'uk': {
       'home': 'Головна',
@@ -73,6 +93,7 @@ class AppLocalizations {
       'equalizer': 'Еквалайзер',
       'sleep_timer': 'Таймер сну',
       'quick_picks': 'Швидкий вибір',
+      'quick_access': 'Швидкий доступ',
       'listen_again': 'Слухати знову',
       'community': 'Спільнота',
       'local_albums': 'Локальні альбоми',
@@ -99,6 +120,25 @@ class AppLocalizations {
       'reauth': 'Переавторизуватися',
       'reauth_desc': 'Оновити cookies для YouTube Music',
       'cookies_updated': 'Cookies оновлено успішно!',
+      'single': 'Сингл',
+      'song_type': 'Пісня',
+      'playlist_type': 'Плейлист',
+      'album_type': 'Альбом',
+      'ep_type': 'EP',
+      'unknown_artist': 'Невідомий виконавець',
+      'recommended_for_you': 'Рекомендовано для вас',
+      'trending_now': 'Зараз у тренді',
+      'made_for_you': 'Створено для вас',
+      'share_track': 'Поділитися',
+      'stop_timer': 'Зупинити таймер',
+      'set_sleep_timer': 'Налаштувати таймер',
+      'minutes_suffix': 'хв',
+      'no_history': 'Історія порожня',
+      'add_to_queue': 'Додати в чергу',
+      'play_now': 'Слухати зараз',
+      'queue_added': 'Додано в чергу',
+      'your_library': 'Ваша бібліотека',
+      'last_played_title': 'Останні прослухані',
     },
   };
 
@@ -121,6 +161,8 @@ class AppLocalizations {
       _localizedValues[locale.languageCode]!['sleep_timer']!;
   String get quickPicks =>
       _localizedValues[locale.languageCode]!['quick_picks']!;
+  String get quickAccess =>
+      _localizedValues[locale.languageCode]!['quick_access']!;
   String get listenAgain =>
       _localizedValues[locale.languageCode]!['listen_again']!;
   String get community => _localizedValues[locale.languageCode]!['community']!;
@@ -157,6 +199,40 @@ class AppLocalizations {
       _localizedValues[locale.languageCode]!['reauth_desc']!;
   String get cookiesUpdated =>
       _localizedValues[locale.languageCode]!['cookies_updated']!;
+
+  // New keys getters
+  String get single => _localizedValues[locale.languageCode]!['single']!;
+  String get songType => _localizedValues[locale.languageCode]!['song_type']!;
+  String get playlistType =>
+      _localizedValues[locale.languageCode]!['playlist_type']!;
+  String get albumType => _localizedValues[locale.languageCode]!['album_type']!;
+  String get epType => _localizedValues[locale.languageCode]!['ep_type']!;
+  String get unknownArtist =>
+      _localizedValues[locale.languageCode]!['unknown_artist']!;
+  String get recommendedForYou =>
+      _localizedValues[locale.languageCode]!['recommended_for_you']!;
+  String get trendingNow =>
+      _localizedValues[locale.languageCode]!['trending_now']!;
+  String get madeForYou =>
+      _localizedValues[locale.languageCode]!['made_for_you']!;
+
+  String get shareTrack =>
+      _localizedValues[locale.languageCode]!['share_track']!;
+  String get stopTimer => _localizedValues[locale.languageCode]!['stop_timer']!;
+  String get setSleepTimer =>
+      _localizedValues[locale.languageCode]!['set_sleep_timer']!;
+  String get minutesSuffix =>
+      _localizedValues[locale.languageCode]!['minutes_suffix']!;
+  String get noHistory => _localizedValues[locale.languageCode]!['no_history']!;
+  String get addToQueue =>
+      _localizedValues[locale.languageCode]!['add_to_queue']!;
+  String get playNow => _localizedValues[locale.languageCode]!['play_now']!;
+  String get queueAdded =>
+      _localizedValues[locale.languageCode]!['queue_added']!;
+  String get yourLibrary =>
+      _localizedValues[locale.languageCode]!['your_library']!;
+  String get lastPlayedTitle =>
+      _localizedValues[locale.languageCode]!['last_played_title']!;
 
   // Helper method for dynamic keys
   String translate(String key) {

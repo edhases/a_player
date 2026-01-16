@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:metadata_god/metadata_god.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import '../../../main.dart' show isMetadataGodAvailable;
 
 /// A unified widget for displaying audio artwork.
 /// Prioritizes on_audio_query (fast) using mediaStoreId, falls back to direct file reading.
@@ -72,27 +70,6 @@ class CommonArtwork extends StatelessWidget {
     // CRITICAL: Never use MetadataGod on network URLs (http/https).
     // It will try to download/stream the file to read ID3 tags, causing huge lags.
     // Also check if MetadataGod is available (native library loaded successfully).
-    if (path != null && !path!.startsWith('http') && isMetadataGodAvailable) {
-      return FutureBuilder<Metadata?>(
-        future: _safeReadMetadata(path!),
-        builder: (context, snapshot) {
-          final artwork = snapshot.data?.picture?.data;
-          if (artwork != null) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(radius),
-              child: Image.memory(
-                artwork,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-              ),
-            );
-          }
-          return _buildPlaceholder(context);
-        },
-      );
-    }
 
     return _buildPlaceholder(context);
   }
@@ -111,15 +88,5 @@ class CommonArtwork extends StatelessWidget {
         size: size * 0.5,
       ),
     );
-  }
-
-  /// Safe wrapper for MetadataGod.readMetadata that catches errors
-  static Future<Metadata?> _safeReadMetadata(String path) async {
-    try {
-      return await MetadataGod.readMetadata(file: path);
-    } catch (e) {
-      debugPrint('[CommonArtwork] MetadataGod error: $e');
-      return null;
-    }
   }
 }
