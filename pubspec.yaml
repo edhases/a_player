@@ -1,7 +1,7 @@
 name: oxide_player
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.0+27
+version: 22.8.160126+28
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -63,6 +63,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  analyzer: ^5.13.0
   drift_dev: ^2.14.0
   build_runner: ^2.4.8
   injectable_generator: ^2.4.1
@@ -73,3 +74,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/audio/
+    - assets/lang/

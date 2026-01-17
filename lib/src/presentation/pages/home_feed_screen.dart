@@ -4,15 +4,17 @@ import 'package:get_it/get_it.dart';
 import '../widgets/square_song_card.dart';
 import '../widgets/paged_song_grid.dart';
 import '../widgets/compact_song_tile.dart';
-import '../widgets/song_card.dart';
+
 import '../../domain/entities/home_section.dart';
 import '../../core/services/recommendation_service.dart';
 import '../../core/services/audio_handler.dart';
 import '../../domain/entities/youtube_song.dart';
+import '../../core/services/innertube_service.dart';
 import 'playlist_tracks_screen.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/services/favorites_service.dart';
+import '../../core/utils/localization.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -24,6 +26,7 @@ class HomeFeedScreen extends StatefulWidget {
 class _HomeFeedScreenState extends State<HomeFeedScreen> {
   final RecommendationService _recommendationService =
       GetIt.I<RecommendationService>();
+  final InnerTubeService _innerTube = GetIt.I<InnerTubeService>();
 
   List<HomeSection> _sections = [];
   bool _isLoading = true;
@@ -62,25 +65,70 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     }
   }
 
-  void _onSongTap(YouTubeSong song) {
-    if (song.isPlaylist && song.playlistId != null) {
-      // Navigate to Playlist Detail
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => PlaylistTracksScreen(
-            playlistId: song.playlistId!,
-            title: song.title,
-            knownArtist: song.artist,
-            knownThumbnail: song.thumbnailUrl,
-          ),
-        ),
+  Future<void> _onSongTap(YouTubeSong song) async {
+    // smart play logic
+    final isSuspectId = song.videoId.length != 11 && song.videoId.isNotEmpty;
+    final isPlaylist =
+        song.isPlaylist || (song.playlistId != null) || isSuspectId;
+    final playlistId = song.playlistId ?? (isSuspectId ? song.videoId : null);
+
+    if (isPlaylist && playlistId != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Loading ${song.title}...'),
+            duration: const Duration(seconds: 1)),
       );
+
+      try {
+        final tracks = await _innerTube.getPlaylistTracks(playlistId);
+        if (!mounted) return;
+
+        if (tracks.length == 1) {
+          var singleTrack = tracks.first;
+          singleTrack = singleTrack.copyWith(
+            artist:
+                (singleTrack.artist == 'Unknown' || singleTrack.artist.isEmpty)
+                    ? song.artist
+                    : singleTrack.artist,
+            thumbnailUrl: (singleTrack.thumbnailUrl.isEmpty)
+                ? song.thumbnailUrl
+                : singleTrack.thumbnailUrl,
+          );
+
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Playing ${singleTrack.title}...'),
+                duration: const Duration(seconds: 1)),
+          );
+          await GetIt.I<MyAudioHandler>().playYouTubeSong(singleTrack);
+        } else {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => PlaylistTracksScreen(
+                playlistId: playlistId,
+                title: song.title,
+                knownArtist: song.artist,
+                knownThumbnail: song.thumbnailUrl,
+                preloadedTracks: tracks,
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } else {
-      // Play Song
       GetIt.I<MyAudioHandler>().playYouTubeSong(song);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Playing ${song.title}')),
+          SnackBar(
+              content: Text('Playing ${song.title}...'),
+              duration: const Duration(seconds: 1)),
         );
       }
     }
@@ -123,7 +171,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.queue_music),
-                title: const Text('Add to Queue'),
+                title: Text(AppLocalizations.of(context).addToQueue),
                 onTap: () {
                   audioHandler.addYouTubeToQueue(song);
                   Navigator.pop(context);
@@ -166,7 +214,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               floating: true,
               pinned: false,
               snap: true,
-              title: const Text('Made for You'),
+              title: Text(AppLocalizations.of(context).madeForYou),
               centerTitle: false,
               automaticallyImplyLeading: false,
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -193,15 +241,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: _loadRecommendations,
-                        child: const Text('Retry'),
+                        child: Text(AppLocalizations.of(context).retry),
                       ),
                     ],
                   ),
                 ),
               )
             else if (_sections.isEmpty)
-              const SliverFillRemaining(
-                child: Center(child: Text('No recommendations found.')),
+              SliverFillRemaining(
+                child: Center(
+                    child: Text(AppLocalizations.of(context).noMatchFound)),
               )
             else
               ..._sections.expand(_buildSectionSlivers),

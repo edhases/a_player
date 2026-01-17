@@ -107,22 +107,95 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   }
 
   void _playSong(YouTubeSong song) async {
-    // If it's a container (Album/Playlist/Single), navigate to it instead of trying to play the container ID
-    if (song.isPlaylist && song.playlistId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PlaylistTracksScreen(
-            playlistId: song.playlistId!,
-            title: song.title,
-            knownArtist: song.artist,
-            knownThumbnail: song.thumbnailUrl,
-          ),
+    debugPrint('[SmartPlay] _playSong called for: ${song.title}');
+
+    // Check for explicit playlist OR suspect videoId (Album ID)
+    // Standard YouTube video IDs are 11 characters. If it's different, it's likely an Album/Playlist ID.
+    final isSuspectId = song.videoId.length != 11 && song.videoId.isNotEmpty;
+    final isPlaylist =
+        song.isPlaylist || (song.playlistId != null) || isSuspectId;
+    final playlistId = song.playlistId ?? (isSuspectId ? song.videoId : null);
+
+    debugPrint(
+        '[SmartPlay] isPlaylist: $isPlaylist, playlistId: $playlistId (Suspect: $isSuspectId)');
+
+    // If it's a container (Album/Playlist/Single), we need to check its contents
+    if (isPlaylist && playlistId != null) {
+      if (!mounted) return;
+
+      // Show loading feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Loading ${song.title}...'),
+          duration: const Duration(seconds: 1),
         ),
       );
+
+      try {
+        debugPrint(
+            '[SmartPlay] Fetching tracks for playlistId: $playlistId...');
+        // Fetch tracks first to decide what to do
+        final tracks = await _innerTube.getPlaylistTracks(playlistId);
+        debugPrint('[SmartPlay] Fetched ${tracks.length} tracks.');
+
+        if (!mounted) return;
+
+        // Smart Play Logic
+        if (tracks.length == 1) {
+          debugPrint('[SmartPlay] Single track found. Playing directly.');
+          // It's a Single (or one-track album) -> Play directly
+          var singleTrack = tracks.first;
+
+          // Merge metadata from the container 'song' if useful
+          // (Preserves the beautiful card artwork and correct artist name)
+          singleTrack = singleTrack.copyWith(
+            artist:
+                (singleTrack.artist == 'Unknown' || singleTrack.artist.isEmpty)
+                    ? song.artist
+                    : singleTrack.artist,
+            thumbnailUrl: (singleTrack.thumbnailUrl.isEmpty)
+                ? song.thumbnailUrl
+                : singleTrack.thumbnailUrl,
+          );
+
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Playing ${singleTrack.title}...'),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+
+          await _audioHandler.playYouTubeSong(singleTrack);
+        } else {
+          debugPrint(
+              '[SmartPlay] Multiple tracks found (${tracks.length}). Navigating to playlist screen.');
+          // Multiple tracks -> Navigate to details (with preloaded data)
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PlaylistTracksScreen(
+                playlistId: playlistId,
+                title: song.title,
+                knownArtist: song.artist,
+                knownThumbnail: song.thumbnailUrl,
+                preloadedTracks: tracks, // Pass the data we just fetched
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('[SmartPlay] Error: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading playlist: $e')),
+        );
+      }
       return;
     }
 
+    debugPrint('[SmartPlay] Not a playlist container. Playing regular song.');
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -142,7 +215,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('YouTube Music'),
+        title: const Text('YouTube Music (v4)'),
         actions: [
           if (_isLoggedIn)
             IconButton(
@@ -248,9 +321,9 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -289,15 +362,17 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
                 final playlist = _playlists[index];
                 return GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlaylistTracksScreen(
-                          playlistId: playlist['playlistId'],
-                          title: playlist['title'],
-                        ),
-                      ),
+                    final song = YouTubeSong(
+                      videoId: playlist['playlistId'],
+                      title: playlist['title'],
+                      artist:
+                          'Unknown', // Library playlists usually don't have artist info here
+                      thumbnailUrl: playlist['thumbnail'],
+                      isPlaylist: true,
+                      playlistId: playlist['playlistId'],
+                      category: 'Playlist',
                     );
+                    _playSong(song);
                   },
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,10 +418,13 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
         items.add(item);
       } else if (item is Map<String, dynamic>) {
         items.add(YouTubeSong(
-          videoId: item['videoId'],
-          title: item['title'],
-          artist: item['artist'],
-          thumbnailUrl: item['thumbnailUrl'],
+          videoId: item['videoId'] ?? '',
+          title: item['title'] ?? '',
+          artist: item['artist'] ?? '',
+          thumbnailUrl: item['thumbnailUrl'] ?? '',
+          isPlaylist: item['isPlaylist'] ?? false,
+          playlistId: item['playlistId'],
+          category: item['category'] ?? '',
         ));
       }
     }

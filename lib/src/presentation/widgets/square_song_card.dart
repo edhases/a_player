@@ -58,24 +58,26 @@ class SquareSongCard extends StatelessWidget {
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.queue_music),
-                title: const Text('Add to Queue'),
+                title: Text(AppLocalizations.of(context).addToQueue),
                 onTap: () {
                   audioHandler.addYouTubeToQueue(song);
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Added to Queue'),
-                        duration: Duration(seconds: 1)),
+                    SnackBar(
+                        content: Text(AppLocalizations.of(context).queueAdded),
+                        duration: const Duration(seconds: 1)),
                   );
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.download),
-                title: const Text('Download'),
+                title: Text(AppLocalizations.of(context).download),
                 onTap: () async {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Starting download...')),
+                    SnackBar(
+                        content: Text(
+                            AppLocalizations.of(context).startingDownload)),
                   );
                   try {
                     final ytHelper = GetIt.I<YouTubeHelper>();
@@ -90,7 +92,10 @@ class SquareSongCard extends StatelessWidget {
                       );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Downloaded: ${song.title}')),
+                          SnackBar(
+                              content: Text(AppLocalizations.of(context)
+                                  .translate('downloaded',
+                                      args: {'title': song.title}))),
                         );
                       }
                     } else {
@@ -100,7 +105,10 @@ class SquareSongCard extends StatelessWidget {
                     debugPrint('Download error: $e');
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Download failed: $e')),
+                        SnackBar(
+                            content: Text(AppLocalizations.of(context)
+                                .translate('download_error',
+                                    args: {'error': e}))),
                       );
                     }
                   }
@@ -108,8 +116,9 @@ class SquareSongCard extends StatelessWidget {
               ),
               ListTile(
                 leading: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
-                title: Text(
-                    isLiked ? 'Remove from Favorites' : 'Add to Favorites'),
+                title: Text(isLiked
+                    ? AppLocalizations.of(context).removeFromFavorites
+                    : AppLocalizations.of(context).addToFavorites),
                 onTap: () {
                   GetIt.I<FavoritesService>().toggleFavorite(
                     videoId: song.videoId,
@@ -188,8 +197,10 @@ class SquareSongCard extends StatelessWidget {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(isLiked
-                                      ? 'Removed from Favorites'
-                                      : 'Added to Favorites'),
+                                      ? AppLocalizations.of(context)
+                                          .removedFromFavorites
+                                      : AppLocalizations.of(context)
+                                          .addedToFavorites),
                                   duration: const Duration(seconds: 1),
                                 ),
                               );

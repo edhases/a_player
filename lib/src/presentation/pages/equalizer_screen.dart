@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/equalizer_service.dart';
+import '../../core/utils/localization.dart';
 
 class EqualizerScreen extends StatefulWidget {
   const EqualizerScreen({super.key});
@@ -26,16 +27,16 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     // If the service isn't ready, show a message.
     if (!GetIt.I.isRegistered<EqualizerService>()) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Equalizer')),
-        body: const Center(
-          child: Text('Play a track to activate the equalizer.'),
+        appBar: AppBar(title: Text(AppLocalizations.of(context).equalizer)),
+        body: Center(
+          child: Text(AppLocalizations.of(context).equalizerActivate),
         ),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Equalizer'),
+        title: Text(AppLocalizations.of(context).equalizer),
         actions: [
           ValueListenableBuilder<bool>(
             valueListenable: _equalizerService.isEnabled,
@@ -69,9 +70,9 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
       builder: (context, currentPreset, child) {
         return DropdownButtonFormField<String>(
           value: currentPreset,
-          decoration: const InputDecoration(
-            labelText: 'Preset',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: AppLocalizations.of(context).preset,
+            border: const OutlineInputBorder(),
           ),
           items: _equalizerService.presetNames
               .map((name) => DropdownMenuItem(value: name, child: Text(name)))
@@ -93,7 +94,8 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           crossAxisAlignment: CrossAxisAlignment.center,
-          children: List.generate(_equalizerService.centerFreqs.length, (index) {
+          children:
+              List.generate(_equalizerService.centerFreqs.length, (index) {
             final freq = _equalizerService.centerFreqs[index];
             final level = bandLevels[index];
             return Column(

@@ -28,7 +28,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // Add YouTubeHelper reference
   late final AudioSourceFactory _audioSourceFactory;
   late final RecommendationService _recommendationService;
-  late final MetadataMatchingService _metadataService;
 
   StreamSubscription<int?>? _audioSessionIdSubscription;
   StreamSubscription<LocalTrackOverride?>? _currentOverrideSubscription;
@@ -49,7 +48,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       _audioSourceFactory = GetIt.I<AudioSourceFactory>();
       _recommendationService = GetIt.I<RecommendationService>();
-      _metadataService = GetIt.I<MetadataMatchingService>();
     } catch (e) {
       debugPrint(
           '[AudioHandler] Dependencies not yet registered, will be lazy-loaded: $e');

@@ -145,7 +145,6 @@ class OxidePlayerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final musicFinder = GetIt.I<MusicFinder>();
     final localizationService = Provider.of<LocalizationService>(context);
 
     return MaterialApp(
@@ -156,6 +155,10 @@ class OxidePlayerApp extends StatelessWidget {
       supportedLocales: const [
         Locale('en', ''),
         Locale('uk', ''),
+        Locale('de', ''),
+        Locale('pl', ''),
+        Locale('es', ''),
+        Locale('ja', ''),
       ],
       localizationsDelegates: const [
         AppLocalizationsDelegate(),

@@ -7,6 +7,7 @@ import '../../core/services/music_finder.dart';
 import '../../core/services/audio_handler.dart';
 import '../../core/services/settings_service.dart';
 import '../widgets/common_artwork.dart';
+import '../../core/utils/localization.dart';
 
 import '../widgets/track_list_tile.dart';
 
@@ -54,19 +55,19 @@ class AllTracksScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          'No Music Found',
+                          AppLocalizations.of(context).noTracksFound,
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Add music by scanning a folder',
+                          AppLocalizations.of(context).scanDesc,
                           style: TextStyle(color: Colors.grey[500]),
                         ),
                         const SizedBox(height: 32),
                         FilledButton.icon(
                           onPressed: () => musicFinder.scanAllMusic(),
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Scan Music'),
+                          label: Text(AppLocalizations.of(context).scanMusic),
                         ),
                       ],
                     ),
@@ -127,6 +128,7 @@ class AllTracksScreen extends StatelessWidget {
       );
     }).toList();
 
+    await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
     await audioHandler.updateQueue(mediaItems);
     await audioHandler.skipToQueueItem(relativeIndex);
   }

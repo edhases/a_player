@@ -180,7 +180,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          mediaItem.artist ?? 'Unknown Artist',
+          mediaItem.artist ?? AppLocalizations.of(context).unknownArtist,
           style: TextStyle(
               fontSize: 18, color: Colors.white.withValues(alpha: 0.7)),
           textAlign: TextAlign.start,
@@ -370,10 +370,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
             final currentQueue = snapshot.data ?? [];
             return Column(
               children: [
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('Current Queue',
-                      style: TextStyle(
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(AppLocalizations.of(context).currentQueue,
+                      style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold)),
@@ -435,20 +435,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ListTile(
             leading: const Icon(Icons.download, color: Colors.white),
             title:
-                const Text('Download', style: TextStyle(color: Colors.white)),
+                Text(loc.download, style: const TextStyle(color: Colors.white)),
             onTap: () async {
               Navigator.pop(context); // Close sheet
 
               final mediaItem = _audioHandler.mediaItem.value;
               if (mediaItem == null || mediaItem.extras?['videoId'] == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cannot download this track')),
+                  SnackBar(content: Text(loc.cannotDownload)),
                 );
                 return;
               }
 
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Starting download...')),
+                SnackBar(content: Text(loc.startingDownload)),
               );
 
               try {
@@ -466,7 +466,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   );
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Downloaded: ${mediaItem.title}')),
+                      SnackBar(
+                          content: Text(loc.translate('downloaded',
+                              args: {'title': mediaItem.title}))),
                     );
                   }
                 } else {
@@ -476,7 +478,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 debugPrint('Download error: $e');
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Download failed: $e')),
+                    SnackBar(
+                        content: Text(loc
+                            .translate('download_error', args: {'error': e}))),
                   );
                 }
               }
@@ -562,22 +566,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title:
-            const Text('Track Details', style: TextStyle(color: Colors.white)),
+        title: Text(AppLocalizations.of(context).trackDetails,
+            style: const TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _detailRow('Title', item.title),
-            _detailRow('Artist', item.artist ?? 'Unknown'),
-            _detailRow('Album', item.album ?? 'Unknown'),
-            _detailRow('Path', item.id),
+            _detailRow(AppLocalizations.of(context).trackDetails,
+                item.title), // Title is title
+            _detailRow(
+                AppLocalizations.of(context).artists, item.artist ?? 'Unknown'),
+            _detailRow(
+                AppLocalizations.of(context).albums, item.album ?? 'Unknown'),
+            _detailRow(AppLocalizations.of(context).path, item.id),
           ],
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close')),
+              child: Text(AppLocalizations.of(context).close)),
         ],
       ),
     );

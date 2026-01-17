@@ -268,8 +268,13 @@ class YouTubeHelper {
 
       // Create all MediaItems in parallel to avoid blocking the UI.
       final mediaItemFutures = videos
-          .map((video) => createMediaItem(video.id.value,
-              customTitle: video.title, customArtist: video.author))
+          .map((video) => createMediaItem(
+                video.id.value,
+                customTitle: video.title,
+                customArtist: video.author,
+                customDuration: video.duration,
+                customThumbnail: video.thumbnails.highResUrl,
+              ))
           .toList();
 
       final mediaItems = await Future.wait(mediaItemFutures);
@@ -284,14 +289,34 @@ class YouTubeHelper {
   }
 
   /// Create a MediaItem from a YouTube video ID
-  Future<MediaItem> createMediaItem(String videoId,
-      {String? customTitle, String? customArtist}) async {
+  Future<MediaItem> createMediaItem(
+    String videoId, {
+    String? customTitle,
+    String? customArtist,
+    Duration? customDuration,
+    String? customThumbnail,
+    Map<String, dynamic>? extras,
+  }) async {
     try {
       // Спочатку перевірити кеш
       var cached = await getCachedMetadata(videoId);
 
-      if (cached == null) {
-        // Якщо немає в кеші, отримати дані з YouTube
+      // Якщо немає в кеші, але передані кастомні дані - використовуємо їх
+      if (cached == null &&
+          customTitle != null &&
+          customArtist != null &&
+          customThumbnail != null) {
+        // Кешуємо отримані дані
+        await cacheVideoMetadata(
+          videoId,
+          customTitle,
+          customArtist,
+          customThumbnail,
+          customDuration?.inSeconds,
+        );
+        // Не перечитуємо з бази, створюємо об'єкт з того що є
+      } else if (cached == null) {
+        // Якщо немає в кеші і немає кастомних даних - тягнемо з YouTube
         final video = await _yt.videos.get(videoId);
         final thumbnailUrl = video.thumbnails.highResUrl;
         if (thumbnailUrl.isNotEmpty) {
@@ -306,35 +331,37 @@ class YouTubeHelper {
         }
       }
 
-      if (cached != null) {
-        // Перевірити чи є локальний файл для офлайн відтворення
-        final localPath = await getLocalFilePath(videoId);
-        // Для JIT-фетчингу, ID медіа-елемента - це videoId для онлайн-треків
-        // або шлях до файлу для офлайн-треків.
-        final mediaId = localPath ?? videoId;
+      // Формуємо фінальні дані (пріоритет: кастом -> кеш -> unknown)
+      final title = customTitle ?? cached?.title ?? 'Unknown Title';
+      final artist = customArtist ?? cached?.artist ?? 'Unknown Artist';
+      final duration =
+          customDuration ?? Duration(seconds: cached?.duration ?? 0);
+      final artUri = Uri.parse(customThumbnail ?? cached?.thumbnailUrl ?? '');
 
-        final desktopUA =
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+      // Перевірити чи є локальний файл
+      final localPath = await getLocalFilePath(videoId);
+      final mediaId = localPath ?? videoId;
 
-        return MediaItem(
-          id: mediaId,
-          title: customTitle ?? cached.title,
-          artist: customArtist ?? cached.artist,
-          duration: Duration(seconds: cached.duration),
-          artUri: Uri.parse(cached.thumbnailUrl),
-          extras: {
-            'isOnline': localPath == null,
-            'videoId': videoId,
-            'user_agent': desktopUA,
-          },
-        );
+      final desktopUA =
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+
+      final finalExtras = <String, dynamic>{
+        'isOnline': localPath == null,
+        'videoId': videoId,
+        'user_agent': desktopUA,
+      };
+
+      if (extras != null) {
+        finalExtras.addAll(extras);
       }
 
-      // Fallback якщо немає кеша
       return MediaItem(
-        id: videoId,
-        title: customTitle ?? 'Unknown Title',
-        artist: customArtist ?? 'Unknown Artist',
+        id: mediaId,
+        title: title,
+        artist: artist,
+        duration: duration,
+        artUri: artUri,
+        extras: finalExtras,
       );
     } catch (e) {
       debugPrint('[YouTubeHelper] Error creating MediaItem: $e');

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../core/utils/localization.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -12,7 +13,8 @@ class PermissionGate extends StatefulWidget {
   _PermissionGateState createState() => _PermissionGateState();
 }
 
-class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObserver {
+class _PermissionGateState extends State<PermissionGate>
+    with WidgetsBindingObserver {
   bool _hasPermissions = false;
   bool _isChecking = true; // Додаємо стан завантаження
 
@@ -61,7 +63,8 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
     if (!allGranted) {
       for (int i = 0; i < permissions.length; i++) {
         if (!statuses[i].isGranted) {
-          debugPrint("Missing permission: ${permissions[i]} (Status: ${statuses[i]})");
+          debugPrint(
+              "Missing permission: ${permissions[i]} (Status: ${statuses[i]})");
         }
       }
     }
@@ -100,10 +103,9 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
       }
 
       if (!allGranted) {
-         debugPrint("Permissions denied: $statuses");
-         // Тут можна показати SnackBar або діалог
+        debugPrint("Permissions denied: $statuses");
+        // Тут можна показати SnackBar або діалог
       }
-
     } catch (e) {
       debugPrint("Error requesting permissions: $e");
     } finally {
@@ -161,34 +163,39 @@ class _PermissionGateState extends State<PermissionGate> with WidgetsBindingObse
               children: [
                 const Icon(Icons.music_note, size: 64, color: Colors.blue),
                 const SizedBox(height: 24),
-                const Text(
-                  'Потрібен доступ',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                Text(
+                  AppLocalizations.of(context).permissionNeeded,
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Щоб програвати вашу музику та показувати сповіщення, додатку потрібен доступ до аудіофайлів на цьому пристрої.',
+                Text(
+                  AppLocalizations.of(context).permissionDesc,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(
-                  onPressed: _isRequesting ? null : _requestPermissions, // Вимикаємо кнопку
+                  onPressed: _isRequesting
+                      ? null
+                      : _requestPermissions, // Вимикаємо кнопку
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 16),
                   ),
                   child: _isRequesting
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2)
-                      )
-                    : const Text('Надати дозволи', style: TextStyle(fontSize: 18)),
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(AppLocalizations.of(context).grantPermissions,
+                          style: const TextStyle(fontSize: 18)),
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: openAppSettings, // Вбудована функція permission_handler
-                  child: const Text('Відкрити налаштування системи'),
+                  onPressed:
+                      openAppSettings, // Вбудована функція permission_handler
+                  child: Text(AppLocalizations.of(context).openSettings),
                 ),
               ],
             ),

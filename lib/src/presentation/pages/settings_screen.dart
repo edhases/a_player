@@ -11,6 +11,7 @@ import '../../core/services/metadata_matching_service.dart';
 import '../../core/services/cache_service.dart';
 import 'webview_login_screen.dart';
 import 'cached_tracks_screen.dart';
+import 'equalizer_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -148,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
 
           // Library Filters Section
-          _buildSectionHeader(context, 'Filters'),
+          _buildSectionHeader(context, loc.filters),
 
           // Min Duration
           StatefulBuilder(
@@ -157,8 +158,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               return Column(
                 children: [
                   ListTile(
-                    title: const Text('Skip Short Tracks'),
-                    subtitle: Text('Less than $min seconds'),
+                    title: Text(loc.skipShortTracks),
+                    subtitle: Text(loc.translate('skip_short_tracks_desc',
+                        args: {'min': min})),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -186,9 +188,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return Column(
               children: [
                 ListTile(
-                  title: const Text('Skip Long Tracks'),
-                  subtitle:
-                      Text(max == 0 ? 'No Limit' : 'More than ${max ~/ 60}m'),
+                  title: Text(loc.skipLongTracks),
+                  subtitle: Text(max == 0
+                      ? loc.noLimit
+                      : loc.translate('skip_long_tracks_desc',
+                          args: {'max': max ~/ 60})),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -197,7 +201,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     min: 0,
                     max: 3600, // 1 hour max for slider
                     divisions: 60,
-                    label: max == 0 ? 'Off' : '${max ~/ 60}m',
+                    label: max == 0 ? loc.off : '${max ~/ 60}m',
                     onChanged: (val) {
                       setState(() {
                         settingsService.saveMaxTrackDuration(val.toInt());
@@ -211,9 +215,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Excluded Folders
           ListTile(
-            title: Text('Excluded Folders'),
-            subtitle: Text(
-                '${settingsService.loadExcludedFolders().length} folders hidden'),
+            title: Text(loc.excludedFolders),
+            subtitle: Text(loc.translate('folders_hidden',
+                args: {'count': settingsService.loadExcludedFolders().length})),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               _showExcludedFoldersDialog(context, settingsService);
@@ -221,13 +225,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.auto_fix_high),
-            title: const Text('Match Metadata (Beta)'),
-            subtitle: const Text('Auto-tag unknown tracks from YouTube'),
+            title: Text(loc.matchMetadata),
+            subtitle: Text(loc.matchMetadataDesc),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               if (!GetIt.I.isRegistered<MetadataMatchingService>()) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Service not available')),
+                  SnackBar(content: Text(loc.serviceNotAvailable)),
                 );
                 return;
               }
@@ -239,15 +243,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
 
           // Cache Section
-          _buildSectionHeader(context, 'Cache'),
+          _buildSectionHeader(context, loc.cache),
           StatefulBuilder(builder: (context, setState) {
             final currentSize = settingsService.loadMaxCacheSize();
             return Column(
               children: [
                 ListTile(
-                  title: const Text('Max Cache Size'),
-                  subtitle: Text(
-                      'Used: ${_formatBytes(_cacheUsage)} / ${_formatBytes(currentSize)}'),
+                  title: Text(loc.maxCacheSize),
+                  subtitle: Text(loc.translate('cache_usage', args: {
+                    'used': _formatBytes(_cacheUsage),
+                    'total': _formatBytes(currentSize)
+                  })),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -269,8 +275,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 ListTile(
-                  title: const Text('View Cached Tracks'),
-                  subtitle: const Text('Show downloaded songs'),
+                  title: Text(loc.viewCachedTracks),
+                  subtitle: Text(loc.showDownloadedSongs),
                   trailing: const Icon(Icons.queue_music),
                   onTap: () {
                     Navigator.of(context)
@@ -283,16 +289,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             );
           }),
           ListTile(
-              title: const Text('Clear Cache'),
-              subtitle: const Text('Remove all downloaded songs'),
+              title: Text(loc.clearCache),
+              subtitle: Text(loc.clearCacheDesc),
               trailing: const Icon(Icons.delete_forever),
               onTap: () async {
                 final confirmed = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('Clear Cache'),
-                    content: const Text(
-                        'Are you sure you want to delete all cached songs?'),
+                    title: Text(loc.clearCache),
+                    content: Text(loc.clearCacheConfirm),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
@@ -311,13 +316,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     await GetIt.I<CacheService>().clearCache();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Cache cleared')),
+                        SnackBar(content: Text(loc.cacheCleared)),
                       );
                     }
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Cache Service unavailable')),
+                      SnackBar(content: Text(loc.cacheServiceUnavailable)),
                     );
                   }
                 }
@@ -329,15 +333,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader(context, loc.language),
           ListTile(
             leading: const Icon(Icons.language),
-            title: Text(localizationService.currentLocale.languageCode == 'en'
-                ? 'English'
-                : 'Українська'),
+            title: Text(_getLanguageName(
+                localizationService.currentLocale.languageCode)),
             subtitle: Text(loc.language),
             trailing: DropdownButton<String>(
               value: localizationService.currentLocale.languageCode,
               items: [
                 DropdownMenuItem(value: 'en', child: Text('English')),
                 DropdownMenuItem(value: 'uk', child: Text('Українська')),
+                DropdownMenuItem(value: 'de', child: Text('Deutsch')),
+                DropdownMenuItem(value: 'pl', child: Text('Polski')),
+                DropdownMenuItem(value: 'es', child: Text('Español')),
+                DropdownMenuItem(value: 'ja', child: Text('日本語')),
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -355,10 +362,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.equalizer),
             title: Text(loc.equalizer),
-            subtitle: const Text('Adjust audio frequencies'),
+            subtitle: Text(loc.adjustEqualizer),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              // TODO: Navigate to equalizer
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const EqualizerScreen()),
+              );
             },
           ),
 
@@ -378,7 +387,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: isSignedIn ? Colors.green : Colors.red,
                     ),
                     title: Text(isSignedIn ? loc.signedIn : loc.notSignedIn),
-                    subtitle: const Text('Personalized recommendations'),
+                    subtitle: Text(loc.personalizedRecommendations),
                   ),
                   if (isSignedIn)
                     ListTile(
@@ -416,7 +425,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('Oxide Player'),
-            subtitle: const Text('Version 1.0.0'),
+            subtitle: Text(loc
+                .translate('version', args: {'version': '22.08.160126 [B]'})),
           ),
         ],
       ),
@@ -440,6 +450,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showExcludedFoldersDialog(
       BuildContext context, SettingsService settings) {
+    final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (context) {
@@ -447,11 +458,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           builder: (context, setState) {
             final folders = settings.loadExcludedFolders();
             return AlertDialog(
-              title: const Text('Excluded Folders'),
+              title: Text(loc.excludedFolders),
               content: SizedBox(
                 width: double.maxFinite,
                 child: folders.isEmpty
-                    ? const Text('No excluded folders.')
+                    ? Text(loc.noExcludedFolders)
                     : ListView.builder(
                         itemCount: folders.length,
                         itemBuilder: (context, index) {
@@ -475,7 +486,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
+                  child: Text(loc.close),
                 ),
               ],
             );
@@ -491,19 +502,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showTagScanDialog(BuildContext context, Stream<String> stream) {
+    final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Scanning Library...'),
+          title: Text(loc.scanningLibraryTitle),
           content: StreamBuilder<String>(
             stream: stream,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
-                return Text('Error: ${snapshot.error}');
+                return Text(
+                    loc.translate('error', args: {'error': snapshot.error}));
               }
-              final status = snapshot.data ?? 'Starting...';
+              final status = snapshot.data ?? loc.scanStarting;
 
               // Closing logic when complete
               if (status.startsWith('Scan complete')) {
@@ -526,12 +539,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                  'Close'), // Allow verifying "Scan complete" manually if needed
+              child: Text(loc.close),
             ),
           ],
         );
       },
     );
+  }
+
+  String _getLanguageName(String code) {
+    switch (code) {
+      case 'uk':
+        return 'Українська';
+      case 'de':
+        return 'Deutsch';
+      case 'pl':
+        return 'Polski';
+      case 'es':
+        return 'Español';
+      case 'ja':
+        return '日本語';
+      case 'en':
+      default:
+        return 'English';
+    }
   }
 }

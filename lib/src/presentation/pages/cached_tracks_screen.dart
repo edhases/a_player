@@ -3,6 +3,7 @@ import 'package:get_it/get_it.dart';
 import '../../core/services/cache_service.dart';
 import '../../data/models/cached_track.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/utils/localization.dart';
 
 class CachedTracksScreen extends StatefulWidget {
   const CachedTracksScreen({super.key});
@@ -51,12 +52,12 @@ class _CachedTracksScreenState extends State<CachedTracksScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cached Tracks'),
+        title: Text(AppLocalizations.of(context).cachedTracksTitle),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _tracks.isEmpty
-              ? const Center(child: Text('No tracks cached'))
+              ? Center(child: Text(AppLocalizations.of(context).noTracksFound))
               : ListView.builder(
                   itemCount: _tracks.length,
                   itemBuilder: (context, index) {

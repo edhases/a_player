@@ -8,6 +8,7 @@ import '../widgets/common_artwork.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/search/metadata_pick_delegate.dart';
 import '../../domain/entities/youtube_song.dart';
+import '../../core/utils/localization.dart';
 
 class TrackListTile extends StatefulWidget {
   final Track track;
@@ -46,12 +47,13 @@ class _TrackListTileState extends State<TrackListTile> {
 
   Widget _buildTile(BuildContext context, LocalTrackOverride? override) {
     final colorScheme = Theme.of(context).colorScheme;
+    final loc = AppLocalizations.of(context);
 
     // Use override if available, otherwise fallback to track data
     final title = override?.correctTitle ?? widget.track.title;
     final artist =
-        override?.correctArtist ?? widget.track.artist ?? 'Unknown Artist';
-    final album = widget.track.album ?? 'Unknown Album';
+        override?.correctArtist ?? widget.track.artist ?? loc.unknownArtist;
+    final album = widget.track.album ?? loc.unknownAlbum;
     final artUrl = override?.thumbnailUrl;
 
     return ListTile(
@@ -123,60 +125,60 @@ class _TrackListTileState extends State<TrackListTile> {
               final isExcluded = (widget.track as dynamic).isExcluded == true;
 
               return [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'queue',
                   child: ListTile(
                     leading: Icon(Icons.queue_music),
-                    title: Text('Add to Queue'),
+                    title: Text(loc.addToQueue),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'next',
                   child: ListTile(
                     leading: Icon(Icons.play_arrow_outlined),
-                    title: Text('Play Next'),
+                    title: Text(loc.playNext),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),
                 ),
                 const PopupMenuDivider(),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'scan',
                   child: ListTile(
                     leading: Icon(Icons.auto_fix_high),
-                    title: Text('Match Metadata'),
+                    title: Text(loc.matchMetadata),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),
                 ),
                 const PopupMenuDivider(),
                 if (!isExcluded)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'exclude',
                     child: ListTile(
                       leading: Icon(Icons.visibility_off_outlined),
-                      title: Text('Exclude (Hide)'),
+                      title: Text(loc.excludeHide),
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                     ),
                   )
                 else
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'restore',
                     child: ListTile(
                       leading: Icon(Icons.visibility_outlined),
-                      title: Text('Restore'),
+                      title: Text(loc.restore),
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                     ),
                   ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete_file',
                   child: ListTile(
                     leading: Icon(Icons.delete_forever, color: Colors.red),
-                    title: Text('Delete File',
+                    title: Text(loc.deleteFile,
                         style: TextStyle(color: Colors.red)),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
@@ -193,13 +195,14 @@ class _TrackListTileState extends State<TrackListTile> {
 
   void _handleMenuAction(BuildContext context, String value) async {
     final audioHandler = GetIt.I<MyAudioHandler>();
+    final loc = AppLocalizations.of(context);
 
     switch (value) {
       case 'queue':
         await audioHandler.addToQueue(widget.track);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Added to queue')),
+            SnackBar(content: Text(loc.queueAdded)),
           );
         }
         break;
@@ -207,7 +210,7 @@ class _TrackListTileState extends State<TrackListTile> {
         await audioHandler.playNext(widget.track);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Will play next')),
+            SnackBar(content: Text(loc.willPlayNext)),
           );
         }
         break;
@@ -228,32 +231,31 @@ class _TrackListTileState extends State<TrackListTile> {
 
   Future<void> _toggleExclude(BuildContext context, bool exclude) async {
     final db = GetIt.I<AppDatabase>();
+    final loc = AppLocalizations.of(context);
     await db.setExcluded(widget.track.path, exclude);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                exclude ? 'Track hidden (soft delete)' : 'Track restored')),
+        SnackBar(content: Text(exclude ? loc.trackHidden : loc.trackRestored)),
       );
     }
   }
 
   Future<void> _hardDelete(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete File?'),
-        content: const Text(
-            'This will permanently delete the file from your device storage. This action cannot be undone.'),
+        title: Text(loc.deleteFileTitle),
+        content: Text(loc.deleteFileConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(loc.delete),
           ),
         ],
       ),
@@ -271,13 +273,15 @@ class _TrackListTileState extends State<TrackListTile> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('File deleted')),
+            SnackBar(content: Text(loc.fileDeleted)),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting file: $e')),
+            SnackBar(
+                content:
+                    Text(loc.translate('delete_error', args: {'error': e}))),
           );
         }
       }
@@ -319,10 +323,11 @@ class _TrackListTileState extends State<TrackListTile> {
   }
 
   void _showSuccessDialog(BuildContext context, LocalTrackOverride result) {
+    final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Matched!'),
+        title: Text(loc.matched),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -340,10 +345,9 @@ class _TrackListTileState extends State<TrackListTile> {
               _showManualSearchDialog(
                   context, GetIt.I<MetadataMatchingService>());
             },
-            child: const Text('Wrong Match?'),
+            child: Text(loc.wrongMatch),
           ),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(loc.ok)),
         ],
       ),
     );
@@ -351,23 +355,23 @@ class _TrackListTileState extends State<TrackListTile> {
 
   void _showManualSearchOption(
       BuildContext context, MetadataMatchingService service) {
+    final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('No Match Found'),
-        content: const Text(
-            'Automatic match failed. Do you want to search manually?'),
+        title: Text(loc.noMatchFound),
+        content: Text(loc.manualSearchConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               _showManualSearchDialog(context, service);
             },
-            child: const Text('Manual Search'),
+            child: Text(loc.manualSearch),
           ),
         ],
       ),
@@ -398,10 +402,10 @@ class _TrackListTileState extends State<TrackListTile> {
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Metadata updated successfully!'),
+            SnackBar(
+              content: Text(AppLocalizations.of(context).metadataUpdated),
               backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -411,7 +415,8 @@ class _TrackListTileState extends State<TrackListTile> {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to save metadata: $e'),
+              content: Text(AppLocalizations.of(context)
+                  .translate('metadata_save_error', args: {'error': e})),
               backgroundColor: Colors.red,
             ),
           );

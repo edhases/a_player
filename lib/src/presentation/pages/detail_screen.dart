@@ -7,6 +7,7 @@ import '../../core/services/audio_handler.dart';
 import '../widgets/common_artwork.dart';
 
 import '../widgets/track_list_tile.dart';
+import '../../core/utils/localization.dart';
 
 enum DetailScreenType { album, artist }
 
@@ -43,7 +44,9 @@ class DetailScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(
+                child: Text(AppLocalizations.of(context)
+                    .translate('error', args: {'error': snapshot.error})));
           }
 
           final List<Track> tracks = snapshot.data ?? <Track>[];
@@ -51,7 +54,8 @@ class DetailScreen extends StatelessWidget {
           if (tracks.isEmpty) {
             return Scaffold(
               appBar: AppBar(title: Text(title)),
-              body: const Center(child: Text('No tracks found.')),
+              body: Center(
+                  child: Text(AppLocalizations.of(context).noTracksFound)),
             );
           }
 
@@ -112,14 +116,15 @@ class DetailScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       Text(
-                        '${tracks.length} tracks',
+                        AppLocalizations.of(context).translate('tracks_count',
+                            args: {'count': tracks.length}),
                         style: TextStyle(color: Colors.grey[400]),
                       ),
                       const Spacer(),
                       FilledButton.icon(
                         onPressed: () => _playQueue(audioHandler, tracks, 0),
                         icon: const Icon(Icons.play_arrow),
-                        label: const Text('Play All'),
+                        label: Text(AppLocalizations.of(context).playAll),
                       ),
                       const SizedBox(width: 8),
                       IconButton.outlined(

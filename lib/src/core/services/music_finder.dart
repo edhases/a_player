@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
+import 'package:get_it/get_it.dart';
 import '../../data/datasources/app_database.dart';
+import 'localization_service.dart';
+import '../utils/localization.dart';
 
 /// Service for finding and scanning music files.
 /// Uses on_audio_query for fast MediaStore queries.
@@ -21,7 +24,7 @@ class MusicFinder {
 
     try {
       isScanning.value = true;
-      scanStatus.value = 'Querying music library...';
+      scanStatus.value = _getLoc().scanQuerying;
 
       // Query all songs from MediaStore
       final songs = await _audioQuery.querySongs(
@@ -32,7 +35,8 @@ class MusicFinder {
       );
 
       debugPrint('[MusicFinder] Found ${songs.length} songs in MediaStore');
-      scanStatus.value = 'Found ${songs.length} songs...';
+      scanStatus.value =
+          _getLoc().translate('scan_found', args: {'count': songs.length});
 
       if (songs.isEmpty) {
         debugPrint('[MusicFinder] No songs found in MediaStore');
@@ -41,13 +45,14 @@ class MusicFinder {
 
       // Process in Isolate to avoid blocking UI
       // We also removed per-item UI updates to prevent 60fps rebuilds
-      scanStatus.value = 'Processing metadata...';
+      scanStatus.value = _getLoc().scanProcessing;
 
       final trackCompanions = await compute(_mapSongsToCompanions, songs);
 
       // Insert into database
       if (trackCompanions.isNotEmpty) {
-        scanStatus.value = 'Saving ${trackCompanions.length} tracks...';
+        scanStatus.value = _getLoc()
+            .translate('scan_saving', args: {'count': trackCompanions.length});
 
         await _db.batch((batch) {
           batch.insertAll(_db.tracks, trackCompanions,
@@ -110,5 +115,10 @@ class MusicFinder {
     }
 
     return list;
+  }
+
+  AppLocalizations _getLoc() {
+    final service = GetIt.I<LocalizationService>();
+    return AppLocalizations(service.currentLocale, service.localizedStrings);
   }
 }

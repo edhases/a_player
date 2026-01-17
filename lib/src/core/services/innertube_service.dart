@@ -26,7 +26,7 @@ class InnerTubeService {
         lineLength: 50,
         colors: true,
         printEmojis: true,
-        printTime: false),
+        dateTimeFormat: DateTimeFormat.none),
   );
 
   String? _visitorId;
@@ -149,6 +149,9 @@ class InnerTubeService {
           "gl": "US",
           "androidSdkVersion": 33
         }
+      },
+      "playbackContext": {
+        "contentPlaybackContext": {"signatureTimestamp": 20470}
       }
     };
   }
@@ -157,18 +160,73 @@ class InnerTubeService {
     await _rateLimiter.throttle();
     await _addAuthHeaders();
 
-    final body = _webContextBody();
-    body['query'] = query;
-    body['params'] = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
-
+    // Strategy 1: Try specific "Songs" filter with ANDROID_MUSIC (Primary)
     try {
+      final body = _androidContextBody();
+      body['query'] = query;
+      body['params'] = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
+
       final response = await _dio.post('/search', data: body);
       final results = _parseSearchResults(response.data);
-      return Result.success(results);
+
+      if (results.isNotEmpty) {
+        return Result.success(results);
+      }
+      debugPrint(
+          '[InnerTube] Android Music search with filter returned empty. Trying fallback...');
     } catch (e) {
-      _logger.e('InnerTube Search Error', error: e);
-      return Result.failure(e.toString());
+      debugPrint(
+          '[InnerTube] Android Music filter search failed: $e. Trying fallback...');
     }
+
+    // Strategy 2: Fallback to broad search (Top Results) with ANDROID_MUSIC
+    try {
+      final body = _androidContextBody();
+      body['query'] = query;
+      // No params = mixed results
+
+      final response = await _dio.post('/search', data: body);
+      final results = _parseSearchResults(response.data);
+      if (results.isNotEmpty) {
+        return Result.success(results);
+      }
+    } catch (e) {
+      debugPrint('[InnerTube] Android Music broad search failed: $e');
+    }
+
+    // Strategy 3: Last Resort - WEB_REMIX
+    try {
+      debugPrint('[InnerTube] Trying WEB_REMIX as last resort...');
+      final body = _webContextBody();
+      body['query'] = query;
+      final response = await _dio.post('/search', data: body);
+      final results = _parseSearchResults(response.data);
+      if (results.isNotEmpty) return Result.success(results);
+    } catch (e) {
+      debugPrint('[InnerTube] WEB_REMIX failed: $e');
+    }
+
+    // Strategy 4: Anonymous Fallback (Remove Cookies and try again)
+    // This fixes issues where bad/expired cookies cause empty results.
+    if (_dio.options.headers.containsKey('Cookie')) {
+      debugPrint(
+          '[InnerTube] All auth searches failed. Trying Anonymous search...');
+      _dio.options.headers.remove('Cookie');
+      _dio.options.headers.remove('Authorization');
+
+      try {
+        final body = _androidContextBody();
+        body['query'] = query;
+        final response = await _dio.post('/search', data: body);
+        final results = _parseSearchResults(response.data);
+        return Result.success(results);
+      } catch (e) {
+        _logger.e('InnerTube Anonymous Fallback Error', error: e);
+        return Result.failure(e.toString());
+      }
+    }
+
+    return Result.failure("No results found after all attempts");
   }
 
   /// Returns {'url': string, 'agent': string} on success, null on failure.
@@ -345,33 +403,95 @@ class InnerTubeService {
     final results = <YouTubeSong>[];
 
     try {
+      debugPrint('[InnerTube] Parsing Search Results...');
+      // Debug the top-level keys
+      // debugPrint('[InnerTube] Keys: ${data.keys.toList()}');
+
       var contents = data['contents']?['tabbedSearchResultsRenderer']?['tabs']
           ?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'];
 
       if (contents == null) {
+        debugPrint('[InnerTube] Path 1 failed.');
         contents = data['contents']?['sectionListRenderer']?['contents'];
       }
 
       if (contents == null) {
+        debugPrint('[InnerTube] Path 2 failed.');
+        // Path 3: Single Column (Mobile/Tablet)
         contents = data['contents']?['singleColumnSearchResultsRenderer']
                 ?['tabs']?[0]?['tabRenderer']?['content']
             ?['sectionListRenderer']?['contents'];
       }
 
-      if (contents == null || contents is! List) {
-        return [];
+      if (contents == null) {
+        debugPrint('[InnerTube] Path 3 failed.');
+        // Path 4: Two Column (Desktop/WEB_REMIX default)
+        contents = data['contents']?['twoColumnSearchResultsRenderer']
+            ?['primaryContents']?['sectionListRenderer']?['contents'];
       }
+
+      if (contents == null || contents is! List) {
+        debugPrint(
+            '[InnerTube] All structured paths failed. Falling back to recursive search.');
+        // FALLBACK: Recursive Search
+        // If structured paths failed, recursively find ALL musicResponsiveListItemRenderer
+        // This is a "nuclear option" effective when UI structure changes slightly.
+        final items =
+            _recursiveFindItems(data, 'musicResponsiveListItemRenderer');
+
+        // Also look for secondary items (desktop/list views)
+        final secondaryItems =
+            _recursiveFindItems(data, 'musicTwoColumnItemRenderer');
+        items.addAll(secondaryItems);
+
+        for (var item in items) {
+          final song = _parseSingleSong(item);
+          if (song != null) {
+            results.add(song);
+          }
+        }
+        return results;
+      }
+
+      debugPrint(
+          '[InnerTube] Path 1 Success. Found ${contents.length} sections.');
 
       for (final section in contents) {
         final musicShelf = section['musicShelfRenderer'];
         if (musicShelf != null) {
+          debugPrint(
+              '[InnerTube] Found musicShelfRenderer. Checking contents...');
           final items = musicShelf['contents'];
           if (items is List) {
+            debugPrint('[InnerTube] Shelf has ${items.length} items.');
             for (final item in items) {
               final song = _parseSingleSong(item);
               if (song != null) {
                 results.add(song);
+              } else {
+                debugPrint('[InnerTube] Failed to parse item in shelf.');
               }
+            }
+          }
+        } else if (section['musicCardShelfRenderer'] != null) {
+          // Handle Top Result Card (musicCardShelfRenderer)
+          debugPrint('[InnerTube] Found musicCardShelfRenderer (Top Result).');
+          final cardShelf = section['musicCardShelfRenderer'];
+          final song = _parseTopResultCard(cardShelf);
+          if (song != null) {
+            results.insert(0, song); // Insert at top since it's the best match
+          }
+        } else {
+          debugPrint(
+              '[InnerTube] No musicShelfRenderer. Trying recursive fallback for section keys: ${section.keys}');
+          // Fallback for sections without explicit musicShelfRenderer
+          final items =
+              _recursiveFindItems(section, 'musicResponsiveListItemRenderer');
+          debugPrint('[InnerTube] Recursive found ${items.length} items.');
+          for (final item in items) {
+            final song = _parseSingleSong(item);
+            if (song != null) {
+              results.add(song);
             }
           }
         }
@@ -784,15 +904,49 @@ class InnerTubeService {
       {String? fallbackArtist, String? fallbackThumbnail}) {
     final tracks = <YouTubeSong>[];
     try {
-      // Use recursive search to find ALL musicResponsiveListItemRenderer nodes
-      final items =
-          _recursiveFindItems(data, 'musicResponsiveListItemRenderer');
+      // 1. Try Structured Path (Faster)
+      // Common path: contents -> singleColumn -> tabs -> tab -> content -> sectionList -> contents -> musicPlaylistShelf -> contents
+      var sectionList = data['contents']?['singleColumnBrowseResultsRenderer']
+              ?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']
+          ?['contents'];
 
-      if (items.isEmpty) {
-        // Try searching for secondary items just in case
-        final secondaryItems =
-            _recursiveFindItems(data, 'musicTwoColumnItemRenderer');
-        items.addAll(secondaryItems);
+      // Secondary path (Desktop/Web): twoColumn -> secondaryContents
+      if (sectionList == null) {
+        sectionList = data['contents']?['twoColumnBrowseResultsRenderer']
+            ?['secondaryContents']?['sectionListRenderer']?['contents'];
+      }
+
+      List<dynamic> items = [];
+      bool foundStructured = false;
+
+      if (sectionList != null && sectionList is List) {
+        for (var section in sectionList) {
+          if (section['musicPlaylistShelfRenderer'] != null) {
+            items = section['musicPlaylistShelfRenderer']['contents'] ?? [];
+            foundStructured = true;
+            break;
+          } else if (section['musicShelfRenderer'] != null) {
+            // Sometimes playlists appear as shelves
+            items = section['musicShelfRenderer']['contents'] ?? [];
+            foundStructured = true;
+            break;
+          }
+        }
+      }
+
+      // 2. Fallback to Recursive Search if structured path failed or empty
+      if (!foundStructured || items.isEmpty) {
+        // Use recursive search to find ALL musicResponsiveListItemRenderer nodes
+        final recursiveItems =
+            _recursiveFindItems(data, 'musicResponsiveListItemRenderer');
+
+        if (recursiveItems.isEmpty) {
+          // Try searching for secondary items just in case
+          final secondaryItems =
+              _recursiveFindItems(data, 'musicTwoColumnItemRenderer');
+          recursiveItems.addAll(secondaryItems);
+        }
+        items = recursiveItems;
       }
 
       for (var mrlir in items) {
@@ -839,8 +993,110 @@ class InnerTubeService {
     return results;
   }
 
-  YouTubeSong? _parseSingleSong(Map<String, dynamic> mrlir) {
+  /// Parse Top Result card (musicCardShelfRenderer)
+  YouTubeSong? _parseTopResultCard(Map<String, dynamic> card) {
     try {
+      // Title is in 'title' -> 'runs'
+      final title = card['title']?['runs']?[0]?['text'] as String?;
+      if (title == null) return null;
+
+      // Subtitle contains artist and type info
+      String artist = 'Unknown';
+      final subtitleRuns = card['subtitle']?['runs'] as List?;
+      if (subtitleRuns != null) {
+        // Check for non-music content (filter out)
+        for (var run in subtitleRuns) {
+          final text = run['text']?.toString().trim() ?? '';
+          if (['Video', 'Відео', 'Series', 'Серія', 'Podcast', 'Подкаст']
+              .contains(text)) {
+            return null; // Skip non-music
+          }
+        }
+        artist = _extractArtistFromRuns(subtitleRuns);
+      }
+
+      // Try to get videoId from various endpoints
+      String? videoId;
+      String? playlistId;
+
+      // Check onTap for watchEndpoint
+      videoId = card['onTap']?['watchEndpoint']?['videoId'];
+      playlistId = card['onTap']?['watchEndpoint']?['playlistId'];
+
+      // Check buttons for play action
+      if (videoId == null) {
+        final buttons = card['buttons'] as List?;
+        if (buttons != null) {
+          for (var btn in buttons) {
+            final btnRenderer = btn['buttonRenderer'];
+            if (btnRenderer != null) {
+              videoId = btnRenderer['command']?['watchEndpoint']?['videoId'];
+              playlistId ??=
+                  btnRenderer['command']?['watchEndpoint']?['playlistId'];
+              if (videoId != null) break;
+            }
+          }
+        }
+      }
+
+      // Check for browseEndpoint (Artist/Album result)
+      String? browseId;
+      if (videoId == null) {
+        browseId = card['onTap']?['browseEndpoint']?['browseId'];
+      }
+
+      // Thumbnail
+      String thumbnailUrl = '';
+      final thumbs = card['thumbnail']?['musicThumbnailRenderer']?['thumbnail']
+          ?['thumbnails'] as List?;
+      if (thumbs != null && thumbs.isNotEmpty) {
+        thumbnailUrl = thumbs.last['url'] ?? '';
+      }
+
+      // If it's an Artist result (browseId starts with UC), skip or handle differently
+      if (browseId != null && browseId.startsWith('UC')) {
+        // This is an artist, not a song
+        return null;
+      }
+
+      // If we have a playlist ID (Album/Single), return as playlist
+      if (playlistId != null && videoId == null) {
+        return YouTubeSong(
+          videoId: playlistId, // Use playlist ID as identifier
+          title: title,
+          artist: artist,
+          thumbnailUrl: thumbnailUrl,
+          playlistId: playlistId,
+          isPlaylist: true,
+        );
+      }
+
+      // If we have videoId, return as song
+      if (videoId != null) {
+        return YouTubeSong(
+          videoId: videoId,
+          title: title,
+          artist: artist,
+          thumbnailUrl: thumbnailUrl,
+          playlistId: playlistId,
+        );
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[InnerTube] _parseTopResultCard error: $e');
+      return null;
+    }
+  }
+
+  YouTubeSong? _parseSingleSong(Map<String, dynamic> item) {
+    try {
+      // Unwrap if item is wrapped in a renderer key
+      var mrlir = item['musicResponsiveListItemRenderer'] ??
+          item['musicTwoRowItemRenderer'] ??
+          item['musicTwoColumnItemRenderer'] ??
+          item; // Fallback to item itself if already unwrapped
+
       // Try multiple title extraction paths
       String? title = mrlir['flexColumns']?[0]
               ?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']
@@ -872,7 +1128,33 @@ class InnerTubeService {
       }
 
       if (subtitleRuns != null && subtitleRuns.isNotEmpty) {
-        // Extract Category first (Single, Album, EP, Playlist)
+        // Check for non-music categories FIRST and filter out
+        for (var run in subtitleRuns) {
+          final text = run['text']?.toString().trim() ?? '';
+          // Non-music categories we want to FILTER OUT
+          if ([
+            'Video',
+            'Відео',
+            'Series',
+            'Серія',
+            'Episode',
+            'Епізод',
+            'Podcast',
+            'Подкаст',
+            'News',
+            'Новини',
+            'Live',
+            'Наживо',
+            'Хіт-парад', // Chart/Ranking videos
+            'Канал', // Channel
+            'Channel',
+          ].contains(text)) {
+            // Skip this item entirely - it's not music
+            return null;
+          }
+        }
+
+        // Extract Category (Single, Album, EP, Playlist)
         for (var run in subtitleRuns) {
           final text = run['text']?.toString().trim() ?? '';
           if ([
@@ -880,9 +1162,11 @@ class InnerTubeService {
             'Album',
             'EP',
             'Playlist',
+            'Song',
             'Сингл',
             'Альбом',
-            'Плейлист'
+            'Плейлист',
+            'Пісня',
           ].contains(text)) {
             category = text;
           }

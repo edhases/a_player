@@ -108,6 +108,11 @@ class RecommendationService {
         await init();
       }
 
+      final loc = _localizationService != null
+          ? AppLocalizations(_localizationService!.currentLocale,
+              _localizationService!.localizedStrings)
+          : null;
+
       // Fetch Liked Songs (Favorites)
       // Note: We need to import LikedSong model to use it in queries if not implicitly available via isar
       // (It should be imported at top)
@@ -129,13 +134,8 @@ class RecommendationService {
                 category: "Liked"))
             .toList();
 
-        final loc = _localizationService != null
-            ? AppLocalizations(_localizationService!.currentLocale)
-            : null;
-
         likedSection = HomeSection(
-            title:
-                "Liked Songs", // TODO: Localize "Liked Songs" if needed (loc?.likedSongs ?? ...)
+            title: loc?.likedSongs ?? "Liked Songs",
             songs: songs,
             type: SectionType.horizontal);
       }
@@ -183,7 +183,24 @@ class RecommendationService {
               type = SectionType.grid;
             }
 
-            sections.add(HomeSection(title: title, songs: songs, type: type));
+            // Try to match known English titles to localized strings
+            String displayTitle = title;
+            if (loc != null) {
+              final lower = title.toLowerCase();
+              if (lower == 'made for you' || lower.contains('made for you')) {
+                displayTitle = loc.madeForYou;
+              } else if (lower == 'quick picks') {
+                displayTitle = loc.quickPicks;
+              } else if (lower == 'listen again') {
+                displayTitle = loc.listenAgain;
+              } else if (lower == 'recommended' ||
+                  lower.contains('recommended')) {
+                displayTitle = loc.recommendedForYou;
+              }
+            }
+
+            sections.add(
+                HomeSection(title: displayTitle, songs: songs, type: type));
           }
         }
 
@@ -203,7 +220,8 @@ class RecommendationService {
       if (history.isEmpty) {
         final trending = await _fetchTrendingMusic();
         final loc = _localizationService != null
-            ? AppLocalizations(_localizationService!.currentLocale)
+            ? AppLocalizations(_localizationService!.currentLocale,
+                _localizationService!.localizedStrings)
             : null;
         return [
           HomeSection(
@@ -256,9 +274,7 @@ class RecommendationService {
 
       recommendedSongs.shuffle();
 
-      final loc = _localizationService != null
-          ? AppLocalizations(_localizationService!.currentLocale)
-          : null;
+      recommendedSongs.shuffle();
 
       return [
         if (likedSection != null) likedSection,

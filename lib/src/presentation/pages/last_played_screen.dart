@@ -12,7 +12,6 @@ class LastPlayedScreen extends StatelessWidget {
   const LastPlayedScreen({super.key});
 
   @override
-  @override
   Widget build(BuildContext context) {
     final recommendationService = GetIt.I<RecommendationService>();
     final loc = AppLocalizations.of(context);

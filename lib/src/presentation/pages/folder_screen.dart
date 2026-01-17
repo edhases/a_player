@@ -45,7 +45,8 @@ class FolderScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.folder_off_outlined, size: 64, color: Colors.grey[600]),
+                  Icon(Icons.folder_off_outlined,
+                      size: 64, color: Colors.grey[600]),
                   const SizedBox(height: 16),
                   Text(
                     'This folder is empty',
@@ -60,7 +61,7 @@ class FolderScreen extends StatelessWidget {
             itemCount: entries.length,
             itemBuilder: (context, index) {
               final entry = entries[index];
-              
+
               if (entry is FolderEntry) {
                 return _FolderListTile(
                   folder: entry,
@@ -74,8 +75,9 @@ class FolderScreen extends StatelessWidget {
                   },
                 );
               } else if (entry is TrackEntry) {
-                final isCurrentTrack = audioHandler.mediaItem.value?.id == entry.track.path;
-                
+                final isCurrentTrack =
+                    audioHandler.mediaItem.value?.id == entry.track.path;
+
                 return _TrackListTile(
                   track: entry.track,
                   isCurrentTrack: isCurrentTrack,
@@ -96,18 +98,24 @@ class FolderScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _playQueue(MyAudioHandler audioHandler, List<Track> tracks, Track startTrack) async {
-    final mediaItems = tracks.map((track) => MediaItem(
-      id: track.path,
-      album: track.album ?? '',
-      title: track.title,
-      artist: track.artist,
-      duration: Duration(milliseconds: track.duration),
-      extras: track.mediaStoreId != null ? {'mediaStoreId': track.mediaStoreId} : null,
-    )).toList();
+  Future<void> _playQueue(
+      MyAudioHandler audioHandler, List<Track> tracks, Track startTrack) async {
+    final mediaItems = tracks
+        .map((track) => MediaItem(
+              id: track.path,
+              album: track.album ?? '',
+              title: track.title,
+              artist: track.artist,
+              duration: Duration(milliseconds: track.duration),
+              extras: track.mediaStoreId != null
+                  ? {'mediaStoreId': track.mediaStoreId}
+                  : null,
+            ))
+        .toList();
 
     final startIndex = tracks.indexOf(startTrack);
 
+    await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
     await audioHandler.updateQueue(mediaItems);
     await audioHandler.skipToQueueItem(startIndex);
   }
@@ -191,7 +199,9 @@ class _TrackListTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 12,
-          color: isCurrentTrack ? colorScheme.primary.withValues(alpha: 0.7) : Colors.grey[500],
+          color: isCurrentTrack
+              ? colorScheme.primary.withValues(alpha: 0.7)
+              : Colors.grey[500],
         ),
       ),
       trailing: Text(

@@ -13,6 +13,7 @@ class PlaylistTracksScreen extends StatefulWidget {
   final String title;
   final String? knownArtist; // Pass artist if known from previous screen
   final String? knownThumbnail; // Pass thumbnail if known from previous screen
+  final List<YouTubeSong>? preloadedTracks; // Optional pre-fetched tracks
 
   const PlaylistTracksScreen({
     super.key,
@@ -20,6 +21,7 @@ class PlaylistTracksScreen extends StatefulWidget {
     required this.title,
     this.knownArtist,
     this.knownThumbnail,
+    this.preloadedTracks,
   });
 
   @override
@@ -37,7 +39,12 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
   @override
   void initState() {
     super.initState();
-    _loadTracks();
+    if (widget.preloadedTracks != null && widget.preloadedTracks!.isNotEmpty) {
+      _tracks = widget.preloadedTracks!;
+      _isLoading = false;
+    } else {
+      _loadTracks();
+    }
   }
 
   Future<void> _loadTracks() async {

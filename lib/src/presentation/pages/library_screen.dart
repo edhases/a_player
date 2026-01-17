@@ -5,6 +5,7 @@ import '../../data/datasources/app_database.dart';
 import '../../core/services/settings_service.dart';
 import '../widgets/common_artwork.dart';
 import 'detail_screen.dart';
+import '../../core/utils/localization.dart';
 import 'folder_screen.dart'; // We'll need to check if this exists or implement it
 
 enum LibraryViewMode { folders, albums, artists }
@@ -39,6 +40,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: DropdownButtonHideUnderline(
@@ -58,18 +60,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 });
               }
             },
-            items: const [
+            items: [
               DropdownMenuItem(
                 value: LibraryViewMode.folders,
-                child: Text('Folders'),
+                child: Text(loc.folders),
               ),
               DropdownMenuItem(
                 value: LibraryViewMode.albums,
-                child: Text('Albums'),
+                child: Text(loc.albums),
               ),
               DropdownMenuItem(
                 value: LibraryViewMode.artists,
-                child: Text('Artists'),
+                child: Text(loc.artists),
               ),
             ],
           ),
@@ -101,7 +103,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+          return Center(
+              child: Text(AppLocalizations.of(context)
+                  .translate('error', args: {'error': snapshot.error})));
         }
 
         final allFolders = snapshot.data ?? [];
@@ -114,7 +118,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         // This implies we CAN see it here to disable it.
 
         if (allFolders.isEmpty) {
-          return const Center(child: Text('No folders found.'));
+          return Center(child: Text(AppLocalizations.of(context).noFolders));
         }
 
         return ListView.builder(
@@ -160,8 +164,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   PopupMenuItem(
                     value: 'toggle',
                     child: Text(isExcluded
-                        ? 'Include in Library'
-                        : 'Exclude from Library'),
+                        ? AppLocalizations.of(context).includeInLibrary
+                        : AppLocalizations.of(context).excludeFromLibrary),
                   ),
                 ],
               ),
@@ -190,7 +194,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
           }
 
           final albums = snapshot.data ?? [];
-          if (albums.isEmpty) return const Center(child: Text('No albums.'));
+          if (albums.isEmpty)
+            return Center(child: Text(AppLocalizations.of(context).noAlbums));
 
           return GridView.builder(
             padding: const EdgeInsets.all(8),
@@ -246,7 +251,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
-                              album.artist ?? 'Unknown Artist',
+                              album.artist ??
+                                  AppLocalizations.of(context).unknownArtist,
                               style: Theme.of(context).textTheme.bodySmall,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -271,7 +277,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final artists = snapshot.data ?? [];
-          if (artists.isEmpty) return const Center(child: Text('No artists.'));
+          if (artists.isEmpty)
+            return Center(child: Text(AppLocalizations.of(context).noArtists));
 
           return ListView.builder(
             itemCount: artists.length,

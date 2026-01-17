@@ -5,7 +5,7 @@ import '../../core/services/music_finder.dart';
 import '../../data/datasources/app_database.dart';
 import '../widgets/search/search_delegate.dart';
 import 'all_tracks_screen.dart';
-import 'folder_screen.dart';
+
 import 'library_screen.dart';
 import 'settings_screen.dart';
 import 'login_screen.dart';
@@ -73,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.account_circle),
-            tooltip: 'Login to YouTube Music',
+            tooltip: loc.loginTooltip,
             onPressed: () {
               Navigator.of(context)
                   .push(MaterialPageRoute(builder: (_) => const LoginScreen()));

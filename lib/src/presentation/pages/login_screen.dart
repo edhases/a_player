@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'webview_login_screen.dart';
+import '../../core/utils/localization.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sign in to YouTube Music'),
+        title: Text(AppLocalizations.of(context).signInTitle),
         backgroundColor: const Color(0xFF1E1E1E),
       ),
       body: Center(
@@ -52,19 +53,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 color: Colors.orangeAccent,
               ),
               const SizedBox(height: 32),
-              const Text(
-                'Sign in to YouTube Music',
+              Text(
+                AppLocalizations.of(context).signInTitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Access your playlists and personalized recommendations with your Google account.',
+              Text(
+                AppLocalizations.of(context).signInSubtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   color: Colors.grey,
                 ),
@@ -101,8 +102,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       )
                     : const Icon(Icons.login),
-                label:
-                    Text(_isLoading ? 'Signing in...' : 'Sign in with Google'),
+                label: Text(_isLoading
+                    ? AppLocalizations.of(context).signingIn
+                    : AppLocalizations.of(context).signInBtn),
                 style: ElevatedButton.styleFrom(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -126,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text('Cancel'),
+                child: Text(AppLocalizations.of(context).cancel),
               ),
               const SizedBox(height: 48),
               Container(
@@ -136,25 +138,25 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'What we need:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      AppLocalizations.of(context).whatWeNeed,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Text(
-                      '• Access to your YouTube Music account via secure browser',
-                      style: TextStyle(fontSize: 13),
-                    ),
-                    Text(
-                      '• Ability to load your playlists',
-                      style: TextStyle(fontSize: 13),
+                      AppLocalizations.of(context).needAccess,
+                      style: const TextStyle(fontSize: 13),
                     ),
                     Text(
-                      '• Secure cookie storage for offline access',
-                      style: TextStyle(fontSize: 13),
+                      AppLocalizations.of(context).needPlaylists,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    Text(
+                      AppLocalizations.of(context).needCookies,
+                      style: const TextStyle(fontSize: 13),
                     ),
                   ],
                 ),
