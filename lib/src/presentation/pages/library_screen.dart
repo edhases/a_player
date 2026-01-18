@@ -6,9 +6,10 @@ import '../../core/services/settings_service.dart';
 import '../widgets/common_artwork.dart';
 import 'detail_screen.dart';
 import '../../core/utils/localization.dart';
-import 'folder_screen.dart'; // We'll need to check if this exists or implement it
+import 'folder_screen.dart';
+import '../../core/services/audio_handler.dart';
 
-enum LibraryViewMode { folders, albums, artists }
+enum LibraryViewMode { folders, albums, artists, radio }
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -73,10 +74,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 value: LibraryViewMode.artists,
                 child: Text(loc.artists),
               ),
+              DropdownMenuItem(
+                value: LibraryViewMode.radio,
+                child: Text(loc.radio),
+              ),
             ],
           ),
         ),
         actions: [
+          if (_viewMode == LibraryViewMode.radio)
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _showAddRadioDialog,
+            ),
           // Add extra actions if needed specific to view
         ],
       ),
@@ -92,7 +102,105 @@ class _LibraryScreenState extends State<LibraryScreen> {
         return _buildAlbumsGrid();
       case LibraryViewMode.artists:
         return _buildArtistsList();
+      case LibraryViewMode.radio:
+        return _buildRadioList();
     }
+  }
+
+  Widget _buildRadioList() {
+    return StreamBuilder<List<RadioStation>>(
+      stream: _db.watchRadioStations(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        // Handle error gracefully, or just empty list
+        final stations = snapshot.data ?? [];
+
+        if (stations.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.radio, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(AppLocalizations.of(context).noRadioStations),
+                TextButton(
+                  onPressed: _showAddRadioDialog,
+                  child: Text(AppLocalizations.of(context).addRadioStation),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: stations.length,
+          itemBuilder: (context, index) {
+            final station = stations[index];
+            return ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.radio)),
+              title: Text(station.name),
+              subtitle: Text(station.streamUrl,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () => _db.deleteRadioStation(station.id),
+              ),
+              onTap: () {
+                // Play logic will be added via AudioHandler
+                GetIt.I<MyAudioHandler>().playRadioStation(station);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddRadioDialog() {
+    final nameController = TextEditingController();
+    final urlController = TextEditingController();
+    final loc = AppLocalizations.of(context);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(loc.addRadioStation),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(labelText: loc.stationName),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            TextField(
+              controller: urlController,
+              decoration: InputDecoration(labelText: loc.streamUrl),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(loc.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty &&
+                  urlController.text.isNotEmpty) {
+                _db.addRadioStation(nameController.text, urlController.text);
+                Navigator.pop(context);
+              }
+            },
+            child: Text(loc.add),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFoldersList() {
@@ -200,10 +308,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           return GridView.builder(
             padding: const EdgeInsets.all(8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.8,
+              crossAxisCount: 3,
+              childAspectRatio: 0.65,
               crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              mainAxisSpacing: 10,
             ),
             itemCount: albums.length,
             itemBuilder: (context, index) {
@@ -227,14 +335,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
+                      AspectRatio(
+                        aspectRatio: 1.0,
                         child: Hero(
                           tag: heroTag,
                           child: CommonArtwork(
                             mediaStoreId: album.mediaStoreId,
                             path: album.artworkPath,
-                            size: 200,
-                            radius: 0,
+                            size: 120,
+                            radius: 4,
                             placeholderIcon: Icons.album,
                           ),
                         ),

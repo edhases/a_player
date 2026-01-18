@@ -53,6 +53,15 @@ class HomeCache extends Table {
   DateTimeColumn get timestamp => dateTime()();
 }
 
+// Radio Stations table
+@DataClassName('RadioStation')
+class RadioStations extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  TextColumn get streamUrl => text()();
+  TextColumn get imageUrl => text().nullable()(); // Optional custom logo
+}
+
 // --- DATA WRAPPER CLASSES ---
 
 class AlbumWithArtwork {
@@ -77,12 +86,12 @@ class Artist {
 
 // --- DATABASE CLASS ---
 
-@DriftDatabase(tables: [Tracks, YouTubeTracks, HomeCache])
+@DriftDatabase(tables: [Tracks, YouTubeTracks, HomeCache, RadioStations])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -116,6 +125,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 10) {
             await m.addColumn(tracks, tracks.isExcluded);
+          }
+          if (from < 11) {
+            await m.createTable(radioStations);
           }
         },
       );
@@ -243,6 +255,13 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Future<List<Track>> getRandomTracks({int limit = 20}) {
+    return (select(tracks)
+          ..orderBy([(t) => OrderingTerm.random()])
+          ..limit(limit))
+        .get();
+  }
+
   Future<List<Track>> getTracksByAlbum(String albumName) {
     return (select(tracks)..where((t) => t.album.equals(albumName))).get();
   }
@@ -328,6 +347,22 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> deleteTrack(String path) async {
     await (delete(tracks)..where((t) => t.path.equals(path))).go();
+  }
+
+  // --- RADIO STATION METHODS ---
+  Future<int> addRadioStation(String name, String streamUrl) {
+    return into(radioStations).insert(RadioStationsCompanion.insert(
+      name: name,
+      streamUrl: streamUrl,
+    ));
+  }
+
+  Future<void> deleteRadioStation(int id) {
+    return (delete(radioStations)..where((r) => r.id.equals(id))).go();
+  }
+
+  Stream<List<RadioStation>> watchRadioStations() {
+    return select(radioStations).watch();
   }
 }
 

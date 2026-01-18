@@ -124,15 +124,26 @@ class RecommendationService {
 
       HomeSection? likedSection;
       if (likedSongs.isNotEmpty) {
-        final songs = likedSongs
-            .map((l) => YouTubeSong(
-                videoId: l.videoId,
-                title: l.title,
-                artist: l.artist,
-                thumbnailUrl: l.thumbnailUrl,
-                duration: 0,
-                category: "Liked"))
-            .toList();
+        final songs = likedSongs.map((l) {
+          // Heuristic: If ID contains slash and doesn't look like a standard YouTube ID (11 chars), assume it's a local path.
+          // YouTube IDs are 11 chars (alphanumeric + _/-).
+          // Local paths are usually longer and contain slashes.
+          String vId = l.videoId;
+          if (vId.length != 11 && vId.contains(RegExp(r'[/\\]'))) {
+            // Add prefix so HomeFeedScreen handles it as local track
+            if (!vId.startsWith('local:')) {
+              vId = 'local:$vId';
+            }
+          }
+
+          return YouTubeSong(
+              videoId: vId,
+              title: l.title,
+              artist: l.artist,
+              thumbnailUrl: l.thumbnailUrl,
+              duration: 0,
+              category: "Liked");
+        }).toList();
 
         likedSection = HomeSection(
             title: loc?.likedSongs ?? "Liked Songs",

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
 
@@ -12,9 +13,46 @@ class YoutubeAudioSource extends StreamAudioSource {
   final YouTubeHelper _ytHelper;
   String? _cachedUrl;
   DateTime? _cacheTime;
+  bool _isPrefetching = false;
+  Completer<void>? _prefetchCompleter;
 
   YoutubeAudioSource(this.videoId, this._ytHelper, {dynamic tag})
       : super(tag: tag ?? videoId);
+
+  /// Prefetch the audio URL before playback starts.
+  /// This prevents race conditions where the player tries to stream
+  /// before the URL is available.
+  Future<void> prefetch() async {
+    if (_cachedUrl != null &&
+        _cacheTime != null &&
+        DateTime.now().difference(_cacheTime!) < const Duration(hours: 4)) {
+      debugPrint('[YoutubeAudioSource] URL already cached for $videoId');
+      return;
+    }
+
+    if (_isPrefetching) {
+      debugPrint('[YoutubeAudioSource] Already prefetching, waiting...');
+      await _prefetchCompleter?.future;
+      return;
+    }
+
+    _isPrefetching = true;
+    _prefetchCompleter = Completer<void>();
+
+    try {
+      debugPrint('[YoutubeAudioSource] Prefetching URL for $videoId...');
+      _cachedUrl = await _ytHelper.getAudioUrl(videoId);
+      _cacheTime = DateTime.now();
+      debugPrint(
+          '[YoutubeAudioSource] Prefetch complete: ${_cachedUrl?.substring(0, 50)}...');
+    } catch (e) {
+      debugPrint('[YoutubeAudioSource] Prefetch error: $e');
+      rethrow;
+    } finally {
+      _isPrefetching = false;
+      _prefetchCompleter?.complete();
+    }
+  }
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {
@@ -22,12 +60,22 @@ class YoutubeAudioSource extends StreamAudioSource {
     if (_cachedUrl == null ||
         _cacheTime == null ||
         DateTime.now().difference(_cacheTime!) > const Duration(hours: 4)) {
-      try {
-        _cachedUrl = await _ytHelper.getAudioUrl(videoId);
-        _cacheTime = DateTime.now();
-      } catch (e) {
-        // Propagate the error if the URL fetch fails.
-        throw Exception('Failed to get audio URL for videoId: $videoId - $e');
+      // Wait for any ongoing prefetch
+      if (_isPrefetching) {
+        debugPrint('[YoutubeAudioSource] request() waiting for prefetch...');
+        await _prefetchCompleter?.future;
+      }
+
+      // If still null, fetch now
+      if (_cachedUrl == null) {
+        try {
+          debugPrint('[YoutubeAudioSource] Fetching URL in request()...');
+          _cachedUrl = await _ytHelper.getAudioUrl(videoId);
+          _cacheTime = DateTime.now();
+        } catch (e) {
+          // Propagate the error if the URL fetch fails.
+          throw Exception('Failed to get audio URL for videoId: $videoId - $e');
+        }
       }
     }
 

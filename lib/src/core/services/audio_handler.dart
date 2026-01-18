@@ -9,6 +9,7 @@ import 'package:audio_session/audio_session.dart';
 import '../../data/datasources/app_database.dart';
 import 'settings_service.dart';
 import 'equalizer_service.dart';
+import 'log_service.dart';
 // Add import for YouTubeHelper
 // Add import for YouTubeHelper
 
@@ -17,6 +18,7 @@ import '../utils/media_item_adapter.dart';
 import 'audio_source_factory.dart';
 import '../../core/services/recommendation_service.dart';
 import '../../core/services/metadata_matching_service.dart';
+import '../../core/services/innertube_service.dart';
 import '../../data/models/local_track_override.dart';
 
 /// The main audio handler that bridges just_audio with audio_service.
@@ -33,8 +35,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   StreamSubscription<LocalTrackOverride?>? _currentOverrideSubscription;
   bool _isInitialized = false;
 
+  // YouTube playback history tracking
+  final Set<String> _reportedVideoIds = {};
+  int? _lastReportedIndex;
+  InnerTubeService? _innerTubeService;
+
   MyAudioHandler(this._db) {
     _init();
+  }
+
+  void _logError(String message, [Object? error]) {
+    debugPrint(message); // Keep debug print
+    if (GetIt.I.isRegistered<LogService>()) {
+      GetIt.I<LogService>().error(message, error: error);
+    }
   }
 
   Future<void> _init() async {
@@ -81,8 +95,34 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         .listen((_) => _broadcastState(player.playbackEvent));
     player.loopModeStream.listen((_) => _broadcastState(player.playbackEvent));
 
+    // Initialize Equalizer when audio session ID is available (Android only)
+    _audioSessionIdSubscription =
+        player.androidAudioSessionIdStream.listen((sessionId) async {
+      debugPrint(
+          '[AudioHandler] androidAudioSessionIdStream emitted: $sessionId');
+      if (sessionId != null && sessionId > 0) {
+        debugPrint(
+            '[AudioHandler] Got Android audio session ID: $sessionId, initializing Equalizer...');
+        try {
+          // Register and initialize EqualizerService if not already done
+          if (!GetIt.I.isRegistered<EqualizerService>()) {
+            final equalizerService = EqualizerService();
+            await equalizerService.init(sessionId);
+            GetIt.I.registerSingleton<EqualizerService>(equalizerService);
+            debugPrint(
+                '[AudioHandler] EqualizerService initialized and registered');
+          }
+        } catch (e) {
+          debugPrint('[AudioHandler] Failed to initialize Equalizer: $e');
+        }
+      } else {
+        debugPrint(
+            '[AudioHandler] Invalid sessionId: $sessionId (null or <= 0)');
+      }
+    });
+
     // Update current song info immediately when index changes
-    player.currentIndexStream.listen((index) {
+    player.currentIndexStream.distinct().listen((index) {
       if (index != null && index < queue.value.length) {
         final item = queue.value[index];
         debugPrint(
@@ -111,7 +151,34 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     });
 
+    // ICY Metadata Listener for Radio
+    player.icyMetadataStream.listen((metadata) {
+      if (metadata != null && metadata.info != null) {
+        debugPrint(
+            '[AudioHandler] ICY Metadata: ${metadata.info?.title} - ${metadata.info?.url}');
+
+        final current = mediaItem.value;
+        if (current != null && current.extras?['isRadio'] == true) {
+          final title = metadata.info?.title;
+          if (title != null && title.isNotEmpty) {
+            // Update the media item with the current song from radio
+            final newItem = current.copyWith(
+              artist:
+                  title, // Often radio sends "Artist - Song" as title, or just title
+              // We might want to parse "Artist - Title" if possible, but raw title is safer for now.
+            );
+            mediaItem.add(newItem);
+          }
+        }
+      }
+    });
+
     // ... rest of init
+
+    // Initialize InnerTubeService for playback history reporting
+    if (GetIt.I.isRegistered<InnerTubeService>()) {
+      _innerTubeService = GetIt.I<InnerTubeService>();
+    }
 
     // Save state persistence
     mediaItem.stream.listen((item) {
@@ -121,6 +188,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     player.positionStream
         .debounceTime(const Duration(seconds: 5))
         .listen((position) => _settingsService.saveLastPosition(position));
+
+    // YouTube playback history tracking - report after 30 seconds
+    player.positionStream
+        .where((pos) => pos.inSeconds >= 30)
+        .distinct()
+        .listen((position) => _reportPlaybackHistory());
 
     queue.stream.listen((q) {
       final trackIds = q.map((item) => item.id).toList();
@@ -136,6 +209,39 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await _loadInitialState();
     debugPrint(
         '[AudioHandler] _init completed in ${DateTime.now().difference(initStart).inMilliseconds}ms');
+  }
+
+  /// Report current playing YouTube track to YouTube history
+  void _reportPlaybackHistory() {
+    final index = player.currentIndex;
+    if (index == null) return;
+
+    // Don't report same track twice in this session
+    if (_lastReportedIndex == index) return;
+
+    if (index >= queue.value.length) return;
+    final item = queue.value[index];
+
+    // Only report YouTube tracks
+    final isOnline = item.extras?['isOnline'] == true;
+    final videoId = item.extras?['videoId'] as String?;
+
+    if (!isOnline || videoId == null) return;
+
+    // Don't report same video twice
+    if (_reportedVideoIds.contains(videoId)) return;
+
+    debugPrint(
+        '[AudioHandler] Reporting playback history for: $videoId (${item.title})');
+    _lastReportedIndex = index;
+    _reportedVideoIds.add(videoId);
+
+    // Fire-and-forget reporting
+    _innerTubeService?.getPlaybackTrackingUrl(videoId).then((trackingUrl) {
+      if (trackingUrl != null) {
+        _innerTubeService?.reportPlayback(trackingUrl);
+      }
+    });
   }
 
   void _broadcastState(PlaybackEvent event) {
@@ -361,12 +467,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await addQueueItem(mediaItem);
   }
 
-  Future<void> playYouTubeSong(YouTubeSong song) async {
+  Future<void> playYouTubeSong(YouTubeSong song,
+      {bool loadRadioQueue = true}) async {
     final mediaItem = MediaItemAdapter.fromYouTubeSong(song);
 
     debugPrint('[AudioHandler] playYouTubeSong: ${song.title}');
 
-    // Record history
+    // Record history (non-blocking)
     _recommendationService
         .addToHistoryManual(
       videoId: song.videoId,
@@ -387,12 +494,96 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final source = await _audioSourceFactory.createSource(mediaItem);
       await _playlist.add(source);
 
+      // Explicitly seek to the beginning of the new track.
+      // This prepares the player without strictly blocking on the full load like player.load() might.
+      debugPrint('[AudioHandler] playYouTubeSong: Seeking to 0...');
       await player.seek(Duration.zero, index: 0);
+
+      // Load radio queue in background (non-blocking) - Start this BEFORE awaiting play()
+      // because just_audio's play() future completes when playback FINISHES.
+      if (loadRadioQueue && song.videoId.length == 11) {
+        _loadRadioQueue(song.videoId);
+      }
+
+      debugPrint('[AudioHandler] playYouTubeSong: Calling play()...');
       await player.play();
       debugPrint(
           '[AudioHandler] playYouTubeSong: Started playing ${song.title}');
     } catch (e) {
       debugPrint('[AudioHandler] playYouTubeSong error: $e');
+    }
+  }
+
+  Future<void> playRadioStation(RadioStation station) async {
+    debugPrint('[AudioHandler] playing radio station: ${station.name}');
+
+    // Create MediaItem for the radio station
+    final mediaItem = MediaItem(
+      id: station.streamUrl,
+      album: 'Radio',
+      title: station.name,
+      artist: 'Live Stream',
+      artUri: station.imageUrl != null ? Uri.parse(station.imageUrl!) : null,
+      extras: {
+        'isOnline': true,
+        'isRadio': true,
+        'radioId': station.id,
+      },
+    );
+
+    // Clear and set new queue
+    queue.add([mediaItem]);
+
+    try {
+      await _playlist.clear();
+      // For radio, we might not need AudioSourceFactory if we handle it directly,
+      // but let's see if AudioSourceFactory can handle HTTP URLs.
+      // Yes, it has a check for 'http'.
+
+      final source = await _audioSourceFactory.createSource(mediaItem);
+      await _playlist.add(source);
+
+      debugPrint('[AudioHandler] playRadioStation: Seeking to 0...');
+      await player.seek(Duration.zero, index: 0);
+
+      debugPrint('[AudioHandler] playRadioStation: Calling play()...');
+      await player.play();
+    } catch (e) {
+      _logError('[AudioHandler] playRadioStation error', e);
+    }
+  }
+
+  /// Load radio/recommended tracks for auto-play after current song
+  Future<void> _loadRadioQueue(String videoId) async {
+    try {
+      debugPrint('[AudioHandler] Loading radio queue for $videoId...');
+      final innerTube = GetIt.I<InnerTubeService>();
+      final radioTracks = await innerTube.getRadioTracks(videoId);
+
+      if (radioTracks.isEmpty) {
+        debugPrint('[AudioHandler] No radio tracks found');
+        return;
+      }
+
+      // Add radio tracks to queue (up to 25), filtering out any duplicates
+      // that might already be in the queue (e.g. the seed track if API returned it).
+      final currentIds = queue.value.map((m) => m.id).toSet();
+      final tracksToAdd = radioTracks
+          .where((t) => !currentIds.contains(t.videoId))
+          .take(25)
+          .toList();
+
+      debugPrint(
+          '[AudioHandler] Adding ${tracksToAdd.length} radio tracks to queue');
+
+      for (final track in tracksToAdd) {
+        final mi = MediaItemAdapter.fromYouTubeSong(track);
+        await addQueueItem(mi);
+      }
+
+      debugPrint('[AudioHandler] Radio queue loaded successfully');
+    } catch (e) {
+      debugPrint('[AudioHandler] Error loading radio queue: $e');
     }
   }
 

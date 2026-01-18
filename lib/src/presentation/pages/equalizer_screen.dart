@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
+import 'package:equalizer_flutter/equalizer_flutter.dart';
 import '../../core/services/equalizer_service.dart';
 import '../../core/utils/localization.dart';
 
@@ -24,12 +26,45 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // If the service isn't ready, show a message.
+    // If the service isn't ready, offer to open system equalizer
     if (!GetIt.I.isRegistered<EqualizerService>()) {
       return Scaffold(
         appBar: AppBar(title: Text(AppLocalizations.of(context).equalizer)),
         body: Center(
-          child: Text(AppLocalizations.of(context).equalizerActivate),
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.equalizer, size: 64, color: Colors.white54),
+                const SizedBox(height: 16),
+                Text(
+                  AppLocalizations.of(context).equalizerActivate,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await EqualizerFlutter.open(0); // 0 = global/system EQ
+                    } catch (e) {
+                      debugPrint('[Equalizer] Failed to open system EQ: $e');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(AppLocalizations.of(context)
+                                  .serviceNotAvailable)),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: Text(AppLocalizations.of(context).openSystemEqualizer),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -69,7 +104,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
       valueListenable: _equalizerService.currentPreset,
       builder: (context, currentPreset, child) {
         return DropdownButtonFormField<String>(
-          value: currentPreset,
+          initialValue: currentPreset,
           decoration: InputDecoration(
             labelText: AppLocalizations.of(context).preset,
             border: const OutlineInputBorder(),

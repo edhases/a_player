@@ -9,6 +9,9 @@ import '../../core/services/localization_service.dart';
 import '../../core/utils/localization.dart';
 import '../../core/services/metadata_matching_service.dart';
 import '../../core/services/cache_service.dart';
+import '../../core/services/log_service.dart';
+import '../../core/services/telegram_service.dart';
+import 'package:share_plus/share_plus.dart';
 import 'webview_login_screen.dart';
 import 'cached_tracks_screen.dart';
 import 'equalizer_screen.dart';
@@ -420,6 +423,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
+          // Logs Section
+          _buildSectionHeader(context, loc.logs),
+          ListTile(
+            leading: const Icon(Icons.send),
+            title: Text(loc.sendLogs),
+            subtitle: Text(GetIt.I.isRegistered<TelegramService>() &&
+                    GetIt.I<TelegramService>().isConfigured
+                ? loc.sendLogsDesc
+                : loc.telegramNotConfigured),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              if (!GetIt.I.isRegistered<TelegramService>() ||
+                  !GetIt.I<TelegramService>().isConfigured) {
+                _showTelegramConfigDialog(context);
+                return;
+              }
+              final success = await GetIt.I<TelegramService>().sendLogs();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content:
+                          Text(success ? loc.logsSent : loc.logsSendFailed)),
+                );
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.share),
+            title: Text(loc.shareLogs),
+            subtitle: Text(loc.shareLogsDesc),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              if (!GetIt.I.isRegistered<LogService>()) return;
+              final file = await GetIt.I<LogService>().getLogFile();
+              if (file != null && context.mounted) {
+                await Share.shareXFiles([XFile(file.path)],
+                    text: 'Oxide Player Logs');
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: Text(loc.configureTelegram),
+            subtitle: Text(loc.configureTelegramDesc),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showTelegramConfigDialog(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: Text(loc.clearLogs),
+            subtitle: Text(loc.clearLogsDesc),
+            onTap: () async {
+              if (!GetIt.I.isRegistered<LogService>()) return;
+              await GetIt.I<LogService>().clearLogs();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(loc.logsCleared)),
+                );
+              }
+            },
+          ),
+
+          const Divider(),
+
           // About Section
           _buildSectionHeader(context, loc.about),
           ListTile(
@@ -563,5 +630,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
       default:
         return 'English';
     }
+  }
+
+  void _showTelegramConfigDialog(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final tokenController = TextEditingController();
+    final chatIdController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(loc.configureTelegram),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: tokenController,
+                decoration: InputDecoration(
+                  labelText: loc.telegramBotToken,
+                  hintText: '123456:ABC-DEF...',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: chatIdController,
+                decoration: InputDecoration(
+                  labelText: loc.telegramChatId,
+                  hintText: '-1001234567890',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(loc.cancel),
+            ),
+            TextButton(
+              onPressed: () async {
+                if (tokenController.text.isEmpty ||
+                    chatIdController.text.isEmpty) {
+                  return;
+                }
+                if (GetIt.I.isRegistered<TelegramService>()) {
+                  await GetIt.I<TelegramService>().configure(
+                    botToken: tokenController.text.trim(),
+                    chatId: chatIdController.text.trim(),
+                  );
+                  final success =
+                      await GetIt.I<TelegramService>().testConnection();
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(success
+                            ? loc.telegramTestSuccess
+                            : loc.telegramTestFailed),
+                        backgroundColor: success ? Colors.green : Colors.red,
+                      ),
+                    );
+                    setState(() {}); // Refresh UI
+                  }
+                }
+              },
+              child: Text(loc.ok),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

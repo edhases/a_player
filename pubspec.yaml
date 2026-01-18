@@ -1,7 +1,7 @@
 name: oxide_player
 description: "A new Flutter project."
 publish_to: 'none'
-version: 22.8.160126+28
+version: 22.8.20260118+29
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -46,6 +46,8 @@ dependencies:
   collection: ^1.18.0
   path: ^1.9.0
   flutter_cache_manager: ^3.3.1
+  share_plus: ^10.1.4
+  # audiotagger: ^2.2.1 # Removed: incompatible with Flutter 3.29+ (uses v1 embedding)
 
   # YouTube Integration
   dio: ^5.4.0

@@ -7,6 +7,7 @@ import '../../core/services/youtube_helper.dart';
 import '../../core/services/audio_handler.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../widgets/common_artwork.dart';
+import '../widgets/youtube_song_menu.dart';
 
 class PlaylistTracksScreen extends StatefulWidget {
   final String playlistId;
@@ -143,6 +144,20 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
                       subtitle: Text(song.artist,
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       onTap: () => _playSong(song),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.play_circle_outline),
+                            onPressed: () => _playSong(song),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.more_vert),
+                            onPressed: () =>
+                                YouTubeSongMenu.show(context, song),
+                          ),
+                        ],
+                      ),
                     );
                   },
                 ),

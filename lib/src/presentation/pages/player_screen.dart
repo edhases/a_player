@@ -11,6 +11,8 @@ import '../../core/services/sleep_timer_service.dart';
 import '../../core/utils/localization.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/youtube_helper.dart';
+import '../../core/services/favorites_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -27,7 +29,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final db = GetIt.I<AppDatabase>();
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -86,22 +87,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     child: Row(
                       children: [
                         Expanded(child: _buildTrackInfo(mediaItem)),
-                        StreamBuilder<bool>(
-                          stream: db.watchIsFavorite(mediaItem.id),
-                          builder: (context, favSnapshot) {
-                            final isFavorite = favSnapshot.data ?? false;
-                            return IconButton(
-                              icon: Icon(
-                                isFavorite
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: isFavorite ? Colors.red : Colors.white70,
-                                size: 28,
-                              ),
-                              onPressed: () => db.toggleFavorite(mediaItem.id),
-                            );
-                          },
-                        ),
+                        _buildFavoriteButton(mediaItem),
                       ],
                     ),
                   ),
@@ -164,6 +150,64 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildFavoriteButton(MediaItem mediaItem) {
+    final isOnline = mediaItem.extras?['isOnline'] == true;
+    final videoId = mediaItem.extras?['videoId'] as String?;
+
+    // Always use videoId for like checks - liked songs are stored by videoId only
+    // Always use videoId for like checks - liked songs are stored by videoId only
+    if (isOnline && videoId != null) {
+      // YouTube track - use FavoritesService
+      final favService = GetIt.I<FavoritesService>();
+      return StreamBuilder<bool>(
+        stream: favService.isLikedStream(videoId),
+        builder: (context, snapshot) {
+          final isLiked = snapshot.data ?? false;
+          return IconButton(
+            icon: Icon(
+              isLiked ? Icons.favorite : Icons.favorite_border,
+              color: isLiked ? Colors.red : Colors.white70,
+              size: 28,
+            ),
+            onPressed: () {
+              favService.toggleFavorite(
+                videoId: videoId,
+                title: mediaItem.title,
+                artist: mediaItem.artist ?? 'Unknown',
+                thumbnailUrl: mediaItem.artUri?.toString() ?? '',
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(isLiked
+                      ? AppLocalizations.of(context).removedFromFavorites
+                      : AppLocalizations.of(context).addedToFavorites),
+                  duration: const Duration(seconds: 1),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } else {
+      // Local track - use AppDatabase
+      final db = GetIt.I<AppDatabase>();
+      return StreamBuilder<bool>(
+        stream: db.watchIsFavorite(mediaItem.id),
+        builder: (context, snapshot) {
+          final isFavorite = snapshot.data ?? false;
+          return IconButton(
+            icon: Icon(
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: isFavorite ? Colors.red : Colors.white70,
+              size: 28,
+            ),
+            onPressed: () => db.toggleFavorite(mediaItem.id),
+          );
+        },
+      );
+    }
   }
 
   Widget _buildTrackInfo(MediaItem mediaItem) {
@@ -499,7 +543,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
             leading: const Icon(Icons.share, color: Colors.white),
             title: Text(loc.shareTrack,
                 style: const TextStyle(color: Colors.white)),
-            onTap: () => Navigator.pop(context),
+            onTap: () async {
+              Navigator.pop(context);
+              final mediaItem = _audioHandler.mediaItem.value;
+              final videoId = mediaItem?.extras?['videoId'] as String?;
+              if (videoId != null && videoId.length == 11) {
+                final url = 'https://music.youtube.com/watch?v=$videoId';
+                await Share.share(url, subject: mediaItem?.title ?? 'Track');
+              } else {
+                // For local tracks, share title/artist info
+                final title = mediaItem?.title ?? 'Unknown';
+                final artist = mediaItem?.artist ?? 'Unknown';
+                await Share.share('$title - $artist');
+              }
+            },
           ),
         ],
       ),

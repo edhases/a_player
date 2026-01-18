@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import '../widgets/square_song_card.dart';
+import '../widgets/paged_song_list.dart';
+import '../widgets/youtube_song_menu.dart';
 import '../../core/services/innertube_service.dart';
 import '../../core/services/google_auth_service.dart';
 import '../../core/utils/localization.dart';
-import '../../core/services/audio_handler.dart';
+import '../../core/services/smart_play_service.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../widgets/common_artwork.dart';
 import 'login_screen.dart';
-import 'playlist_tracks_screen.dart';
 import 'last_played_screen.dart';
 import 'liked_songs_screen.dart';
 
@@ -23,12 +23,12 @@ class YouTubeHubScreen extends StatefulWidget {
 class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   final _innerTube = GetIt.I<InnerTubeService>();
   final _authService = GetIt.I<GoogleAuthService>();
-  final _audioHandler = GetIt.I<MyAudioHandler>();
+  final _smartPlayService = GetIt.I<SmartPlayService>();
 
   bool _isLoggedIn = false;
   bool _isLoading = true;
   List<Map<String, dynamic>> _sections = [];
-  List<Map<String, dynamic>> _playlists = []; // Added playlists variable
+  List<Map<String, dynamic>> _playlists = [];
   String? _error;
 
   StreamSubscription<bool>? _loginStatusSubscription;
@@ -85,8 +85,6 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
     });
 
     try {
-      // Load both home data and user playlists
-      // Load both home data and user playlists
       final sectionsResult = await _innerTube.getHomeData();
       final playlists = await _innerTube.getLibraryPlaylists();
 
@@ -107,104 +105,13 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
   }
 
   void _playSong(YouTubeSong song) async {
-    debugPrint('[SmartPlay] _playSong called for: ${song.title}');
+    // Використовуємо централізований SmartPlayService
+    await _smartPlayService.handleSongTap(context, song);
+  }
 
-    // Check for explicit playlist OR suspect videoId (Album ID)
-    // Standard YouTube video IDs are 11 characters. If it's different, it's likely an Album/Playlist ID.
-    final isSuspectId = song.videoId.length != 11 && song.videoId.isNotEmpty;
-    final isPlaylist =
-        song.isPlaylist || (song.playlistId != null) || isSuspectId;
-    final playlistId = song.playlistId ?? (isSuspectId ? song.videoId : null);
-
-    debugPrint(
-        '[SmartPlay] isPlaylist: $isPlaylist, playlistId: $playlistId (Suspect: $isSuspectId)');
-
-    // If it's a container (Album/Playlist/Single), we need to check its contents
-    if (isPlaylist && playlistId != null) {
-      if (!mounted) return;
-
-      // Show loading feedback
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Loading ${song.title}...'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-
-      try {
-        debugPrint(
-            '[SmartPlay] Fetching tracks for playlistId: $playlistId...');
-        // Fetch tracks first to decide what to do
-        final tracks = await _innerTube.getPlaylistTracks(playlistId);
-        debugPrint('[SmartPlay] Fetched ${tracks.length} tracks.');
-
-        if (!mounted) return;
-
-        // Smart Play Logic
-        if (tracks.length == 1) {
-          debugPrint('[SmartPlay] Single track found. Playing directly.');
-          // It's a Single (or one-track album) -> Play directly
-          var singleTrack = tracks.first;
-
-          // Merge metadata from the container 'song' if useful
-          // (Preserves the beautiful card artwork and correct artist name)
-          singleTrack = singleTrack.copyWith(
-            artist:
-                (singleTrack.artist == 'Unknown' || singleTrack.artist.isEmpty)
-                    ? song.artist
-                    : singleTrack.artist,
-            thumbnailUrl: (singleTrack.thumbnailUrl.isEmpty)
-                ? song.thumbnailUrl
-                : singleTrack.thumbnailUrl,
-          );
-
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Playing ${singleTrack.title}...'),
-              duration: const Duration(seconds: 1),
-            ),
-          );
-
-          await _audioHandler.playYouTubeSong(singleTrack);
-        } else {
-          debugPrint(
-              '[SmartPlay] Multiple tracks found (${tracks.length}). Navigating to playlist screen.');
-          // Multiple tracks -> Navigate to details (with preloaded data)
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PlaylistTracksScreen(
-                playlistId: playlistId,
-                title: song.title,
-                knownArtist: song.artist,
-                knownThumbnail: song.thumbnailUrl,
-                preloadedTracks: tracks, // Pass the data we just fetched
-              ),
-            ),
-          );
-        }
-      } catch (e) {
-        debugPrint('[SmartPlay] Error: $e');
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading playlist: $e')),
-        );
-      }
-      return;
-    }
-
-    debugPrint('[SmartPlay] Not a playlist container. Playing regular song.');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text('Playing ${song.title}...'),
-          duration: const Duration(seconds: 1)),
-    );
-
-    // Use centralized player logic
-    await _audioHandler.playYouTubeSong(song);
+  Future<void> _showSongContextMenu(
+      BuildContext context, YouTubeSong song) async {
+    await YouTubeSongMenu.show(context, song);
   }
 
   @override
@@ -215,7 +122,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('YouTube Music (v4)'),
+        title: const Text('YouTube Music'),
         actions: [
           if (_isLoggedIn)
             IconButton(
@@ -352,12 +259,13 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.8,
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.65,
               ),
               itemCount: _playlists.length,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemBuilder: (context, index) {
                 final playlist = _playlists[index];
                 return GestureDetector(
@@ -377,25 +285,27 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
+                      AspectRatio(
+                        aspectRatio: 1.0,
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                           child: CommonArtwork(
                             url: playlist['thumbnail'],
-                            size: 200,
+                            size: 120,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       Text(
                         playlist['title'],
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w500, fontSize: 12),
                       ),
                       Text(
                         loc.playlistType,
-                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        style: TextStyle(color: Colors.grey[500], fontSize: 10),
                       ),
                     ],
                   ),
@@ -443,21 +353,12 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
             ),
           ),
         ),
-        SizedBox(
-          height: 215, // Fixed overflow issues
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            clipBehavior: Clip.none,
-            itemBuilder: (context, index) {
-              final song = items[index];
-              return SquareSongCard(
-                song: song,
-                width: 150,
-                onTap: () => _playSong(song),
-              );
-            },
-          ),
+        PagedSongList(
+          songs: items,
+          itemsPerPage: 5,
+          onSongTap: _playSong,
+          onPlayTap: _playSong,
+          onMenuTap: (song) => _showSongContextMenu(context, song),
         ),
       ],
     );

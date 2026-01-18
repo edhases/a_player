@@ -14,6 +14,10 @@ import 'src/core/services/youtube_helper.dart';
 import 'src/core/services/innertube_service.dart';
 import 'src/core/services/audio_source_factory.dart';
 import 'src/core/services/sleep_timer_service.dart';
+import 'src/core/services/smart_play_service.dart';
+import 'src/core/services/log_service.dart';
+import 'src/core/services/telegram_service.dart';
+import 'src/core/services/download_service.dart';
 
 import 'src/core/services/localization_service.dart';
 import 'src/core/utils/localization.dart';
@@ -39,6 +43,21 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Initialize LogService first (for early logging)
+  final logService = LogService();
+  await logService.init();
+  GetIt.I.registerSingleton<LogService>(logService);
+  logService.info('[Main] LogService initialized');
+
+  // Initialize TelegramService
+  final telegramService = TelegramService();
+  await telegramService.init();
+  GetIt.I.registerSingleton<TelegramService>(telegramService);
+
+  // Notify start (fire/forget)
+  telegramService.sendMessage(
+      '🚀 <b>Oxide Player Started</b>\nVersion: 20260118\nDevice: ${await logService.getDeviceInfoSummary()}');
 
   // Initialize and register services in order
   final settingsService = SettingsService();
@@ -71,6 +90,10 @@ void main() async {
   final youtubeHelper = YouTubeHelper(db);
   GetIt.I.registerSingleton<YouTubeHelper>(youtubeHelper);
   debugPrint('[Main] YouTubeHelper initialized.');
+
+  // Register DownloadService
+  GetIt.I.registerSingleton<DownloadService>(
+      DownloadService(ytHelper: youtubeHelper));
 
   // Register RecommendationService
   debugPrint('[Main] RecommendationService initializing...');
@@ -131,6 +154,9 @@ void main() async {
 
   // Register SleepTimerService
   GetIt.I.registerSingleton<SleepTimerService>(SleepTimerService(handler));
+
+  // Register SmartPlayService
+  GetIt.I.registerSingleton<SmartPlayService>(SmartPlayService());
 
   runApp(
     ChangeNotifierProvider.value(

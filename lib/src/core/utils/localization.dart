@@ -28,6 +28,7 @@ class AppLocalizations {
   String get settings => translate('settings');
   String get youtube => translate('youtube');
   String get search => translate('search');
+  String get yourLocalMusic => translate('yourLocalMusic');
   String get playlists => translate('playlists');
   String get tracks => translate('tracks');
   String get albums => translate('albums');
@@ -75,6 +76,17 @@ class AppLocalizations {
   String get recommendedForYou => translate('recommended_for_you');
   String get trendingNow => translate('trending_now');
   String get madeForYou => translate('made_for_you');
+  String get open => translate('open');
+  String get openSystemEqualizer => translate('open_system_equalizer');
+
+  // Radio
+  String get radio => translate('radio');
+  String get addRadioStation => translate('add_radio_station');
+  String get stationName => translate('station_name');
+  String get streamUrl => translate('stream_url');
+  String get add => translate('add');
+  String get noRadioStations => translate('no_radio_stations');
+  String get deleteStationConfirm => translate('delete_station_confirm');
 
   String get shareTrack => translate('share_track');
   String get stopTimer => translate('stop_timer');
@@ -175,6 +187,35 @@ class AppLocalizations {
   String get needAccess => translate('need_access');
   String get needPlaylists => translate('need_playlists');
   String get needCookies => translate('need_cookies');
+
+  // Logs
+  String get logs => translate('logs');
+  String get logsDesc => translate('logs_desc');
+  String get sendLogs => translate('send_logs');
+  String get sendLogsDesc => translate('send_logs_desc');
+  String get shareLogs => translate('share_logs');
+  String get shareLogsDesc => translate('share_logs_desc');
+  String get clearLogs => translate('clear_logs');
+  String get clearLogsDesc => translate('clear_logs_desc');
+  String get logsCleared => translate('logs_cleared');
+  String get logsSent => translate('logs_sent');
+  String get logsSendFailed => translate('logs_send_failed');
+  String get configureTelegram => translate('configure_telegram');
+  String get configureTelegramDesc => translate('configure_telegram_desc');
+  String get telegramBotToken => translate('telegram_bot_token');
+  String get telegramChatId => translate('telegram_chat_id');
+  String get telegramConfigured => translate('telegram_configured');
+  String get telegramTestSuccess => translate('telegram_test_success');
+  String get telegramTestFailed => translate('telegram_test_failed');
+  String get telegramNotConfigured => translate('telegram_not_configured');
+
+  // Download
+  String get saveToDevice => translate('saveToDevice');
+  String get downloadError => translate('downloadError');
+  String downloadStarted(String title) =>
+      translate('downloadStarted', args: {'arg0': title});
+  String downloadCompleted(String title) =>
+      translate('downloadCompleted', args: {'arg0': title});
 }
 
 class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

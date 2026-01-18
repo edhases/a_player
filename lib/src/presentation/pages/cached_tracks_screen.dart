@@ -4,6 +4,8 @@ import '../../core/services/cache_service.dart';
 import '../../data/models/cached_track.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/utils/localization.dart';
+import '../../core/services/download_service.dart';
+import '../../domain/entities/youtube_song.dart';
 
 class CachedTracksScreen extends StatefulWidget {
   const CachedTracksScreen({super.key});
@@ -79,13 +81,62 @@ class _CachedTracksScreenState extends State<CachedTracksScreen> {
                       title: Text(track.title),
                       subtitle: Text(
                           '${track.artist} • ${_formatBytes(track.fileSize)}'),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _deleteTrack(track),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.save_alt),
+                            tooltip: AppLocalizations.of(context).saveToDevice,
+                            onPressed: () => _saveToDevice(track),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => _deleteTrack(track),
+                          ),
+                        ],
                       ),
                     );
                   },
                 ),
     );
+  }
+
+  Future<void> _saveToDevice(CachedTrack track) async {
+    final downloadService = GetIt.I<DownloadService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final loc = AppLocalizations.of(context);
+
+    // Show starting snackbar
+    messenger.showSnackBar(
+      SnackBar(content: Text(loc.downloadStarted(track.title))),
+    );
+
+    final song = YouTubeSong(
+      videoId: track.videoId,
+      title: track.title,
+      artist: track.artist,
+      thumbnailUrl: track.thumbnailUrl,
+      duration:
+          0, // Duration not stored in cache model, acceptable for download wrapper
+    );
+
+    final path = await downloadService.saveToDevice(
+      song,
+      onProgress: (progress) {
+        // Optional: show progress dialog
+      },
+    );
+
+    if (!mounted) return;
+
+    if (path != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(loc.downloadCompleted(track.title))),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(content: Text(loc.downloadError)),
+      );
+    }
   }
 }

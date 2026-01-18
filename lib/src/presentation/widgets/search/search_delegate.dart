@@ -16,6 +16,7 @@ import '../common_artwork.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../../core/utils/result.dart';
 import '../../pages/playlist_tracks_screen.dart';
+import '../youtube_song_menu.dart';
 
 class MusicSearchDelegate extends SearchDelegate<Track?> {
   final AppDatabase db;
@@ -276,7 +277,19 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
                   ),
                   title: Text(track.title),
                   subtitle: Text(track.artist),
-                  trailing: const Icon(Icons.play_circle_outline),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.play_circle_outline),
+                        onPressed: () => _playYouTubeTrack(context, track),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.more_vert),
+                        onPressed: () => YouTubeSongMenu.show(context, track),
+                      ),
+                    ],
+                  ),
                   onTap: () => _playYouTubeTrack(context, track),
                 );
               },

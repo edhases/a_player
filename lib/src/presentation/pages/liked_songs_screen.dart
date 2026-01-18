@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/favorites_service.dart';
-import '../../core/services/audio_handler.dart';
+import '../../core/services/smart_play_service.dart';
 import '../../data/models/liked_song.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../widgets/common_artwork.dart';
 import '../../core/utils/localization.dart';
-import '../../core/services/innertube_service.dart';
-import 'package:audio_service/audio_service.dart';
 
 class LikedSongsScreen extends StatefulWidget {
   const LikedSongsScreen({super.key});
@@ -18,7 +16,7 @@ class LikedSongsScreen extends StatefulWidget {
 
 class _LikedSongsScreenState extends State<LikedSongsScreen> {
   final _favoritesService = GetIt.I<FavoritesService>();
-  final _audioHandler = GetIt.I<MyAudioHandler>();
+  final _smartPlayService = GetIt.I<SmartPlayService>();
 
   List<LikedSong> _songs = [];
   bool _isLoading = true;
@@ -41,82 +39,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
   }
 
   Future<void> _playSong(LikedSong song) async {
-    // Check if the "videoId" is actually a Playlist/Album ID (e.g. starts with MPRE, VL, or length != 11)
-    // Standard YouTube video IDs are 11 characters.
-    final isLikelyPlaylist = song.videoId.length != 11;
-
-    if (isLikelyPlaylist) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Loading album details...'),
-            duration: const Duration(seconds: 1)),
-      );
-
-      try {
-        // Resolve tracks using InnerTubeService (assuming GetIt has it)
-        // We need to access InnerTubeService, but it wasn't injected in the state.
-        // We can get it via GetIt.
-        final innerTube = GetIt.I<InnerTubeService>();
-        final tracks = await innerTube.getPlaylistTracks(song.videoId);
-
-        if (tracks.isNotEmpty) {
-          if (tracks.length == 1) {
-            // Play the single track
-            var singleTrack = tracks.first;
-
-            // Merge known metadata from the LikedSong
-            singleTrack = singleTrack.copyWith(
-              artist: (singleTrack.artist == 'Unknown' ||
-                      singleTrack.artist.isEmpty)
-                  ? song.artist
-                  : singleTrack.artist,
-              thumbnailUrl: (singleTrack.thumbnailUrl.isEmpty)
-                  ? song.thumbnailUrl
-                  : singleTrack.thumbnailUrl,
-            );
-
-            await _audioHandler.playYouTubeSong(singleTrack);
-          } else {
-            // If multiple tracks, we probably should open the playlist view or queue them?
-            // For "Smart Play" context, if user clicked "Play" on a liked item, they expect playback.
-            // Let's queue them all and play the first one?
-            // Or play the first one and queue the rest?
-            // Actually, playing just the first one is safe for now, or adding all to Queue.
-            // Let's just play the first one to be consistent with 'Play' action.
-            // Better: Replace queue with these tracks.
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text('Playing album (${tracks.length} tracks)...'),
-                  duration: const Duration(seconds: 1)),
-            );
-
-            final mediaItems = tracks
-                .map((t) => MediaItem(
-                    id: t.videoId,
-                    title: t.title,
-                    artist: t.artist,
-                    artUri: Uri.parse(t.thumbnailUrl),
-                    extras: {'videoId': t.videoId, 'isOnline': true}))
-                .toList();
-
-            await _audioHandler.updateQueue(mediaItems);
-            await _audioHandler.skipToQueueItem(0);
-            await _audioHandler.play();
-          }
-        } else {
-          throw Exception('No tracks found for this item');
-        }
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not play item: $e')),
-        );
-      }
-      return;
-    }
-
+    // Конвертуємо LikedSong в YouTubeSong та використовуємо SmartPlayService
     final ytSong = YouTubeSong(
       videoId: song.videoId,
       title: song.title,
@@ -124,9 +47,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
       thumbnailUrl: song.thumbnailUrl,
     );
 
-    // Play single song or maybe queue all liked songs?
-    // For now, play single using standard handler
-    await _audioHandler.playYouTubeSong(ytSong);
+    await _smartPlayService.handleSongTap(context, ytSong);
   }
 
   @override

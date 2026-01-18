@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../domain/entities/youtube_song.dart';
 import 'common_artwork.dart';
+import 'youtube_song_menu.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/favorites_service.dart';
-import '../../core/services/cache_service.dart';
-import '../../core/services/youtube_helper.dart';
 import '../../core/utils/localization.dart';
-
-import '../../core/services/audio_handler.dart';
 
 class SquareSongCard extends StatelessWidget {
   final YouTubeSong song;
@@ -23,117 +19,8 @@ class SquareSongCard extends StatelessWidget {
   });
 
   Future<void> _showContextMenu(BuildContext context) async {
-    final audioHandler = GetIt.I<MyAudioHandler>();
-    final isLiked = await GetIt.I<FavoritesService>().isLiked(song.videoId);
-
-    if (!context.mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: CachedNetworkImage(
-                    imageUrl: song.thumbnailUrl,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                title: Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(song.artist),
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.queue_music),
-                title: Text(AppLocalizations.of(context).addToQueue),
-                onTap: () {
-                  audioHandler.addYouTubeToQueue(song);
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(AppLocalizations.of(context).queueAdded),
-                        duration: const Duration(seconds: 1)),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.download),
-                title: Text(AppLocalizations.of(context).download),
-                onTap: () async {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(
-                            AppLocalizations.of(context).startingDownload)),
-                  );
-                  try {
-                    final ytHelper = GetIt.I<YouTubeHelper>();
-                    final url = await ytHelper.getAudioUrl(song.videoId);
-                    if (url != null) {
-                      await GetIt.I<CacheService>().cacheTrack(
-                        videoId: song.videoId,
-                        url: url,
-                        title: song.title,
-                        artist: song.artist,
-                        thumbnailUrl: song.thumbnailUrl,
-                      );
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                              content: Text(AppLocalizations.of(context)
-                                  .translate('downloaded',
-                                      args: {'title': song.title}))),
-                        );
-                      }
-                    } else {
-                      throw Exception('Could not get audio URL');
-                    }
-                  } catch (e) {
-                    debugPrint('Download error: $e');
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(AppLocalizations.of(context)
-                                .translate('download_error',
-                                    args: {'error': e}))),
-                      );
-                    }
-                  }
-                },
-              ),
-              ListTile(
-                leading: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
-                title: Text(isLiked
-                    ? AppLocalizations.of(context).removeFromFavorites
-                    : AppLocalizations.of(context).addToFavorites),
-                onTap: () {
-                  GetIt.I<FavoritesService>().toggleFavorite(
-                    videoId: song.videoId,
-                    title: song.title,
-                    artist: song.artist,
-                    thumbnailUrl: song.thumbnailUrl,
-                  );
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    // Використовуємо централізоване контекстне меню
+    await YouTubeSongMenu.show(context, song);
   }
 
   @override
@@ -143,32 +30,26 @@ class SquareSongCard extends StatelessWidget {
       onLongPress: () => _showContextMenu(context),
       child: Container(
         width: width,
-        margin: const EdgeInsets.only(right: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            // Квадратна обкладинка
+            AspectRatio(
+              aspectRatio: 1.0,
               child: Stack(
                 children: [
                   Positioned.fill(
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Hero(
-                        tag: 'artwork-${song.videoId}',
-                        child: CommonArtwork(
-                          // Assuming CommonArtwork is improved or using CachedNetworkImage directly if CommonArtwork not suitable for stack filling context, but CommonArtwork should be fine if it fits.
-                          // Actually CommonArtwork usually has fixed size. Let's use CachedNetworkImage directly or ensure CommonArtwork fits.
-                          // CommonArtwork takes `size` and `url`.
-                          // Previous code used CommonArtwork(url: song.thumbnailUrl, size: 150).
-                          url: song.thumbnailUrl,
-                          size: 150,
-                        ),
+                      borderRadius: BorderRadius.circular(8),
+                      child: CommonArtwork(
+                        url: song.thumbnailUrl,
+                        size: 120,
                       ),
                     ),
                   ),
                   Positioned(
-                    top: 4,
-                    right: 4,
+                    top: 2,
+                    right: 2,
                     child: StreamBuilder<bool>(
                       stream: GetIt.I<FavoritesService>()
                           .isLikedStream(song.videoId),
@@ -176,13 +57,13 @@ class SquareSongCard extends StatelessWidget {
                         final isLiked = snapshot.data ?? false;
                         return Container(
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            iconSize: 20,
+                            iconSize: 16,
                             constraints: const BoxConstraints(),
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(5),
                             icon: Icon(
                               isLiked ? Icons.favorite : Icons.favorite_border,
                               color: isLiked ? Colors.red : Colors.white,
@@ -213,7 +94,7 @@ class SquareSongCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             // Title
             Text(
               song.title,

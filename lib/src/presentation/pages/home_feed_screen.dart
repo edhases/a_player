@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
-import '../widgets/square_song_card.dart';
-import '../widgets/paged_song_grid.dart';
-import '../widgets/compact_song_tile.dart';
+import '../widgets/compact_quick_pick_tile.dart';
+import '../widgets/paged_song_list.dart';
+import '../widgets/youtube_song_menu.dart';
 
 import '../../domain/entities/home_section.dart';
 import '../../core/services/recommendation_service.dart';
-import '../../core/services/audio_handler.dart';
+import '../../core/services/smart_play_service.dart';
 import '../../domain/entities/youtube_song.dart';
-import '../../core/services/innertube_service.dart';
-import 'playlist_tracks_screen.dart';
-
-import 'package:cached_network_image/cached_network_image.dart';
-import '../../core/services/favorites_service.dart';
 import '../../core/utils/localization.dart';
+import '../../data/datasources/app_database.dart';
+import '../../core/services/audio_handler.dart';
+import '../../core/services/metadata_matching_service.dart';
+import '../../data/models/local_track_override.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -26,7 +25,7 @@ class HomeFeedScreen extends StatefulWidget {
 class _HomeFeedScreenState extends State<HomeFeedScreen> {
   final RecommendationService _recommendationService =
       GetIt.I<RecommendationService>();
-  final InnerTubeService _innerTube = GetIt.I<InnerTubeService>();
+  final SmartPlayService _smartPlayService = GetIt.I<SmartPlayService>();
 
   List<HomeSection> _sections = [];
   bool _isLoading = true;
@@ -52,8 +51,86 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       if (mounted) {
         setState(() {
           _sections = sections;
-          _isLoading = false;
         });
+
+        // Load local tracks separately to append as a new section
+        try {
+          final db = GetIt.I<AppDatabase>();
+          final localTracks = await db.getRandomTracks(limit: 20);
+
+          if (localTracks.isNotEmpty) {
+            // Unify metadata: Fetch overrides for enhanced info (Internet art, corrected tags)
+            List<YouTubeSong> convertedSongs = [];
+            final metadataService =
+                GetIt.I.isRegistered<MetadataMatchingService>()
+                    ? GetIt.I<MetadataMatchingService>()
+                    : null;
+
+            // Fetch all overrides in parallel if service is available
+            Map<String, LocalTrackOverride?> overrides = {};
+            if (metadataService != null) {
+              final futures = localTracks.map((t) async {
+                final override = await metadataService.getTrackOverride(t.path);
+                return MapEntry(t.path, override);
+              });
+              final results = await Future.wait(futures);
+              overrides = Map.fromEntries(results);
+            }
+
+            for (var t in localTracks) {
+              String title = t.title;
+              String artist = t.artist ?? 'Unknown Artist';
+              String thumb = '';
+
+              // Apply Metadata Override if available
+              final override = overrides[t.path];
+              if (override != null) {
+                title = override.correctTitle ?? title;
+                artist = override.correctArtist ?? artist;
+                if (override.thumbnailUrl != null &&
+                    override.thumbnailUrl!.isNotEmpty) {
+                  thumb = override.thumbnailUrl!;
+                }
+              }
+
+              // Fallback artwork logic
+              if (thumb.isEmpty) {
+                if (t.artworkUri != null && t.artworkUri!.isNotEmpty) {
+                  thumb = t.artworkUri!;
+                } else if (t.mediaStoreId != null) {
+                  thumb = 'mediastore:${t.mediaStoreId}';
+                }
+              }
+
+              convertedSongs.add(YouTubeSong(
+                videoId: 'local:${t.path}',
+                title: title,
+                artist: artist,
+                thumbnailUrl: thumb,
+              ));
+            }
+
+            final localSection = HomeSection(
+              title: AppLocalizations.of(context).yourLocalMusic,
+              type: SectionType.horizontal,
+              songs: convertedSongs,
+            );
+
+            if (mounted) {
+              setState(() {
+                _sections.add(localSection);
+              });
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading local tracks for home: $e');
+        }
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -66,141 +143,42 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   Future<void> _onSongTap(YouTubeSong song) async {
-    // smart play logic
-    final isSuspectId = song.videoId.length != 11 && song.videoId.isNotEmpty;
-    final isPlaylist =
-        song.isPlaylist || (song.playlistId != null) || isSuspectId;
-    final playlistId = song.playlistId ?? (isSuspectId ? song.videoId : null);
-
-    if (isPlaylist && playlistId != null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Loading ${song.title}...'),
-            duration: const Duration(seconds: 1)),
-      );
-
+    // Handle Local Tracks
+    if (song.videoId.startsWith('local:')) {
+      final path = song.videoId.substring(6); // Remove 'local:' prefix
       try {
-        final tracks = await _innerTube.getPlaylistTracks(playlistId);
-        if (!mounted) return;
+        final db = GetIt.I<AppDatabase>();
+        final track = await (db.select(db.tracks)
+              ..where((t) => t.path.equals(path)))
+            .getSingleOrNull();
 
-        if (tracks.length == 1) {
-          var singleTrack = tracks.first;
-          singleTrack = singleTrack.copyWith(
-            artist:
-                (singleTrack.artist == 'Unknown' || singleTrack.artist.isEmpty)
-                    ? song.artist
-                    : singleTrack.artist,
-            thumbnailUrl: (singleTrack.thumbnailUrl.isEmpty)
-                ? song.thumbnailUrl
-                : singleTrack.thumbnailUrl,
-          );
+        if (track != null) {
+          final audioHandler = GetIt.I<MyAudioHandler>();
+          await audioHandler.playLocalTrack(track);
 
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Playing ${singleTrack.title}...'),
-                duration: const Duration(seconds: 1)),
-          );
-          await GetIt.I<MyAudioHandler>().playYouTubeSong(singleTrack);
-        } else {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => PlaylistTracksScreen(
-                playlistId: playlistId,
-                title: song.title,
-                knownArtist: song.artist,
-                knownThumbnail: song.thumbnailUrl,
-                preloadedTracks: tracks,
-              ),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text('Playing ${track.title}...'),
+                  duration: const Duration(seconds: 1)),
+            );
+          }
         }
       } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        debugPrint('Error playing local track from home: $e');
       }
-    } else {
-      GetIt.I<MyAudioHandler>().playYouTubeSong(song);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Playing ${song.title}...'),
-              duration: const Duration(seconds: 1)),
-        );
-      }
+      return;
     }
+
+    // Handle YouTube Tracks
+    // Використовуємо централізований SmartPlayService
+    await _smartPlayService.handleSongTap(context, song);
   }
 
   Future<void> _showSongContextMenu(
       BuildContext context, YouTubeSong song) async {
-    final audioHandler = GetIt.I<MyAudioHandler>();
-    final isLiked = await GetIt.I<FavoritesService>().isLiked(song.videoId);
-
-    if (!context.mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: CachedNetworkImage(
-                    imageUrl: song.thumbnailUrl,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                title: Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(song.artist),
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.queue_music),
-                title: Text(AppLocalizations.of(context).addToQueue),
-                onTap: () {
-                  audioHandler.addYouTubeToQueue(song);
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Added to Queue'),
-                        duration: Duration(seconds: 1)),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
-                title: Text(
-                    isLiked ? 'Remove from Favorites' : 'Add to Favorites'),
-                onTap: () {
-                  GetIt.I<FavoritesService>().toggleFavorite(
-                    videoId: song.videoId,
-                    title: song.title,
-                    artist: song.artist,
-                    thumbnailUrl: song.thumbnailUrl,
-                  );
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    // Використовуємо централізоване контекстне меню
+    await YouTubeSongMenu.show(context, song);
   }
 
   @override
@@ -284,81 +262,39 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       ),
     );
 
-    // Section Content
-    if (section.type == SectionType.vertical) {
-      // List View (Vertical) - For "Listen Again"
+    // Section Content - Use PagedSongList for song type sections
+    if (section.type == SectionType.vertical ||
+        section.type == SectionType.grid ||
+        section.type == SectionType.horizontal) {
+      // All song sections now use the paged layout (YouTube Music style)
+      if (section.songs.isNotEmpty) {
+        slivers.add(SliverToBoxAdapter(
+          child: PagedSongList(
+            songs: section.songs,
+            itemsPerPage: 5,
+            onSongTap: _onSongTap,
+            onPlayTap: _onSongTap,
+            onMenuTap: (song) => _showSongContextMenu(context, song),
+          ),
+        ));
+      }
+    } else {
+      // Fallback for unknown types (though currently all are treated same)
+      // keeping previous list logic just in case, but practically unreachable with current logic
       slivers.add(SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: CompactSongTile(
-                song: section.songs[index],
-                onTap: () => _onSongTap(section.songs[index]),
-                onMenuTap: () =>
-                    _showSongContextMenu(context, section.songs[index]),
-              ),
+            return CompactQuickPickTile(
+              song: section.songs[index],
+              onTap: () => _onSongTap(section.songs[index]),
+              onPlayTap: () => _onSongTap(section.songs[index]),
+              onMenuTap: () =>
+                  _showSongContextMenu(context, section.songs[index]),
             );
           },
           childCount: section.songs.length,
         ),
       ));
-    } else if (section.type == SectionType.grid) {
-      // Grid View (Tiles) - For Albums/Mixes
-      slivers.add(SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverGrid(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            childAspectRatio: 0.75,
-          ),
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              return SquareSongCard(
-                song: section.songs[index],
-                width: double.infinity,
-                onTap: () => _onSongTap(section.songs[index]),
-              );
-            },
-            childCount: section.songs.length,
-          ),
-        ),
-      ));
-    } else {
-      // Horizontal (Paged Grid or Carousel)
-      // Check if it's "Quick Picks" -> Use Paged Grid
-      // User requested "List or Tiles", so we should try to honor that for main sections.
-      // But Quick Picks is special.
-
-      Widget content;
-      if (section.title.toLowerCase().contains('quick picks') ||
-          section.title.toLowerCase().contains('швидкий вибір') ||
-          section.title.toLowerCase().contains('start radio')) {
-        content = PagedSongGrid(
-          songs: section.songs,
-          onSongTap: _onSongTap,
-        );
-      } else {
-        // Fallback for generic horizontal sections if any
-        content = SizedBox(
-          height: 220,
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
-            itemCount: section.songs.length,
-            itemBuilder: (context, index) {
-              return SquareSongCard(
-                song: section.songs[index],
-                onTap: () => _onSongTap(section.songs[index]),
-              );
-            },
-          ),
-        );
-      }
-
-      slivers.add(SliverToBoxAdapter(child: content));
     }
 
     return slivers;

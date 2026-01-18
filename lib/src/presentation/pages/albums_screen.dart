@@ -33,10 +33,10 @@ class AlbumsScreen extends StatelessWidget {
           return GridView.builder(
             padding: const EdgeInsets.all(8),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.8,
+              crossAxisCount: 3,
+              childAspectRatio: 0.65,
               crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+              mainAxisSpacing: 10,
             ),
             itemCount: albums.length,
             itemBuilder: (context, index) {
@@ -60,14 +60,15 @@ class AlbumsScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
+                      AspectRatio(
+                        aspectRatio: 1.0,
                         child: Hero(
                           tag: heroTag,
                           child: CommonArtwork(
                             mediaStoreId: album.mediaStoreId,
                             path: album.artworkPath,
-                            size: 200,
-                            radius: 0,
+                            size: 120,
+                            radius: 4,
                             placeholderIcon: Icons.album,
                           ),
                         ),

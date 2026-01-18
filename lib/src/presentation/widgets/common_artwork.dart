@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -28,6 +29,43 @@ class CommonArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url != null && url!.isNotEmpty) {
+      // Check if it's a mediastore ID
+      if (url!.startsWith('mediastore:')) {
+        final id = int.tryParse(url!.substring(11));
+        if (id != null) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: QueryArtworkWidget(
+              id: id,
+              type: type,
+              artworkHeight: size,
+              artworkWidth: size,
+              artworkFit: BoxFit.cover,
+              nullArtworkWidget: _buildPlaceholder(context),
+              errorBuilder: (context, error, stackTrace) =>
+                  _buildPlaceholder(context),
+            ),
+          );
+        }
+      }
+
+      // Check if it's a local file path (not starting with http/https)
+      final isLocalFile = !url!.startsWith('http');
+
+      if (isLocalFile) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Image.file(
+            File(url!),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPlaceholder(context),
+          ),
+        );
+      }
+
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: CachedNetworkImage(

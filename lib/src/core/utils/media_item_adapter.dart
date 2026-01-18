@@ -34,6 +34,7 @@ class MediaItemAdapter {
         'isOnline': true,
         'videoId': song.videoId,
         'thumbnailUrl': song.thumbnailUrl,
+        'playlistId': song.playlistId, // For like synchronization with albums
       },
     );
   }

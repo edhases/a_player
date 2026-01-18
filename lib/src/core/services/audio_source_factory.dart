@@ -15,7 +15,13 @@ class AudioSourceFactory {
     debugPrint('[AudioSourceFactory] Creating AudioSource for ${item.title}');
 
     // Check if it's an online YouTube track that needs JIT fetching.
+    // Check if it's an online YouTube track that needs JIT fetching.
     if (item.extras?['isOnline'] == true) {
+      // If it is a radio station, it uses direct URL, so skip YouTube logic
+      if (item.extras?['isRadio'] == true) {
+        return AudioSource.uri(Uri.parse(item.id), tag: item);
+      }
+
       final videoId = item.extras!['videoId'] as String;
 
       // Check cache first
@@ -32,7 +38,13 @@ class AudioSourceFactory {
 
       debugPrint(
           '[AudioSourceFactory] Creating YoutubeAudioSource for videoId: $videoId');
-      return YoutubeAudioSource(videoId, _ytHelper, tag: item);
+      final ytSource = YoutubeAudioSource(videoId, _ytHelper, tag: item);
+
+      // Prefetching removed. Let just_audio manage buffering.
+      // It will call request() on the next item automatically when needed.
+      // ytSource.prefetch();
+
+      return ytSource;
     }
 
     // Handle content URIs from sources like Android MediaStore.
