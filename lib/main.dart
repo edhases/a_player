@@ -55,10 +55,6 @@ void main() async {
   await telegramService.init();
   GetIt.I.registerSingleton<TelegramService>(telegramService);
 
-  // Notify start (fire/forget)
-  telegramService.sendMessage(
-      '🚀 <b>Oxide Player Started</b>\nVersion: 20260118\nDevice: ${await logService.getDeviceInfoSummary()}');
-
   // Initialize and register services in order
   final settingsService = SettingsService();
   await settingsService.init();

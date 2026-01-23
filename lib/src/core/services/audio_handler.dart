@@ -25,6 +25,9 @@ import '../../data/models/local_track_override.dart';
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
+
+  /// Get current Android audio session ID (for equalizer)
+  int? get audioSessionId => player.androidAudioSessionId;
   final _settingsService = GetIt.I<SettingsService>();
   final AppDatabase _db;
   // Add YouTubeHelper reference

@@ -328,10 +328,11 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
 
       // 1. Prioritize YouTubeHelper (YoutubeExplode) as it handles Signature Decryption ('n' parameter)
       // This is slightly slower but MUCH more reliable against 403 errors.
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Fetching audio stream...'),
             duration: Duration(seconds: 1)));
+      }
 
       try {
         debugPrint(

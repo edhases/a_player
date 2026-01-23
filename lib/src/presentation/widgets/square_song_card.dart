@@ -28,7 +28,7 @@ class SquareSongCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       onLongPress: () => _showContextMenu(context),
-      child: Container(
+      child: SizedBox(
         width: width,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

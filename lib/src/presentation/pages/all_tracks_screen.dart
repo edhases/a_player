@@ -6,7 +6,6 @@ import '../../data/datasources/app_database.dart';
 import '../../core/services/music_finder.dart';
 import '../../core/services/audio_handler.dart';
 import '../../core/services/settings_service.dart';
-import '../widgets/common_artwork.dart';
 import '../../core/utils/localization.dart';
 
 import '../widgets/track_list_tile.dart';

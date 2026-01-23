@@ -137,7 +137,7 @@ class YouTubeHelper {
       }
 
       final fileName =
-          '${cached.title.replaceAll(RegExp(r'[^\w\s]'), '')}_${videoId}.mp3';
+          '${cached.title.replaceAll(RegExp(r'[^\w\s]'), '')}_$videoId.mp3';
       final filePath = '${downloadDir.path}/$fileName';
       final file = File(filePath);
 
