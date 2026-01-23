@@ -139,7 +139,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           mutableSections.insert(
               0,
               HomeSection(
-                title: 'Liked Songs',
+                title: 'liked_songs', // Use key
                 type: SectionType.horizontal,
                 songs: allFavs,
               ));
@@ -150,9 +150,29 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         if (localTracks.isNotEmpty) {
           final converted = await convertLocalTracks(localTracks);
           mutableSections.add(HomeSection(
-            title: 'Your Local Music',
+            title: 'your_local_music', // Use key
             type: SectionType.horizontal,
             songs: converted,
+          ));
+        }
+
+        // 4. Load Radio Stations
+        final radioStations = await _db.getAllRadioStations();
+        if (radioStations.isNotEmpty) {
+          final radioSongs = radioStations
+              .map((r) => YouTubeSong(
+                    videoId: 'radio:${r.id}',
+                    title: r.name,
+                    artist: 'Radio',
+                    thumbnailUrl: r.imageUrl ?? '',
+                    // specialized extras dealing
+                  ))
+              .toList();
+
+          mutableSections.add(HomeSection(
+            title: 'radio_stations',
+            type: SectionType.horizontal, // Or grid? Horizontal is consistent.
+            songs: radioSongs,
           ));
         }
       } catch (e) {

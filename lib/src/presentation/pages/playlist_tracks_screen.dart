@@ -29,7 +29,7 @@ class PlaylistTracksScreen extends StatefulWidget {
 }
 
 class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
-  final _innerTube = InnerTubeService();
+  final _innerTube = GetIt.I<InnerTubeService>();
   final _audioHandler = GetIt.I<MyAudioHandler>();
 
   bool _isLoading = true;

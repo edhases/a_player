@@ -16,7 +16,7 @@ enum LogLevel {
 
 /// Centralized logging service with local file storage and Telegram integration
 class LogService {
-  static const int _maxFileSize = 2 * 1024 * 1024; // 2MB
+  int _maxFileSize = 10 * 1024 * 1024; // Default 10MB
   static const int _maxFiles = 3;
   static const String _logFileName = 'oxide_player.log';
 
@@ -32,6 +32,28 @@ class LogService {
     RegExp(r'__Secure-\w+[=:][^\s;]+', caseSensitive: false),
     RegExp(r'token[=:][^\s,]+', caseSensitive: false),
   ];
+
+  /// Set the maximum size of a single log file
+  void setMaxFileSize(int bytes) {
+    _maxFileSize = bytes;
+    info('Log limit set to ${_formatBytes(bytes)}');
+    // Trigger rotation check if needed
+    _checkForRotation();
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Future<void> _checkForRotation() async {
+    if (_logFile != null && await _logFile!.exists()) {
+      if ((await _logFile!.length()) > _maxFileSize) {
+        await _rotateFiles();
+      }
+    }
+  }
 
   /// Initialize the log service
   Future<void> init() async {
@@ -85,7 +107,7 @@ class LogService {
     }
     if (stackTrace != null) {
       final stackLines =
-          stackTrace.toString().split('\n').take(5).join('\n         ');
+          stackTrace.toString().split('\n').take(20).join('\n         ');
       logLine += '\n  Stack: $stackLines';
     }
 

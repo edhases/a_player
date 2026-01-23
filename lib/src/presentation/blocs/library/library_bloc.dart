@@ -106,4 +106,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     await _db.addRadioStation(event.name, event.url);
     add(LibraryLoadData()); // Reload
   }
+
+  @override
+  Future<void> close() {
+    _radioSubscription?.cancel();
+    return super.close();
+  }
 }

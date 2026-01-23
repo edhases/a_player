@@ -99,6 +99,38 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   Future<void> _onSongTap(YouTubeSong song) async {
+    // Handle Radio Tracks
+    if (song.videoId.startsWith('radio:')) {
+      final idStr = song.videoId.substring(6);
+      final id = int.tryParse(idStr);
+      if (id != null) {
+        // Play radio
+        // We need to fetch the full object or just construct it?
+        // AudioHandler needs RadioStation object.
+        // Fetch from DB is safest.
+        final db = GetIt.I<AppDatabase>();
+        // getAllRadioStations returns List. We need single.
+        // Simpler: Just make a temporary RadioStation object if we have data,
+        // OR fetch it. Since we only have partial data in YouTubeSong (title, art),
+        // let's fetch to be safe for StreamURL.
+        final stations = await db.getAllRadioStations();
+        final station = stations.where((s) => s.id == id).firstOrNull;
+
+        if (station != null) {
+          final audioHandler = GetIt.I<MyAudioHandler>();
+          await audioHandler.playRadioStation(station);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text('Playing ${station.name}...'),
+                  duration: const Duration(seconds: 1)),
+            );
+          }
+        }
+      }
+      return;
+    }
+
     // Handle Local Tracks
     if (song.videoId.startsWith('local:')) {
       final path = song.videoId.substring(6); // Remove 'local:' prefix
@@ -132,6 +164,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   Future<void> _showSongContextMenu(
       BuildContext context, YouTubeSong song) async {
+    if (song.videoId.startsWith('radio:')) return; // No menu for radio yet
     await YouTubeSongMenu.show(context, song);
   }
 
@@ -140,13 +173,24 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
     final slivers = <Widget>[];
 
+    // Localize Title
+    String title = section.title;
+    final loc = AppLocalizations.of(context);
+    if (title == 'liked_songs')
+      title = loc.likedSongs;
+    else if (title == 'your_local_music')
+      title = loc.yourLocalMusic;
+    else if (title == 'radio_stations')
+      title = loc.radio; // Or 'radio_stations' key
+    // else, assume it's "Made For You" or other dynamic title, or simple string.
+
     // Section Header
     slivers.add(
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
           child: Text(
-            section.title,
+            title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   fontSize: 22,

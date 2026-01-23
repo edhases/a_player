@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:drift/drift.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
@@ -9,19 +9,20 @@ import '../../data/datasources/app_database.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../../domain/entities/home_section.dart';
 import 'innertube_service.dart';
-import 'localization_service.dart';
+// LocalizationService removed
+import 'settings_service.dart';
 import '../utils/localization.dart';
 
 class RecommendationService {
   final YoutubeExplode _yt;
   final InnerTubeService _innerTube;
-  final AppDatabase _db; // Use Drift AppDatabase
-  final LocalizationService?
-      _localizationService; // Optional for now to avoid breaking changes if not ready
+  final AppDatabase _db;
+  final SettingsService?
+      _settingsService; // Optional for now to avoid breaking changes if not ready
 
   RecommendationService(this._yt, this._innerTube, this._db,
-      {LocalizationService? localizationService})
-      : _localizationService = localizationService;
+      {SettingsService? settingsService})
+      : _settingsService = settingsService;
 
   /// Ініціалізація сервісу (Isar initialization removed).
   /// Initialize service.
@@ -87,10 +88,13 @@ class RecommendationService {
   /// Main method to get personalized feed.
   Future<List<HomeSection>> getPersonalizedFeed() async {
     try {
-      final loc = _localizationService != null
-          ? AppLocalizations(_localizationService!.currentLocale,
-              _localizationService!.localizedStrings)
-          : null;
+      AppLocalizations? loc;
+      if (_settingsService != null) {
+        final langCode = _settingsService?.loadString('language_code') ?? 'en';
+        // We need to load localizations manually since we are in a service
+        // This is a bit of a hack, but better than depending on a Provider
+        loc = await const AppLocalizationsDelegate().load(Locale(langCode));
+      }
 
       // Fetch Liked Songs (Favorites) from Drift
       final likedTracks = await (_db.select(_db.youTubeTracks)

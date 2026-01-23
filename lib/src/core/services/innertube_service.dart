@@ -9,7 +9,7 @@ import 'google_auth_service.dart';
 import 'rate_limiter.dart';
 import 'package:logger/logger.dart';
 import '../utils/result.dart';
-import 'localization_service.dart';
+import 'settings_service.dart';
 
 import '../../data/datasources/app_database.dart';
 
@@ -18,7 +18,7 @@ class InnerTubeService {
   final GoogleAuthService _googleAuthService;
   final RateLimiter _rateLimiter = RateLimiter();
   final AppDatabase _db;
-  final LocalizationService? _localizationService;
+  final SettingsService _settingsService;
   final _logger = Logger(
     printer: PrettyPrinter(
         methodCount: 0,
@@ -43,10 +43,10 @@ class InnerTubeService {
   InnerTubeService(
       {GoogleAuthService? googleAuthService,
       AppDatabase? db,
-      LocalizationService? localizationService})
+      required SettingsService settingsService})
       : _googleAuthService = googleAuthService ?? GetIt.I<GoogleAuthService>(),
         _db = db ?? GetIt.I<AppDatabase>(),
-        _localizationService = localizationService,
+        _settingsService = settingsService,
         _dio = Dio(BaseOptions(
           baseUrl: 'https://music.youtube.com/youtubei/v1',
           connectTimeout: const Duration(seconds: 10),
@@ -126,7 +126,7 @@ class InnerTubeService {
         "client": {
           "clientName": "WEB_REMIX",
           "clientVersion": "1.20241111.01.00",
-          "hl": _localizationService?.currentLocale.languageCode ?? "en",
+          "hl": _settingsService.loadString('language_code') ?? "en",
           "gl": "US",
           "browserName": "Chrome",
           "browserVersion": "120.0.0.0",
@@ -145,7 +145,7 @@ class InnerTubeService {
         "client": {
           "clientName": "ANDROID_MUSIC",
           "clientVersion": "9.02.50",
-          "hl": _localizationService?.currentLocale.languageCode ?? "en",
+          "hl": _settingsService.loadString('language_code') ?? "en",
           "gl": "US",
           "androidSdkVersion": 33
         }

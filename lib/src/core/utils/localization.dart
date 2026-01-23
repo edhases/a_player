@@ -28,7 +28,7 @@ class AppLocalizations {
   String get settings => translate('settings');
   String get youtube => translate('youtube');
   String get search => translate('search');
-  String get yourLocalMusic => translate('yourLocalMusic');
+  String get yourLocalMusic => translate('your_local_music');
   String get playlists => translate('playlists');
   String get tracks => translate('tracks');
   String get albums => translate('albums');
@@ -216,6 +216,22 @@ class AppLocalizations {
       translate('downloadStarted', args: {'arg0': title});
   String downloadCompleted(String title) =>
       translate('downloadCompleted', args: {'arg0': title});
+  String get equalizerNotActive => translate('equalizer_not_active');
+  String get equalizerActivateMusic => translate('equalizer_activate_music');
+  String get resetToFlat => translate('reset_to_flat');
+
+  // Presets
+  String get presetCustom => translate('preset_custom');
+  String get presetFlat => translate('preset_flat');
+  String get presetPop => translate('preset_pop');
+  String get presetRock => translate('preset_rock');
+  String get presetPunk => translate('preset_punk');
+  String get presetDubstep => translate('preset_dubstep');
+  String get presetPhonk => translate('preset_phonk');
+  String get presetJazz => translate('preset_jazz');
+  String get presetClassical => translate('preset_classical');
+  String get presetMetal => translate('preset_metal');
+  String get presetHipHop => translate('preset_hip_hop');
 }
 
 class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import 'package:provider/provider.dart';
-
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/music_finder.dart';
-import '../../core/services/settings_service.dart'; // Add SettingsService
+import '../../core/services/settings_service.dart';
 import '../../core/services/google_auth_service.dart';
-import '../../core/services/localization_service.dart';
+// LocalizationService removed
 import '../../core/utils/localization.dart';
+import '../blocs/settings/settings_bloc.dart';
+import '../blocs/settings/settings_event.dart';
+import '../blocs/settings/settings_state.dart';
 import '../../core/services/metadata_matching_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/log_service.dart';
 import '../../core/services/telegram_service.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'webview_login_screen.dart';
 import 'cached_tracks_screen.dart';
 import 'equalizer_screen.dart';
@@ -57,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final musicFinder = GetIt.I<MusicFinder>();
     final settingsService = GetIt.I<SettingsService>();
     final authService = GetIt.I<GoogleAuthService>();
-    final localizationService = Provider.of<LocalizationService>(context);
+    // LocalizationService removed
     final loc = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -334,28 +337,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Language Section
           _buildSectionHeader(context, loc.language),
-          ListTile(
-            leading: const Icon(Icons.language),
-            title: Text(_getLanguageName(
-                localizationService.currentLocale.languageCode)),
-            subtitle: Text(loc.language),
-            trailing: DropdownButton<String>(
-              value: localizationService.currentLocale.languageCode,
-              items: [
-                DropdownMenuItem(value: 'en', child: Text('English')),
-                DropdownMenuItem(value: 'uk', child: Text('Українська')),
-                DropdownMenuItem(value: 'de', child: Text('Deutsch')),
-                DropdownMenuItem(value: 'pl', child: Text('Polski')),
-                DropdownMenuItem(value: 'es', child: Text('Español')),
-                DropdownMenuItem(value: 'ja', child: Text('日本語')),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  localizationService.changeLanguage(value);
-                }
-              },
-              underline: const SizedBox(),
-            ),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, state) {
+              return ListTile(
+                leading: const Icon(Icons.language),
+                title: Text(_getLanguageName(state.locale.languageCode)),
+                subtitle: Text(loc.language),
+                trailing: DropdownButton<String>(
+                  value: state.locale.languageCode,
+                  items: [
+                    DropdownMenuItem(value: 'en', child: Text('English')),
+                    DropdownMenuItem(value: 'uk', child: Text('Українська')),
+                    DropdownMenuItem(value: 'de', child: Text('Deutsch')),
+                    DropdownMenuItem(value: 'pl', child: Text('Polski')),
+                    DropdownMenuItem(value: 'es', child: Text('Español')),
+                    DropdownMenuItem(value: 'ja', child: Text('日本語')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      context
+                          .read<SettingsBloc>()
+                          .add(ChangeLocale(Locale(value)));
+                    }
+                  },
+                  underline: const SizedBox(),
+                ),
+              );
+            },
           ),
 
           const Divider(),
@@ -425,6 +433,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Logs Section
           _buildSectionHeader(context, loc.logs),
+          // Logs Section
+          _buildSectionHeader(context, loc.logs),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, state) {
+              return Column(
+                children: [
+                  ListTile(
+                    title: Text(loc.translate('log_history_size')),
+                    subtitle: Text(state.maxLogSize == 0
+                        ? loc.translate('disabled_not_recommended')
+                        : _formatBytes(state.maxLogSize)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Slider(
+                      value: state.maxLogSize.toDouble(),
+                      min: 0,
+                      max: 50 * 1024 * 1024, // 50 MB
+                      divisions: 50,
+                      label: state.maxLogSize == 0
+                          ? loc.off
+                          : _formatBytes(state.maxLogSize),
+                      onChanged: (val) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(ChangeMaxLogSize(val.toInt()));
+                      },
+                      onChangeEnd: (val) {
+                        final sizeMB = val / (1024 * 1024);
+                        if (val == 0) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title:
+                                  Text(loc.translate('logging_disabled_title')),
+                              content:
+                                  Text(loc.translate('logging_disabled_desc')),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: Text(loc.ok),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else if (sizeMB > 0 && sizeMB <= 5) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(loc.translate('more_logs_needed')),
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.send),
             title: Text(loc.sendLogs),
@@ -489,11 +557,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // About Section
           _buildSectionHeader(context, loc.about),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('Oxide Player'),
-            subtitle: Text(loc
-                .translate('version', args: {'version': '22.08.160126 [B]'})),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.data?.version ?? '...';
+              final build = snapshot.data?.buildNumber ?? '';
+              return ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Oxide Player'),
+                subtitle: Text(loc.translate('version',
+                    args: {'version': '$version ($build)'})),
+              );
+            },
           ),
         ],
       ),

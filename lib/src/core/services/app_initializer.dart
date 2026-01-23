@@ -11,7 +11,7 @@ import 'download_service.dart';
 import 'favorites_service.dart';
 import 'google_auth_service.dart';
 import 'innertube_service.dart';
-import 'localization_service.dart';
+
 import 'log_service.dart';
 import 'metadata_matching_service.dart';
 import 'music_finder.dart';
@@ -62,10 +62,6 @@ class AppInitializer {
     await settingsService.init();
     GetIt.I.registerSingleton<SettingsService>(settingsService);
 
-    // LocalizationService
-    final localizationService = LocalizationService();
-    GetIt.I.registerSingleton<LocalizationService>(localizationService);
-
     // GoogleAuthService
     debugPrint('[AppInitializer] GoogleAuthService initializing...');
     final googleAuthService = GoogleAuthService();
@@ -79,7 +75,7 @@ class AppInitializer {
 
     // InnerTubeService
     GetIt.I.registerSingleton<InnerTubeService>(
-        InnerTubeService(localizationService: GetIt.I<LocalizationService>()));
+        InnerTubeService(settingsService: GetIt.I<SettingsService>()));
 
     // MusicRepository
     GetIt.I.registerSingleton<MusicRepository>(MusicRepositoryImpl());
@@ -100,7 +96,7 @@ class AppInitializer {
       ytInstance,
       GetIt.I<InnerTubeService>(),
       db,
-      localizationService: GetIt.I<LocalizationService>(),
+      settingsService: GetIt.I<SettingsService>(),
     );
     await recommendationService.init();
     GetIt.I.registerSingleton<RecommendationService>(recommendationService);
@@ -131,7 +127,18 @@ class AppInitializer {
   static Future<void> _initAudioHandler(AppDatabase db) async {
     debugPrint('[AppInitializer] AudioService initializing...');
     final handler = await AudioService.init(
-      builder: () => MyAudioHandler(db),
+      builder: () => MyAudioHandler(
+        db: db,
+        settingsService: GetIt.I<SettingsService>(),
+        audioSourceFactory: GetIt.I<AudioSourceFactory>(),
+        recommendationService: GetIt.I<RecommendationService>(),
+        innerTubeService: GetIt.I<InnerTubeService>(),
+        metadataMatchingService: GetIt.I.isRegistered<MetadataMatchingService>()
+            ? GetIt.I<MetadataMatchingService>()
+            : null,
+        logService:
+            GetIt.I.isRegistered<LogService>() ? GetIt.I<LogService>() : null,
+      ),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.example.oxide_player.channel.audio',
         androidNotificationChannelName: 'Audio Playback',

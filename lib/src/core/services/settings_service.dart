@@ -14,6 +14,7 @@ const String kMaxTrackDurationKey =
     'max_track_duration'; // in seconds (0 = no limit)
 const String kMaxCacheSizeKey = 'max_cache_size';
 const String kExcludedFoldersKey = 'excluded_folders';
+const String kMaxLogSizeKey = 'max_log_size'; // in bytes
 
 class SettingsService {
   late final SharedPreferences _prefs;
@@ -130,6 +131,17 @@ class SettingsService {
   int loadMaxCacheSize() {
     return _prefs.getInt(kMaxCacheSizeKey) ??
         500 * 1024 * 1024; // Default 500MB
+  }
+
+  // --- Log Size ---
+  Future<void> saveMaxLogSize(int bytes) async {
+    await _prefs.setInt(kMaxLogSizeKey, bytes);
+    _notify();
+  }
+
+  int loadMaxLogSize() {
+    // Default 10MB
+    return _prefs.getInt(kMaxLogSizeKey) ?? 10 * 1024 * 1024;
   }
 
   // --- Generic Storage ---
