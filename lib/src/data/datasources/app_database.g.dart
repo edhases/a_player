@@ -589,6 +589,12 @@ class $YouTubeTracksTable extends YouTubeTracks
   late final GeneratedColumn<String> downloadPath = GeneratedColumn<String>(
       'download_path', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _fileSizeMeta =
+      const VerificationMeta('fileSize');
+  @override
+  late final GeneratedColumn<int> fileSize = GeneratedColumn<int>(
+      'file_size', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _lastPlayedMeta =
       const VerificationMeta('lastPlayed');
   @override
@@ -601,6 +607,22 @@ class $YouTubeTracksTable extends YouTubeTracks
   late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
       'cached_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _isFavoriteMeta =
+      const VerificationMeta('isFavorite');
+  @override
+  late final GeneratedColumn<bool> isFavorite = GeneratedColumn<bool>(
+      'is_favorite', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_favorite" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _likedAtMeta =
+      const VerificationMeta('likedAt');
+  @override
+  late final GeneratedColumn<DateTime> likedAt = GeneratedColumn<DateTime>(
+      'liked_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         videoId,
@@ -609,8 +631,11 @@ class $YouTubeTracksTable extends YouTubeTracks
         thumbnailUrl,
         duration,
         downloadPath,
+        fileSize,
         lastPlayed,
-        cachedAt
+        cachedAt,
+        isFavorite,
+        likedAt
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -660,6 +685,10 @@ class $YouTubeTracksTable extends YouTubeTracks
           downloadPath.isAcceptableOrUnknown(
               data['download_path']!, _downloadPathMeta));
     }
+    if (data.containsKey('file_size')) {
+      context.handle(_fileSizeMeta,
+          fileSize.isAcceptableOrUnknown(data['file_size']!, _fileSizeMeta));
+    }
     if (data.containsKey('last_played')) {
       context.handle(
           _lastPlayedMeta,
@@ -671,6 +700,16 @@ class $YouTubeTracksTable extends YouTubeTracks
           cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta));
     } else if (isInserting) {
       context.missing(_cachedAtMeta);
+    }
+    if (data.containsKey('is_favorite')) {
+      context.handle(
+          _isFavoriteMeta,
+          isFavorite.isAcceptableOrUnknown(
+              data['is_favorite']!, _isFavoriteMeta));
+    }
+    if (data.containsKey('liked_at')) {
+      context.handle(_likedAtMeta,
+          likedAt.isAcceptableOrUnknown(data['liked_at']!, _likedAtMeta));
     }
     return context;
   }
@@ -693,10 +732,16 @@ class $YouTubeTracksTable extends YouTubeTracks
           .read(DriftSqlType.int, data['${effectivePrefix}duration'])!,
       downloadPath: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}download_path']),
+      fileSize: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}file_size']),
       lastPlayed: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}last_played']),
       cachedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}cached_at'])!,
+      isFavorite: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_favorite'])!,
+      likedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}liked_at']),
     );
   }
 
@@ -713,8 +758,11 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
   final String thumbnailUrl;
   final int duration;
   final String? downloadPath;
+  final int? fileSize;
   final DateTime? lastPlayed;
   final DateTime cachedAt;
+  final bool isFavorite;
+  final DateTime? likedAt;
   const YouTubeTrack(
       {required this.videoId,
       required this.title,
@@ -722,8 +770,11 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       required this.thumbnailUrl,
       required this.duration,
       this.downloadPath,
+      this.fileSize,
       this.lastPlayed,
-      required this.cachedAt});
+      required this.cachedAt,
+      required this.isFavorite,
+      this.likedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -735,10 +786,17 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
     if (!nullToAbsent || downloadPath != null) {
       map['download_path'] = Variable<String>(downloadPath);
     }
+    if (!nullToAbsent || fileSize != null) {
+      map['file_size'] = Variable<int>(fileSize);
+    }
     if (!nullToAbsent || lastPlayed != null) {
       map['last_played'] = Variable<DateTime>(lastPlayed);
     }
     map['cached_at'] = Variable<DateTime>(cachedAt);
+    map['is_favorite'] = Variable<bool>(isFavorite);
+    if (!nullToAbsent || likedAt != null) {
+      map['liked_at'] = Variable<DateTime>(likedAt);
+    }
     return map;
   }
 
@@ -752,10 +810,17 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       downloadPath: downloadPath == null && nullToAbsent
           ? const Value.absent()
           : Value(downloadPath),
+      fileSize: fileSize == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fileSize),
       lastPlayed: lastPlayed == null && nullToAbsent
           ? const Value.absent()
           : Value(lastPlayed),
       cachedAt: Value(cachedAt),
+      isFavorite: Value(isFavorite),
+      likedAt: likedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(likedAt),
     );
   }
 
@@ -769,8 +834,11 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       thumbnailUrl: serializer.fromJson<String>(json['thumbnailUrl']),
       duration: serializer.fromJson<int>(json['duration']),
       downloadPath: serializer.fromJson<String?>(json['downloadPath']),
+      fileSize: serializer.fromJson<int?>(json['fileSize']),
       lastPlayed: serializer.fromJson<DateTime?>(json['lastPlayed']),
       cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+      isFavorite: serializer.fromJson<bool>(json['isFavorite']),
+      likedAt: serializer.fromJson<DateTime?>(json['likedAt']),
     );
   }
   @override
@@ -783,8 +851,11 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       'thumbnailUrl': serializer.toJson<String>(thumbnailUrl),
       'duration': serializer.toJson<int>(duration),
       'downloadPath': serializer.toJson<String?>(downloadPath),
+      'fileSize': serializer.toJson<int?>(fileSize),
       'lastPlayed': serializer.toJson<DateTime?>(lastPlayed),
       'cachedAt': serializer.toJson<DateTime>(cachedAt),
+      'isFavorite': serializer.toJson<bool>(isFavorite),
+      'likedAt': serializer.toJson<DateTime?>(likedAt),
     };
   }
 
@@ -795,8 +866,11 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
           String? thumbnailUrl,
           int? duration,
           Value<String?> downloadPath = const Value.absent(),
+          Value<int?> fileSize = const Value.absent(),
           Value<DateTime?> lastPlayed = const Value.absent(),
-          DateTime? cachedAt}) =>
+          DateTime? cachedAt,
+          bool? isFavorite,
+          Value<DateTime?> likedAt = const Value.absent()}) =>
       YouTubeTrack(
         videoId: videoId ?? this.videoId,
         title: title ?? this.title,
@@ -805,8 +879,11 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
         duration: duration ?? this.duration,
         downloadPath:
             downloadPath.present ? downloadPath.value : this.downloadPath,
+        fileSize: fileSize.present ? fileSize.value : this.fileSize,
         lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
         cachedAt: cachedAt ?? this.cachedAt,
+        isFavorite: isFavorite ?? this.isFavorite,
+        likedAt: likedAt.present ? likedAt.value : this.likedAt,
       );
   @override
   String toString() {
@@ -817,15 +894,28 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
           ..write('thumbnailUrl: $thumbnailUrl, ')
           ..write('duration: $duration, ')
           ..write('downloadPath: $downloadPath, ')
+          ..write('fileSize: $fileSize, ')
           ..write('lastPlayed: $lastPlayed, ')
-          ..write('cachedAt: $cachedAt')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('isFavorite: $isFavorite, ')
+          ..write('likedAt: $likedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(videoId, title, artist, thumbnailUrl,
-      duration, downloadPath, lastPlayed, cachedAt);
+  int get hashCode => Object.hash(
+      videoId,
+      title,
+      artist,
+      thumbnailUrl,
+      duration,
+      downloadPath,
+      fileSize,
+      lastPlayed,
+      cachedAt,
+      isFavorite,
+      likedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -836,8 +926,11 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
           other.thumbnailUrl == this.thumbnailUrl &&
           other.duration == this.duration &&
           other.downloadPath == this.downloadPath &&
+          other.fileSize == this.fileSize &&
           other.lastPlayed == this.lastPlayed &&
-          other.cachedAt == this.cachedAt);
+          other.cachedAt == this.cachedAt &&
+          other.isFavorite == this.isFavorite &&
+          other.likedAt == this.likedAt);
 }
 
 class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
@@ -847,8 +940,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
   final Value<String> thumbnailUrl;
   final Value<int> duration;
   final Value<String?> downloadPath;
+  final Value<int?> fileSize;
   final Value<DateTime?> lastPlayed;
   final Value<DateTime> cachedAt;
+  final Value<bool> isFavorite;
+  final Value<DateTime?> likedAt;
   final Value<int> rowid;
   const YouTubeTracksCompanion({
     this.videoId = const Value.absent(),
@@ -857,8 +953,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     this.thumbnailUrl = const Value.absent(),
     this.duration = const Value.absent(),
     this.downloadPath = const Value.absent(),
+    this.fileSize = const Value.absent(),
     this.lastPlayed = const Value.absent(),
     this.cachedAt = const Value.absent(),
+    this.isFavorite = const Value.absent(),
+    this.likedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   YouTubeTracksCompanion.insert({
@@ -868,8 +967,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     required String thumbnailUrl,
     required int duration,
     this.downloadPath = const Value.absent(),
+    this.fileSize = const Value.absent(),
     this.lastPlayed = const Value.absent(),
     required DateTime cachedAt,
+    this.isFavorite = const Value.absent(),
+    this.likedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : videoId = Value(videoId),
         title = Value(title),
@@ -884,8 +986,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     Expression<String>? thumbnailUrl,
     Expression<int>? duration,
     Expression<String>? downloadPath,
+    Expression<int>? fileSize,
     Expression<DateTime>? lastPlayed,
     Expression<DateTime>? cachedAt,
+    Expression<bool>? isFavorite,
+    Expression<DateTime>? likedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -895,8 +1000,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
       if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
       if (duration != null) 'duration': duration,
       if (downloadPath != null) 'download_path': downloadPath,
+      if (fileSize != null) 'file_size': fileSize,
       if (lastPlayed != null) 'last_played': lastPlayed,
       if (cachedAt != null) 'cached_at': cachedAt,
+      if (isFavorite != null) 'is_favorite': isFavorite,
+      if (likedAt != null) 'liked_at': likedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -908,8 +1016,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
       Value<String>? thumbnailUrl,
       Value<int>? duration,
       Value<String?>? downloadPath,
+      Value<int?>? fileSize,
       Value<DateTime?>? lastPlayed,
       Value<DateTime>? cachedAt,
+      Value<bool>? isFavorite,
+      Value<DateTime?>? likedAt,
       Value<int>? rowid}) {
     return YouTubeTracksCompanion(
       videoId: videoId ?? this.videoId,
@@ -918,8 +1029,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       duration: duration ?? this.duration,
       downloadPath: downloadPath ?? this.downloadPath,
+      fileSize: fileSize ?? this.fileSize,
       lastPlayed: lastPlayed ?? this.lastPlayed,
       cachedAt: cachedAt ?? this.cachedAt,
+      isFavorite: isFavorite ?? this.isFavorite,
+      likedAt: likedAt ?? this.likedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -945,11 +1059,20 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     if (downloadPath.present) {
       map['download_path'] = Variable<String>(downloadPath.value);
     }
+    if (fileSize.present) {
+      map['file_size'] = Variable<int>(fileSize.value);
+    }
     if (lastPlayed.present) {
       map['last_played'] = Variable<DateTime>(lastPlayed.value);
     }
     if (cachedAt.present) {
       map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (isFavorite.present) {
+      map['is_favorite'] = Variable<bool>(isFavorite.value);
+    }
+    if (likedAt.present) {
+      map['liked_at'] = Variable<DateTime>(likedAt.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -966,8 +1089,11 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
           ..write('thumbnailUrl: $thumbnailUrl, ')
           ..write('duration: $duration, ')
           ..write('downloadPath: $downloadPath, ')
+          ..write('fileSize: $fileSize, ')
           ..write('lastPlayed: $lastPlayed, ')
           ..write('cachedAt: $cachedAt, ')
+          ..write('isFavorite: $isFavorite, ')
+          ..write('likedAt: $likedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1434,16 +1560,591 @@ class RadioStationsCompanion extends UpdateCompanion<RadioStation> {
   }
 }
 
+class $PlaybackLogTable extends PlaybackLog
+    with TableInfo<$PlaybackLogTable, PlaybackLogEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlaybackLogTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _videoIdMeta =
+      const VerificationMeta('videoId');
+  @override
+  late final GeneratedColumn<String> videoId = GeneratedColumn<String>(
+      'video_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _playedAtMeta =
+      const VerificationMeta('playedAt');
+  @override
+  late final GeneratedColumn<DateTime> playedAt = GeneratedColumn<DateTime>(
+      'played_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, videoId, playedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'playback_log';
+  @override
+  VerificationContext validateIntegrity(Insertable<PlaybackLogEntry> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('video_id')) {
+      context.handle(_videoIdMeta,
+          videoId.isAcceptableOrUnknown(data['video_id']!, _videoIdMeta));
+    } else if (isInserting) {
+      context.missing(_videoIdMeta);
+    }
+    if (data.containsKey('played_at')) {
+      context.handle(_playedAtMeta,
+          playedAt.isAcceptableOrUnknown(data['played_at']!, _playedAtMeta));
+    } else if (isInserting) {
+      context.missing(_playedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PlaybackLogEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlaybackLogEntry(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      videoId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}video_id'])!,
+      playedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}played_at'])!,
+    );
+  }
+
+  @override
+  $PlaybackLogTable createAlias(String alias) {
+    return $PlaybackLogTable(attachedDatabase, alias);
+  }
+}
+
+class PlaybackLogEntry extends DataClass
+    implements Insertable<PlaybackLogEntry> {
+  final int id;
+  final String videoId;
+  final DateTime playedAt;
+  const PlaybackLogEntry(
+      {required this.id, required this.videoId, required this.playedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['video_id'] = Variable<String>(videoId);
+    map['played_at'] = Variable<DateTime>(playedAt);
+    return map;
+  }
+
+  PlaybackLogCompanion toCompanion(bool nullToAbsent) {
+    return PlaybackLogCompanion(
+      id: Value(id),
+      videoId: Value(videoId),
+      playedAt: Value(playedAt),
+    );
+  }
+
+  factory PlaybackLogEntry.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PlaybackLogEntry(
+      id: serializer.fromJson<int>(json['id']),
+      videoId: serializer.fromJson<String>(json['videoId']),
+      playedAt: serializer.fromJson<DateTime>(json['playedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'videoId': serializer.toJson<String>(videoId),
+      'playedAt': serializer.toJson<DateTime>(playedAt),
+    };
+  }
+
+  PlaybackLogEntry copyWith({int? id, String? videoId, DateTime? playedAt}) =>
+      PlaybackLogEntry(
+        id: id ?? this.id,
+        videoId: videoId ?? this.videoId,
+        playedAt: playedAt ?? this.playedAt,
+      );
+  @override
+  String toString() {
+    return (StringBuffer('PlaybackLogEntry(')
+          ..write('id: $id, ')
+          ..write('videoId: $videoId, ')
+          ..write('playedAt: $playedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, videoId, playedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PlaybackLogEntry &&
+          other.id == this.id &&
+          other.videoId == this.videoId &&
+          other.playedAt == this.playedAt);
+}
+
+class PlaybackLogCompanion extends UpdateCompanion<PlaybackLogEntry> {
+  final Value<int> id;
+  final Value<String> videoId;
+  final Value<DateTime> playedAt;
+  const PlaybackLogCompanion({
+    this.id = const Value.absent(),
+    this.videoId = const Value.absent(),
+    this.playedAt = const Value.absent(),
+  });
+  PlaybackLogCompanion.insert({
+    this.id = const Value.absent(),
+    required String videoId,
+    required DateTime playedAt,
+  })  : videoId = Value(videoId),
+        playedAt = Value(playedAt);
+  static Insertable<PlaybackLogEntry> custom({
+    Expression<int>? id,
+    Expression<String>? videoId,
+    Expression<DateTime>? playedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (videoId != null) 'video_id': videoId,
+      if (playedAt != null) 'played_at': playedAt,
+    });
+  }
+
+  PlaybackLogCompanion copyWith(
+      {Value<int>? id, Value<String>? videoId, Value<DateTime>? playedAt}) {
+    return PlaybackLogCompanion(
+      id: id ?? this.id,
+      videoId: videoId ?? this.videoId,
+      playedAt: playedAt ?? this.playedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (videoId.present) {
+      map['video_id'] = Variable<String>(videoId.value);
+    }
+    if (playedAt.present) {
+      map['played_at'] = Variable<DateTime>(playedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlaybackLogCompanion(')
+          ..write('id: $id, ')
+          ..write('videoId: $videoId, ')
+          ..write('playedAt: $playedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TrackOverridesTable extends TrackOverrides
+    with TableInfo<$TrackOverridesTable, TrackOverride> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TrackOverridesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _filePathMeta =
+      const VerificationMeta('filePath');
+  @override
+  late final GeneratedColumn<String> filePath = GeneratedColumn<String>(
+      'file_path', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _correctTitleMeta =
+      const VerificationMeta('correctTitle');
+  @override
+  late final GeneratedColumn<String> correctTitle = GeneratedColumn<String>(
+      'correct_title', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _correctArtistMeta =
+      const VerificationMeta('correctArtist');
+  @override
+  late final GeneratedColumn<String> correctArtist = GeneratedColumn<String>(
+      'correct_artist', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _thumbnailUrlMeta =
+      const VerificationMeta('thumbnailUrl');
+  @override
+  late final GeneratedColumn<String> thumbnailUrl = GeneratedColumn<String>(
+      'thumbnail_url', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _youtubeIdMeta =
+      const VerificationMeta('youtubeId');
+  @override
+  late final GeneratedColumn<String> youtubeId = GeneratedColumn<String>(
+      'youtube_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        filePath,
+        correctTitle,
+        correctArtist,
+        thumbnailUrl,
+        youtubeId,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'track_overrides';
+  @override
+  VerificationContext validateIntegrity(Insertable<TrackOverride> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('file_path')) {
+      context.handle(_filePathMeta,
+          filePath.isAcceptableOrUnknown(data['file_path']!, _filePathMeta));
+    } else if (isInserting) {
+      context.missing(_filePathMeta);
+    }
+    if (data.containsKey('correct_title')) {
+      context.handle(
+          _correctTitleMeta,
+          correctTitle.isAcceptableOrUnknown(
+              data['correct_title']!, _correctTitleMeta));
+    }
+    if (data.containsKey('correct_artist')) {
+      context.handle(
+          _correctArtistMeta,
+          correctArtist.isAcceptableOrUnknown(
+              data['correct_artist']!, _correctArtistMeta));
+    }
+    if (data.containsKey('thumbnail_url')) {
+      context.handle(
+          _thumbnailUrlMeta,
+          thumbnailUrl.isAcceptableOrUnknown(
+              data['thumbnail_url']!, _thumbnailUrlMeta));
+    }
+    if (data.containsKey('youtube_id')) {
+      context.handle(_youtubeIdMeta,
+          youtubeId.isAcceptableOrUnknown(data['youtube_id']!, _youtubeIdMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {filePath};
+  @override
+  TrackOverride map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TrackOverride(
+      filePath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}file_path'])!,
+      correctTitle: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}correct_title']),
+      correctArtist: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}correct_artist']),
+      thumbnailUrl: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}thumbnail_url']),
+      youtubeId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}youtube_id']),
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $TrackOverridesTable createAlias(String alias) {
+    return $TrackOverridesTable(attachedDatabase, alias);
+  }
+}
+
+class TrackOverride extends DataClass implements Insertable<TrackOverride> {
+  final String filePath;
+  final String? correctTitle;
+  final String? correctArtist;
+  final String? thumbnailUrl;
+  final String? youtubeId;
+  final DateTime updatedAt;
+  const TrackOverride(
+      {required this.filePath,
+      this.correctTitle,
+      this.correctArtist,
+      this.thumbnailUrl,
+      this.youtubeId,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['file_path'] = Variable<String>(filePath);
+    if (!nullToAbsent || correctTitle != null) {
+      map['correct_title'] = Variable<String>(correctTitle);
+    }
+    if (!nullToAbsent || correctArtist != null) {
+      map['correct_artist'] = Variable<String>(correctArtist);
+    }
+    if (!nullToAbsent || thumbnailUrl != null) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    }
+    if (!nullToAbsent || youtubeId != null) {
+      map['youtube_id'] = Variable<String>(youtubeId);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  TrackOverridesCompanion toCompanion(bool nullToAbsent) {
+    return TrackOverridesCompanion(
+      filePath: Value(filePath),
+      correctTitle: correctTitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(correctTitle),
+      correctArtist: correctArtist == null && nullToAbsent
+          ? const Value.absent()
+          : Value(correctArtist),
+      thumbnailUrl: thumbnailUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailUrl),
+      youtubeId: youtubeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(youtubeId),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory TrackOverride.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TrackOverride(
+      filePath: serializer.fromJson<String>(json['filePath']),
+      correctTitle: serializer.fromJson<String?>(json['correctTitle']),
+      correctArtist: serializer.fromJson<String?>(json['correctArtist']),
+      thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
+      youtubeId: serializer.fromJson<String?>(json['youtubeId']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'filePath': serializer.toJson<String>(filePath),
+      'correctTitle': serializer.toJson<String?>(correctTitle),
+      'correctArtist': serializer.toJson<String?>(correctArtist),
+      'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
+      'youtubeId': serializer.toJson<String?>(youtubeId),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  TrackOverride copyWith(
+          {String? filePath,
+          Value<String?> correctTitle = const Value.absent(),
+          Value<String?> correctArtist = const Value.absent(),
+          Value<String?> thumbnailUrl = const Value.absent(),
+          Value<String?> youtubeId = const Value.absent(),
+          DateTime? updatedAt}) =>
+      TrackOverride(
+        filePath: filePath ?? this.filePath,
+        correctTitle:
+            correctTitle.present ? correctTitle.value : this.correctTitle,
+        correctArtist:
+            correctArtist.present ? correctArtist.value : this.correctArtist,
+        thumbnailUrl:
+            thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
+        youtubeId: youtubeId.present ? youtubeId.value : this.youtubeId,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  @override
+  String toString() {
+    return (StringBuffer('TrackOverride(')
+          ..write('filePath: $filePath, ')
+          ..write('correctTitle: $correctTitle, ')
+          ..write('correctArtist: $correctArtist, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('youtubeId: $youtubeId, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(filePath, correctTitle, correctArtist,
+      thumbnailUrl, youtubeId, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TrackOverride &&
+          other.filePath == this.filePath &&
+          other.correctTitle == this.correctTitle &&
+          other.correctArtist == this.correctArtist &&
+          other.thumbnailUrl == this.thumbnailUrl &&
+          other.youtubeId == this.youtubeId &&
+          other.updatedAt == this.updatedAt);
+}
+
+class TrackOverridesCompanion extends UpdateCompanion<TrackOverride> {
+  final Value<String> filePath;
+  final Value<String?> correctTitle;
+  final Value<String?> correctArtist;
+  final Value<String?> thumbnailUrl;
+  final Value<String?> youtubeId;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const TrackOverridesCompanion({
+    this.filePath = const Value.absent(),
+    this.correctTitle = const Value.absent(),
+    this.correctArtist = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.youtubeId = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TrackOverridesCompanion.insert({
+    required String filePath,
+    this.correctTitle = const Value.absent(),
+    this.correctArtist = const Value.absent(),
+    this.thumbnailUrl = const Value.absent(),
+    this.youtubeId = const Value.absent(),
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  })  : filePath = Value(filePath),
+        updatedAt = Value(updatedAt);
+  static Insertable<TrackOverride> custom({
+    Expression<String>? filePath,
+    Expression<String>? correctTitle,
+    Expression<String>? correctArtist,
+    Expression<String>? thumbnailUrl,
+    Expression<String>? youtubeId,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (filePath != null) 'file_path': filePath,
+      if (correctTitle != null) 'correct_title': correctTitle,
+      if (correctArtist != null) 'correct_artist': correctArtist,
+      if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (youtubeId != null) 'youtube_id': youtubeId,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TrackOverridesCompanion copyWith(
+      {Value<String>? filePath,
+      Value<String?>? correctTitle,
+      Value<String?>? correctArtist,
+      Value<String?>? thumbnailUrl,
+      Value<String?>? youtubeId,
+      Value<DateTime>? updatedAt,
+      Value<int>? rowid}) {
+    return TrackOverridesCompanion(
+      filePath: filePath ?? this.filePath,
+      correctTitle: correctTitle ?? this.correctTitle,
+      correctArtist: correctArtist ?? this.correctArtist,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      youtubeId: youtubeId ?? this.youtubeId,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (filePath.present) {
+      map['file_path'] = Variable<String>(filePath.value);
+    }
+    if (correctTitle.present) {
+      map['correct_title'] = Variable<String>(correctTitle.value);
+    }
+    if (correctArtist.present) {
+      map['correct_artist'] = Variable<String>(correctArtist.value);
+    }
+    if (thumbnailUrl.present) {
+      map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
+    }
+    if (youtubeId.present) {
+      map['youtube_id'] = Variable<String>(youtubeId.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TrackOverridesCompanion(')
+          ..write('filePath: $filePath, ')
+          ..write('correctTitle: $correctTitle, ')
+          ..write('correctArtist: $correctArtist, ')
+          ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('youtubeId: $youtubeId, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   late final $TracksTable tracks = $TracksTable(this);
   late final $YouTubeTracksTable youTubeTracks = $YouTubeTracksTable(this);
   late final $HomeCacheTable homeCache = $HomeCacheTable(this);
   late final $RadioStationsTable radioStations = $RadioStationsTable(this);
+  late final $PlaybackLogTable playbackLog = $PlaybackLogTable(this);
+  late final $TrackOverridesTable trackOverrides = $TrackOverridesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [tracks, youTubeTracks, homeCache, radioStations];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+        tracks,
+        youTubeTracks,
+        homeCache,
+        radioStations,
+        playbackLog,
+        trackOverrides
+      ];
 }

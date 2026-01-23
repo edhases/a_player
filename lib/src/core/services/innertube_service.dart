@@ -144,7 +144,7 @@ class InnerTubeService {
       "context": {
         "client": {
           "clientName": "ANDROID_MUSIC",
-          "clientVersion": isPlayer ? "6.41.52" : "7.02.51",
+          "clientVersion": "9.02.50",
           "hl": _localizationService?.currentLocale.languageCode ?? "en",
           "gl": "US",
           "androidSdkVersion": 33
@@ -245,7 +245,7 @@ class InnerTubeService {
 
   Future<Map<String, String>?> _tryAndroidMusic(String videoId) async {
     const String mobileAgent =
-        'com.google.android.apps.youtube.music/6.41.52 (Linux; U; Android 11; US) gzip';
+        'com.google.android.apps.youtube.music/9.02.50 (Linux; U; Android 14; US) gzip';
     try {
       debugPrint('[InnerTube] Trying ANDROID_MUSIC for: $videoId');
       final url = await _getStreamUrl(

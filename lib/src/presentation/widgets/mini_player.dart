@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
-import 'package:audio_service/audio_service.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../pages/player_screen.dart';
-import '../../core/services/audio_handler.dart';
+import '../blocs/player/player_bloc.dart';
 import 'common_artwork.dart';
 
 /// Mini player widget displayed at the bottom of the app.
@@ -12,13 +11,11 @@ class MiniPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final audioHandler = GetIt.I<MyAudioHandler>();
     final colorScheme = Theme.of(context).colorScheme;
 
-    return StreamBuilder<MediaItem?>(
-      stream: audioHandler.mediaItem,
-      builder: (context, mediaItemSnapshot) {
-        final mediaItem = mediaItemSnapshot.data;
+    return BlocBuilder<PlayerBloc, PlayerState>(
+      builder: (context, state) {
+        final mediaItem = state.mediaItem;
         if (mediaItem == null) {
           return const SizedBox.shrink();
         }
@@ -63,22 +60,19 @@ class MiniPlayer extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Progress bar at top
-                StreamBuilder<Duration>(
-                  stream: audioHandler.player.positionStream,
-                  builder: (context, snapshot) {
-                    final position = snapshot.data ?? Duration.zero;
-                    final duration = mediaItem.duration ?? Duration.zero;
-                    final progress = duration.inMilliseconds > 0
-                        ? position.inMilliseconds / duration.inMilliseconds
-                        : 0.0;
-
-                    return LinearProgressIndicator(
-                      value: progress.clamp(0.0, 1.0),
-                      minHeight: 2,
-                      backgroundColor: Colors.grey[800],
-                      valueColor: AlwaysStoppedAnimation(colorScheme.primary),
-                    );
-                  },
+                // For smoother progress bar we might still want a StreamBuilder or Ticker
+                // leveraging the position from Bloc + timestamp or just StreamBuilder on audioHandler if available?
+                // But we want to decouple.
+                // Let's use the state.position for now, accepting it update frequency (which is tied to handler stream).
+                LinearProgressIndicator(
+                  value: (state.duration.inMilliseconds > 0)
+                      ? (state.position.inMilliseconds /
+                              state.duration.inMilliseconds)
+                          .clamp(0.0, 1.0)
+                      : 0.0,
+                  minHeight: 2,
+                  backgroundColor: Colors.grey[800],
+                  valueColor: AlwaysStoppedAnimation(colorScheme.primary),
                 ),
                 // Main content
                 Padding(
@@ -132,7 +126,7 @@ class MiniPlayer extends StatelessWidget {
                         ),
                       ),
                       // Controls
-                      _buildControls(audioHandler, colorScheme),
+                      _buildControls(context, state, colorScheme),
                     ],
                   ),
                 ),
@@ -144,33 +138,33 @@ class MiniPlayer extends StatelessWidget {
     );
   }
 
-  Widget _buildControls(MyAudioHandler audioHandler, ColorScheme colorScheme) {
-    return StreamBuilder<PlaybackState>(
-      stream: audioHandler.playbackState,
-      builder: (context, playbackStateSnapshot) {
-        final isPlaying = playbackStateSnapshot.data?.playing ?? false;
-
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(
-                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                size: 32,
-              ),
-              onPressed: isPlaying ? audioHandler.pause : audioHandler.play,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            ),
-            IconButton(
-              icon: const Icon(Icons.skip_next_rounded, size: 28),
-              onPressed: audioHandler.skipToNext,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            ),
-          ],
-        );
-      },
+  Widget _buildControls(
+      BuildContext context, PlayerState state, ColorScheme colorScheme) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: Icon(
+            state.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            size: 32,
+          ),
+          onPressed: () {
+            context
+                .read<PlayerBloc>()
+                .add(state.isPlaying ? PlayerPause() : PlayerPlay());
+          },
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        ),
+        IconButton(
+          icon: const Icon(Icons.skip_next_rounded, size: 28),
+          onPressed: () {
+            context.read<PlayerBloc>().add(PlayerSkipNext());
+          },
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        ),
+      ],
     );
   }
 }

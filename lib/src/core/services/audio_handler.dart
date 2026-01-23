@@ -19,7 +19,7 @@ import 'audio_source_factory.dart';
 import '../../core/services/recommendation_service.dart';
 import '../../core/services/metadata_matching_service.dart';
 import '../../core/services/innertube_service.dart';
-import '../../data/models/local_track_override.dart';
+// import '../../data/models/local_track_override.dart'; // Removed
 
 /// The main audio handler that bridges just_audio with audio_service.
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -35,7 +35,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   late final RecommendationService _recommendationService;
 
   StreamSubscription<int?>? _audioSessionIdSubscription;
-  StreamSubscription<LocalTrackOverride?>? _currentOverrideSubscription;
+  StreamSubscription<TrackOverride?>? _currentOverrideSubscription;
   bool _isInitialized = false;
 
   // YouTube playback history tracking
@@ -382,7 +382,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
-  Future<LocalTrackOverride?> _getOverride(String path) async {
+  Future<TrackOverride?> _getOverride(String path) async {
     try {
       if (GetIt.I.isRegistered<MetadataMatchingService>()) {
         return await GetIt.I<MetadataMatchingService>().getTrackOverride(path);

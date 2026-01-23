@@ -19,7 +19,7 @@ class SongCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor.withOpacity(0.5),
+          color: Theme.of(context).cardColor.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
@@ -282,7 +282,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.play_circle_outline),
-                        onPressed: () => _playYouTubeTrack(context, track),
+                        onPressed: () => _playYouTubeTrack(track),
                       ),
                       IconButton(
                         icon: const Icon(Icons.more_vert),
@@ -290,7 +290,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
                       ),
                     ],
                   ),
-                  onTap: () => _playYouTubeTrack(context, track),
+                  onTap: () => _playYouTubeTrack(track),
                 );
               },
             );
@@ -300,7 +300,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
     );
   }
 
-  Future<void> _playYouTubeTrack(BuildContext context, YouTubeSong song) async {
+  Future<void> _playYouTubeTrack(YouTubeSong song) async {
     // 1. If it's a playlist/album, navigate to details
     if (song.isPlaylist && song.playlistId != null) {
       Navigator.push(

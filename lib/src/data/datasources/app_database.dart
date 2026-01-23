@@ -39,8 +39,11 @@ class YouTubeTracks extends Table {
   IntColumn get duration => integer()();
   TextColumn get downloadPath =>
       text().nullable()(); // Path to downloaded file for offline play
+  IntColumn get fileSize => integer().nullable()(); // Size in bytes
   DateTimeColumn get lastPlayed => dateTime().nullable()();
   DateTimeColumn get cachedAt => dateTime()(); // When metadata was cached
+  BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get likedAt => dateTime().nullable()();
 
   @override
   Set<Column> get primaryKey => {videoId};
@@ -60,6 +63,33 @@ class RadioStations extends Table {
   TextColumn get name => text()();
   TextColumn get streamUrl => text()();
   TextColumn get imageUrl => text().nullable()(); // Optional custom logo
+}
+
+// Replacement for ListenHistory
+@DataClassName('PlaybackLogEntry')
+class PlaybackLog extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get videoId => text()();
+  DateTimeColumn get playedAt => dateTime()();
+
+  @override
+  List<String> get customConstraints => [
+        'FOREIGN KEY (video_id) REFERENCES you_tube_tracks (video_id) ON DELETE CASCADE'
+      ];
+}
+
+// Replacement for LocalTrackOverride
+@DataClassName('TrackOverride')
+class TrackOverrides extends Table {
+  TextColumn get filePath => text()();
+  TextColumn get correctTitle => text().nullable()();
+  TextColumn get correctArtist => text().nullable()();
+  TextColumn get thumbnailUrl => text().nullable()();
+  TextColumn get youtubeId => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {filePath};
 }
 
 // --- DATA WRAPPER CLASSES ---
@@ -86,12 +116,19 @@ class Artist {
 
 // --- DATABASE CLASS ---
 
-@DriftDatabase(tables: [Tracks, YouTubeTracks, HomeCache, RadioStations])
+@DriftDatabase(tables: [
+  Tracks,
+  YouTubeTracks,
+  HomeCache,
+  RadioStations,
+  PlaybackLog,
+  TrackOverrides
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -128,6 +165,14 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 11) {
             await m.createTable(radioStations);
+          }
+          if (from < 12) {
+            // Add new tables and columns for Isar migration
+            await m.createTable(playbackLog);
+            await m.createTable(trackOverrides);
+            await m.addColumn(youTubeTracks, youTubeTracks.fileSize);
+            await m.addColumn(youTubeTracks, youTubeTracks.isFavorite);
+            await m.addColumn(youTubeTracks, youTubeTracks.likedAt);
           }
         },
       );
@@ -288,6 +333,18 @@ class AppDatabase extends _$AppDatabase {
         .map((t) => t.isFavorite);
   }
 
+  // Watch all favorite tracks
+  Stream<List<Track>> watchFavoriteTracks() {
+    return (select(tracks)
+          ..where((t) => t.isFavorite.equals(true))
+          ..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.lastPlayed, mode: OrderingMode.desc),
+            (t) => OrderingTerm(expression: t.title)
+          ]))
+        .watch();
+  }
+
   // --- YOUTUBE TRACK METHODS ---
   Future<void> upsertYouTubeTrack(YouTubeTrack track) async {
     await into(youTubeTracks).insertOnConflictUpdate(track);
@@ -363,6 +420,10 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<RadioStation>> watchRadioStations() {
     return select(radioStations).watch();
+  }
+
+  Future<List<RadioStation>> getAllRadioStations() {
+    return select(radioStations).get();
   }
 }
 

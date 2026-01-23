@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../core/services/innertube_service.dart';
-import '../../core/services/youtube_helper.dart';
 
 import '../../core/services/audio_handler.dart';
 import '../../domain/entities/youtube_song.dart';
@@ -31,7 +30,6 @@ class PlaylistTracksScreen extends StatefulWidget {
 
 class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
   final _innerTube = InnerTubeService();
-  final _ytHelper = GetIt.I<YouTubeHelper>();
   final _audioHandler = GetIt.I<MyAudioHandler>();
 
   bool _isLoading = true;

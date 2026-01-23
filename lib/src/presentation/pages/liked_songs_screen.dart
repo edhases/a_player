@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/favorites_service.dart';
 import '../../core/services/smart_play_service.dart';
-import '../../data/models/liked_song.dart';
+import '../../data/datasources/app_database.dart'; // Drift models
 import '../../domain/entities/youtube_song.dart';
 import '../widgets/common_artwork.dart';
 import '../../core/utils/localization.dart';
@@ -18,7 +18,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
   final _favoritesService = GetIt.I<FavoritesService>();
   final _smartPlayService = GetIt.I<SmartPlayService>();
 
-  List<LikedSong> _songs = [];
+  List<YouTubeTrack> _songs = []; // Changed type
   bool _isLoading = true;
 
   @override
@@ -38,13 +38,14 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
     }
   }
 
-  Future<void> _playSong(LikedSong song) async {
-    // Конвертуємо LikedSong в YouTubeSong та використовуємо SmartPlayService
+  Future<void> _playSong(YouTubeTrack song) async {
+    // Конвертуємо YouTubeTrack в YouTubeSong
     final ytSong = YouTubeSong(
       videoId: song.videoId,
       title: song.title,
       artist: song.artist,
       thumbnailUrl: song.thumbnailUrl,
+      duration: song.duration,
     );
 
     await _smartPlayService.handleSongTap(context, ytSong);

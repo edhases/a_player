@@ -210,6 +210,7 @@ class YouTubeHelper {
         downloadPath: null,
         lastPlayed: null,
         cachedAt: DateTime.now(),
+        isFavorite: false, // Added missing required parameter
       ));
 
       debugPrint('[YouTubeHelper] Metadata cached successfully');

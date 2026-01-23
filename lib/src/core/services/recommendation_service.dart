@@ -1,14 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:drift/drift.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-import '../../data/models/local_track_override.dart';
-import '../../data/models/listen_history.dart';
-import '../../data/models/liked_song.dart';
-import '../../data/models/cached_track.dart';
+import '../../data/datasources/app_database.dart';
+// Removed Isar models
 import '../../domain/entities/youtube_song.dart';
 import '../../domain/entities/home_section.dart';
 import 'innertube_service.dart';
@@ -18,31 +15,18 @@ import '../utils/localization.dart';
 class RecommendationService {
   final YoutubeExplode _yt;
   final InnerTubeService _innerTube;
+  final AppDatabase _db; // Use Drift AppDatabase
   final LocalizationService?
       _localizationService; // Optional for now to avoid breaking changes if not ready
-  Isar? _isar;
 
-  Isar? get isar => _isar;
-
-  RecommendationService(this._yt, this._innerTube,
+  RecommendationService(this._yt, this._innerTube, this._db,
       {LocalizationService? localizationService})
       : _localizationService = localizationService;
 
-  /// Ініціалізація сервісу та відкриття бази даних Isar.
-  /// Initialize service and open Isar database.
+  /// Ініціалізація сервісу (Isar initialization removed).
+  /// Initialize service.
   Future<void> init() async {
-    if (_isar != null && _isar!.isOpen) return;
-
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [
-        ListenHistorySchema,
-        LocalTrackOverrideSchema,
-        LikedSongSchema,
-        CachedTrackSchema
-      ],
-      directory: dir.path,
-    );
+    // No specific initialization needed for Drift here, usually done in main or lazily
   }
 
   /// Додає відео в історію прослуховування.
@@ -77,57 +61,51 @@ class RecommendationService {
     required String artist,
     required String thumbnailUrl,
   }) async {
-    final isar = _isar;
-    if (isar == null) return;
+    // 1. Update/Insert metadata in YouTubeTracks table
+    await _db.into(_db.youTubeTracks).insertOnConflictUpdate(
+          YouTubeTracksCompanion.insert(
+            videoId: videoId,
+            title: title,
+            artist: artist,
+            thumbnailUrl: thumbnailUrl,
+            duration: 0, // We might update this later if known
+            cachedAt: DateTime.now(),
+            lastPlayed: Value(DateTime.now()),
+          ),
+        );
 
-    final existing =
-        await isar.listenHistorys.filter().videoIdMatches(videoId).findFirst();
-
-    await isar.writeTxn(() async {
-      if (existing != null) {
-        existing.timestamp = DateTime.now();
-        await isar.listenHistorys.put(existing);
-      } else {
-        final newEntry = ListenHistory()
-          ..videoId = videoId
-          ..title = title
-          ..artist = artist
-          ..thumbnailUrl = thumbnailUrl
-          ..timestamp = DateTime.now();
-        await isar.listenHistorys.put(newEntry);
-      }
-    });
+    // 2. Add to PlaybackLog
+    await _db.into(_db.playbackLog).insert(
+          PlaybackLogCompanion.insert(
+            videoId: videoId,
+            playedAt: DateTime.now(),
+          ),
+        );
   }
 
   /// Основний метод для отримання персоналізованої стрічки ("For You").
   /// Main method to get personalized feed.
   Future<List<HomeSection>> getPersonalizedFeed() async {
     try {
-      final isar = _isar;
-      if (isar == null) {
-        await init();
-      }
-
       final loc = _localizationService != null
           ? AppLocalizations(_localizationService!.currentLocale,
               _localizationService!.localizedStrings)
           : null;
 
-      // Fetch Liked Songs (Favorites)
-      // Note: We need to import LikedSong model to use it in queries if not implicitly available via isar
-      // (It should be imported at top)
-      final likedSongs = await isar!.likedSongs
-          .where()
-          .sortByAddedAtDesc()
-          .limit(10)
-          .findAll();
+      // Fetch Liked Songs (Favorites) from Drift
+      final likedTracks = await (_db.select(_db.youTubeTracks)
+            ..where((t) => t.isFavorite.equals(true))
+            ..orderBy([
+              (t) =>
+                  OrderingTerm(expression: t.likedAt, mode: OrderingMode.desc)
+            ])
+            ..limit(10))
+          .get();
 
       HomeSection? likedSection;
-      if (likedSongs.isNotEmpty) {
-        final songs = likedSongs.map((l) {
+      if (likedTracks.isNotEmpty) {
+        final songs = likedTracks.map((l) {
           // Heuristic: If ID contains slash and doesn't look like a standard YouTube ID (11 chars), assume it's a local path.
-          // YouTube IDs are 11 chars (alphanumeric + _/-).
-          // Local paths are usually longer and contain slashes.
           String vId = l.videoId;
           if (vId.length != 11 && vId.contains(RegExp(r'[/\\]'))) {
             // Add prefix so HomeFeedScreen handles it as local track
@@ -141,7 +119,7 @@ class RecommendationService {
               title: l.title,
               artist: l.artist,
               thumbnailUrl: l.thumbnailUrl,
-              duration: 0,
+              duration: l.duration,
               category: "Liked");
         }).toList();
 
@@ -220,20 +198,23 @@ class RecommendationService {
 
       // 2. Fallback to Listen History + Related (Old Logic adapted)
       // Крок А: Отримання історії
-      final history = await _isar!.listenHistorys
-          .where()
-          .sortByTimestampDesc()
-          .distinctByVideoId()
-          .limit(10) // Slightly more history for fallback
-          .findAll();
+
+      // Join PlaybackLog with YouTubeTracks to get metadata
+      final historyQuery = _db.select(_db.playbackLog).join([
+        innerJoin(_db.youTubeTracks,
+            _db.youTubeTracks.videoId.equalsExp(_db.playbackLog.videoId))
+      ])
+        ..orderBy([
+          OrderingTerm(
+              expression: _db.playbackLog.playedAt, mode: OrderingMode.desc)
+        ])
+        ..limit(10);
+
+      final historyRows = await historyQuery.get();
 
       // Крок B: "Холодний старт"
-      if (history.isEmpty) {
+      if (historyRows.isEmpty) {
         final trending = await _fetchTrendingMusic();
-        final loc = _localizationService != null
-            ? AppLocalizations(_localizationService!.currentLocale,
-                _localizationService!.localizedStrings)
-            : null;
         return [
           HomeSection(
               title: loc?.trendingNow ?? "Trending Now",
@@ -244,28 +225,30 @@ class RecommendationService {
       }
 
       // Крок C: Алгоритм рекомендацій
-      // ... (Existing logic for fetching related)
-      final futures =
-          history.take(5).map((item) => _safeGetRelatedVideos(item.videoId));
+      final historyItems = historyRows.map((row) {
+        final track = row.readTable(_db.youTubeTracks);
+        return YouTubeSong(
+          videoId: track.videoId,
+          title: track.title,
+          artist: track.artist,
+          thumbnailUrl: track.thumbnailUrl,
+          duration: track.duration,
+        );
+      }).toList();
+
+      final futures = historyItems
+          .take(5)
+          .map((item) => _safeGetRelatedVideos(item.videoId));
       final results = await Future.wait(futures);
 
       final allRelated = results.expand((i) => i).toList();
 
-      final historyIds = history.map((e) => e.videoId).toSet();
+      final historyIds = historyItems.map((e) => e.videoId).toSet();
       final seenIds = <String>{};
       final List<YouTubeSong> recommendedSongs = [];
 
       // History Section
-      final List<YouTubeSong> historySongs = history
-          .map((h) => YouTubeSong(
-              videoId: h.videoId,
-              title: h.title,
-              artist: h.artist,
-              thumbnailUrl: h.thumbnailUrl,
-              duration: 0, // We might not save duration in history, defaulting
-              category: "Song" // Default history items to Song
-              ))
-          .toList();
+      final List<YouTubeSong> historySongs = historyItems;
 
       for (var video in allRelated) {
         if (!historyIds.contains(video.id.value) &&
@@ -282,8 +265,6 @@ class RecommendationService {
           seenIds.add(video.id.value);
         }
       }
-
-      recommendedSongs.shuffle();
 
       recommendedSongs.shuffle();
 
@@ -355,6 +336,6 @@ class RecommendationService {
   /// Закриття бази даних при необхідності.
   /// Close database if needed.
   Future<void> dispose() async {
-    await _isar?.close();
+    // _db is managed by GetIt usually, so no need to close specifically unless we own it
   }
 }

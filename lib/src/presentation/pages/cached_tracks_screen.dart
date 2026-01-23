@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/cache_service.dart';
-import '../../data/models/cached_track.dart';
+import '../../data/datasources/app_database.dart'; // Drift models
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/utils/localization.dart';
 import '../../core/services/download_service.dart';
@@ -16,7 +16,7 @@ class CachedTracksScreen extends StatefulWidget {
 
 class _CachedTracksScreenState extends State<CachedTracksScreen> {
   final CacheService _cacheService = GetIt.I<CacheService>();
-  List<CachedTrack> _tracks = [];
+  List<YouTubeTrack> _tracks = [];
   bool _isLoading = true;
 
   @override
@@ -36,8 +36,8 @@ class _CachedTracksScreenState extends State<CachedTracksScreen> {
     }
   }
 
-  Future<void> _deleteTrack(CachedTrack track) async {
-    await _cacheService.deleteCachedTrack(track.id);
+  Future<void> _deleteTrack(YouTubeTrack track) async {
+    await _cacheService.deleteCachedTrack(track.videoId);
     _loadTracks(); // Refresh list
   }
 
@@ -80,7 +80,7 @@ class _CachedTracksScreenState extends State<CachedTracksScreen> {
                       ),
                       title: Text(track.title),
                       subtitle: Text(
-                          '${track.artist} • ${_formatBytes(track.fileSize)}'),
+                          '${track.artist} • ${_formatBytes(track.fileSize ?? 0)}'),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -101,7 +101,7 @@ class _CachedTracksScreenState extends State<CachedTracksScreen> {
     );
   }
 
-  Future<void> _saveToDevice(CachedTrack track) async {
+  Future<void> _saveToDevice(YouTubeTrack track) async {
     final downloadService = GetIt.I<DownloadService>();
     final messenger = ScaffoldMessenger.of(context);
     final loc = AppLocalizations.of(context);

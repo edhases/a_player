@@ -21,7 +21,6 @@ class AllTracksScreen extends StatelessWidget {
     final musicFinder = GetIt.I<MusicFinder>();
     final audioHandler = GetIt.I<MyAudioHandler>();
     final settingsService = GetIt.I<SettingsService>();
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: StreamBuilder<void>(

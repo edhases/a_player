@@ -13,7 +13,7 @@ class WebViewLoginScreen extends StatefulWidget {
 class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
   final CookieManager _cookieManager = CookieManager.instance();
   final _authService = GetIt.I<GoogleAuthService>();
-  
+
   final String _targetUrl = 'https://music.youtube.com';
   InAppWebViewController? _webViewController;
   bool _isCheckingCookies = false;
@@ -35,7 +35,8 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
           InAppWebView(
             initialUrlRequest: URLRequest(url: WebUri(_targetUrl)),
             initialSettings: InAppWebViewSettings(
-              userAgent: "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+              userAgent:
+                  "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
               javaScriptEnabled: true,
               domStorageEnabled: true,
               thirdPartyCookiesEnabled: true,
@@ -49,8 +50,8 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
                 await _checkCookies(url);
               }
             },
-            onLoadError: (controller, url, code, message) {
-              debugPrint('[WebViewLogin] Load error: $message');
+            onReceivedError: (controller, request, error) {
+              debugPrint('[WebViewLogin] Load error: $error');
             },
           ),
           if (_isCheckingCookies)
@@ -62,7 +63,8 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 16),
-                    Text('Збереження cookies...', style: TextStyle(color: Colors.white)),
+                    Text('Збереження cookies...',
+                        style: TextStyle(color: Colors.white)),
                   ],
                 ),
               ),
@@ -74,27 +76,26 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
 
   Future<void> _checkCookies(WebUri url) async {
     if (_isCheckingCookies) return;
-    
+
     try {
       final cookies = await _cookieManager.getCookies(url: url);
-      
+
       // Шукаємо ключові cookies для авторизації
-      final hasAuth = cookies.any((c) => 
-        c.name == 'SAPISID' || 
-        c.name == '__Secure-3PAPISID' ||
-        c.name == '__Secure-1PAPISID'
-      );
+      final hasAuth = cookies.any((c) =>
+          c.name == 'SAPISID' ||
+          c.name == '__Secure-3PAPISID' ||
+          c.name == '__Secure-1PAPISID');
 
       if (hasAuth) {
         setState(() => _isCheckingCookies = true);
-        
+
         // Формуємо Cookie header
-        final cookieHeader = cookies
-            .map((c) => '${c.name}=${c.value}')
-            .join('; ');
+        final cookieHeader =
+            cookies.map((c) => '${c.name}=${c.value}').join('; ');
 
         debugPrint('[WebViewLogin] ✅ Auth cookies found!');
-        debugPrint('[WebViewLogin] Cookies: ${cookies.map((c) => c.name).join(', ')}');
+        debugPrint(
+            '[WebViewLogin] Cookies: ${cookies.map((c) => c.name).join(', ')}');
 
         // Зберігаємо через GoogleAuthService
         await _authService.saveCookies(cookieHeader);
@@ -106,7 +107,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          
+
           // Повертаємось з результатом true
           Navigator.pop(context, true);
         }

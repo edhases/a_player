@@ -1,40 +1,36 @@
 import 'package:flutter/foundation.dart';
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
-import '../../data/models/local_track_override.dart';
 import '../../data/datasources/app_database.dart';
-
 import '../../core/services/innertube_service.dart';
 import '../../domain/entities/youtube_song.dart';
 
 class MetadataMatchingService {
-  final Isar _isar;
   final AppDatabase _db;
   final InnerTubeService _innerTube;
 
-  MetadataMatchingService(this._isar, this._db, this._innerTube);
+  MetadataMatchingService(this._db, this._innerTube);
 
-  /// Отримує інформацію про трек (спочатку перевіряє Isar, потім повертає оригінал).
-  /// Gets track info (checks Isar first, then returns original).
-  Future<LocalTrackOverride?> getTrackOverride(String filePath) async {
-    return await _isar.localTrackOverrides.getByFilePath(filePath);
+  /// Отримує інформацію про трек (спочатку перевіряє DB, потім повертає null).
+  /// Gets track info (checks DB first, then returns null).
+  Future<TrackOverride?> getTrackOverride(String filePath) async {
+    return await (_db.select(_db.trackOverrides)
+          ..where((t) => t.filePath.equals(filePath)))
+        .getSingleOrNull();
   }
 
   /// Спостерігає за змінами (для реактивного UI).
   /// Watch for changes (for reactive UI).
-  Stream<LocalTrackOverride?> watchTrackOverride(String filePath) {
-    return _isar.localTrackOverrides
-        .filter()
-        .filePathEqualTo(filePath)
-        .watch(fireImmediately: true)
-        .map((event) => event.firstOrNull);
+  Stream<TrackOverride?> watchTrackOverride(String filePath) {
+    return (_db.select(_db.trackOverrides)
+          ..where((t) => t.filePath.equals(filePath)))
+        .watchSingleOrNull();
   }
 
   /// Автоматичний пошук тегів для локального файлу.
   /// Auto-match tags for a local file.
-  Future<LocalTrackOverride?> autoMatchTags(
-      String filePath, String rawTitle) async {
+  Future<TrackOverride?> autoMatchTags(String filePath, String rawTitle) async {
     try {
       // Крок 1: Очищення назви файлу
       // Step 1: Clean filename
@@ -84,58 +80,45 @@ class MetadataMatchingService {
 
   /// Зберігає "віртуальні" теги в базу.
   /// Saves "virtual" tags to database.
-  Future<LocalTrackOverride> saveOverride({
+  Future<TrackOverride> saveOverride({
     required String filePath,
     required String youtubeId,
     required String title,
     required String artist,
     required String thumbnailUrl,
   }) async {
-    // Check for existing override to preserve ID (important for watchers)
-    final existing = await _isar.localTrackOverrides.getByFilePath(filePath);
-    final override = existing ?? LocalTrackOverride();
+    final override = TrackOverridesCompanion.insert(
+      filePath: filePath,
+      youtubeId: Value(youtubeId),
+      correctTitle: Value(title),
+      correctArtist: Value(artist),
+      thumbnailUrl: Value(thumbnailUrl),
+      updatedAt: DateTime.now(),
+    );
 
-    override
-      ..filePath = filePath
-      ..youtubeId = youtubeId
-      ..correctTitle = title
-      ..correctArtist = artist
-      ..thumbnailUrl = thumbnailUrl
-      ..updatedAt = DateTime.now();
-
-    await _isar.writeTxn(() async {
-      await _isar.localTrackOverrides.put(override);
-    });
+    // Upsert equivalent in Drift
+    await _db.into(_db.trackOverrides).insertOnConflictUpdate(override);
 
     debugPrint(
-        '[MetadataMatcher] Saved override for: $title (ID: ${override.id})');
-    return override;
+        '[MetadataMatcher] Saved override for: $title (Path: $filePath)');
+
+    // Return inserted object (fetch back)
+    return (await getTrackOverride(filePath))!;
   }
 
   String _cleanFilename(String filePath, String rawTitle) {
-    // Якщо rawTitle вже виглядає нормально, використовуємо його
     if (rawTitle != "Unknown" && !rawTitle.contains(".mp3")) {
       return rawTitle;
     }
-
     String filename = p.basenameWithoutExtension(filePath);
-
-    // Видаляємо цифри на початку (01. Song -> Song)
     filename = filename.replaceAll(RegExp(r'^\d+\s*[\.-]?\s*'), '');
-
-    // Замінюємо підкреслення на пробіли
     filename = filename.replaceAll('_', ' ');
-
-    // Видаляємо зайві пробіли
     return filename.trim();
   }
 
   bool _isSimilar(String query, YouTubeSong song) {
     final lowerQuery = query.toLowerCase();
     final lowerTitle = song.title.toLowerCase();
-
-    // Проста перевірка: чи містяться слова запиту в назві
-    // Simple check: does title contain query words
     return lowerTitle.contains(lowerQuery) || lowerQuery.contains(lowerTitle);
   }
 
@@ -145,19 +128,23 @@ class MetadataMatchingService {
       int processed = 0;
 
       for (var track in tracks) {
-        // Skip if override exists
         final existing = await getTrackOverride(track.path);
         if (existing != null) continue;
 
-        // Heuristic: consider track "dirty" if Unknown or contains extension
-        bool isDirty = track.artist == "<unknown>" ||
-            track.title.contains(".mp3") ||
-            track.artist == "Unknown Artist";
+        // Since user manually invoked this, we scan everything that doesn't have an override yet.
+        // We can optionally check if it looks complete, but users often want to match everything.
+        // Let's rely on _cleanFilename to do smart work, or if not dirty enough, maybe skip?
+        // User reported "only 2/4 tracks changed", implying others were skipped.
+        // Let's remove the strict dirty check and try to match everything missing an override.
+        bool needsScan = true;
 
-        if (isDirty) {
+        // Optional: Filter out tracks that already look perfect?
+        // For now, let's scan all. If _cleanFilename returns same title, search results might be poor
+        // but it gives a chance to match "Track 1" or similar.
+
+        if (needsScan) {
           yield "Processing: ${p.basename(track.path)}";
           await autoMatchTags(track.path, track.title);
-          // Delay to avoid rate limiting
           await Future.delayed(const Duration(milliseconds: 500));
         }
         processed++;

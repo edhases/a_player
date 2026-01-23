@@ -34,7 +34,6 @@ class DetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final db = GetIt.I<AppDatabase>();
     final audioHandler = GetIt.I<MyAudioHandler>();
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: FutureBuilder<List<Track>>(

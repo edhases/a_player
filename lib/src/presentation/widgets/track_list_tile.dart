@@ -3,7 +3,7 @@ import 'package:get_it/get_it.dart';
 import 'dart:io';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/metadata_matching_service.dart';
-import '../../data/models/local_track_override.dart';
+// import '../../data/models/local_track_override.dart'; // Removed
 import '../widgets/common_artwork.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/search/metadata_pick_delegate.dart';
@@ -37,7 +37,8 @@ class _TrackListTileState extends State<TrackListTile> {
 
     final service = GetIt.I<MetadataMatchingService>();
     // Watch for changes to the override for this specific file
-    return StreamBuilder<LocalTrackOverride?>(
+    return StreamBuilder<TrackOverride?>(
+      // Updated Type
       stream: service.watchTrackOverride(widget.track.path),
       builder: (context, snapshot) {
         return _buildTile(context, snapshot.data);
@@ -45,7 +46,8 @@ class _TrackListTileState extends State<TrackListTile> {
     );
   }
 
-  Widget _buildTile(BuildContext context, LocalTrackOverride? override) {
+  Widget _buildTile(BuildContext context, TrackOverride? override) {
+    // Updated Type
     final colorScheme = Theme.of(context).colorScheme;
     final loc = AppLocalizations.of(context);
 
@@ -101,7 +103,7 @@ class _TrackListTileState extends State<TrackListTile> {
         style: TextStyle(
           fontSize: 12,
           color: widget.isCurrentTrack
-              ? colorScheme.primary.withOpacity(0.7)
+              ? colorScheme.primary.withValues(alpha: 0.7)
               : Colors.grey[500],
         ),
       ),
@@ -117,7 +119,7 @@ class _TrackListTileState extends State<TrackListTile> {
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.grey),
-            onSelected: (value) => _handleMenuAction(context, value),
+            onSelected: (value) => _handleMenuAction(value),
             itemBuilder: (context) {
               // Safe access to isExcluded using dynamic if needed, or assume generated
               // Since build_runner acts on models, Track class might need regeneration to show property.
@@ -193,7 +195,7 @@ class _TrackListTileState extends State<TrackListTile> {
     );
   }
 
-  void _handleMenuAction(BuildContext context, String value) async {
+  void _handleMenuAction(String value) async {
     final audioHandler = GetIt.I<MyAudioHandler>();
     final loc = AppLocalizations.of(context);
 
@@ -215,21 +217,21 @@ class _TrackListTileState extends State<TrackListTile> {
         }
         break;
       case 'scan':
-        _showMatchDialog(context);
+        _showMatchDialog();
         break;
       case 'exclude':
-        await _toggleExclude(context, true);
+        await _toggleExclude(true);
         break;
       case 'restore':
-        await _toggleExclude(context, false);
+        await _toggleExclude(false);
         break;
       case 'delete_file':
-        await _hardDelete(context);
+        await _hardDelete();
         break;
     }
   }
 
-  Future<void> _toggleExclude(BuildContext context, bool exclude) async {
+  Future<void> _toggleExclude(bool exclude) async {
     final db = GetIt.I<AppDatabase>();
     final loc = AppLocalizations.of(context);
     await db.setExcluded(widget.track.path, exclude);
@@ -240,7 +242,7 @@ class _TrackListTileState extends State<TrackListTile> {
     }
   }
 
-  Future<void> _hardDelete(BuildContext context) async {
+  Future<void> _hardDelete() async {
     final loc = AppLocalizations.of(context);
     final confirm = await showDialog<bool>(
       context: context,
@@ -288,7 +290,7 @@ class _TrackListTileState extends State<TrackListTile> {
     }
   }
 
-  Future<void> _showMatchDialog(BuildContext context) async {
+  Future<void> _showMatchDialog() async {
     if (!GetIt.I.isRegistered<MetadataMatchingService>()) return;
 
     showDialog(
@@ -302,19 +304,19 @@ class _TrackListTileState extends State<TrackListTile> {
       final result =
           await service.autoMatchTags(widget.track.path, widget.track.title);
 
-      if (context.mounted) Navigator.pop(context); // Close loading
+      if (mounted) Navigator.pop(context); // Close loading
 
-      if (context.mounted) {
+      if (mounted) {
         if (result != null) {
-          _showSuccessDialog(context, result);
+          _showSuccessDialog(result);
         } else {
           // Auto-match failed, ask for manual search
-          _showManualSearchOption(context, service);
+          _showManualSearchOption(service);
         }
       }
     } catch (e) {
-      if (context.mounted) Navigator.pop(context); // ensure loading closed
-      if (context.mounted) {
+      if (mounted) Navigator.pop(context); // ensure loading closed
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
@@ -322,7 +324,7 @@ class _TrackListTileState extends State<TrackListTile> {
     }
   }
 
-  void _showSuccessDialog(BuildContext context, LocalTrackOverride result) {
+  void _showSuccessDialog(TrackOverride result) {
     final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
@@ -342,8 +344,7 @@ class _TrackListTileState extends State<TrackListTile> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _showManualSearchDialog(
-                  context, GetIt.I<MetadataMatchingService>());
+              _showManualSearchDialog(GetIt.I<MetadataMatchingService>());
             },
             child: Text(loc.wrongMatch),
           ),
@@ -353,8 +354,7 @@ class _TrackListTileState extends State<TrackListTile> {
     );
   }
 
-  void _showManualSearchOption(
-      BuildContext context, MetadataMatchingService service) {
+  void _showManualSearchOption(MetadataMatchingService service) {
     final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
@@ -369,7 +369,7 @@ class _TrackListTileState extends State<TrackListTile> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _showManualSearchDialog(context, service);
+              _showManualSearchDialog(service);
             },
             child: Text(loc.manualSearch),
           ),
@@ -378,8 +378,7 @@ class _TrackListTileState extends State<TrackListTile> {
     );
   }
 
-  void _showManualSearchDialog(
-      BuildContext context, MetadataMatchingService service) async {
+  void _showManualSearchDialog(MetadataMatchingService service) async {
     // Use the new full-screen Search Delegate
     final YouTubeSong? selectedSong = await showSearch<YouTubeSong?>(
       context: context,
@@ -400,7 +399,7 @@ class _TrackListTileState extends State<TrackListTile> {
           thumbnailUrl: selectedSong.thumbnailUrl,
         );
 
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context).metadataUpdated),
@@ -412,7 +411,7 @@ class _TrackListTileState extends State<TrackListTile> {
       } catch (e, stack) {
         debugPrint('Error saving override: $e');
         debugPrint(stack.toString());
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)

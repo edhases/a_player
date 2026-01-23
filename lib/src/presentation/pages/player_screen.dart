@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
-
 import '../../core/services/audio_handler.dart';
 import '../../data/datasources/app_database.dart';
 import 'equalizer_screen.dart';
@@ -13,6 +12,9 @@ import '../../core/services/cache_service.dart';
 import '../../core/services/youtube_helper.dart';
 import '../../core/services/favorites_service.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:get_it/get_it.dart';
+import '../blocs/player/player_bloc.dart';
+import '../blocs/queue/queue_bloc.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -23,7 +25,6 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  final MyAudioHandler _audioHandler = GetIt.I<MyAudioHandler>();
   double? _dragValue;
 
   @override
@@ -50,10 +51,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<MediaItem?>(
-        stream: _audioHandler.mediaItem,
-        builder: (context, snapshot) {
-          final mediaItem = snapshot.data;
+      body: BlocBuilder<PlayerBloc, PlayerState>(
+        builder: (context, state) {
+          final mediaItem = state.mediaItem;
           if (mediaItem == null) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -78,7 +78,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   // Album Art
                   Expanded(
                     flex: 6,
-                    child: _buildArtwork(mediaItem),
+                    child: _buildArtwork(context, mediaItem),
                   ),
                   const SizedBox(height: 30),
                   // Track Info
@@ -86,7 +86,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
                       children: [
-                        Expanded(child: _buildTrackInfo(mediaItem)),
+                        Expanded(child: _buildTrackInfo(context, mediaItem)),
                         _buildFavoriteButton(mediaItem),
                       ],
                     ),
@@ -95,11 +95,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   // Seekbar
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: _buildSeekbar(mediaItem),
+                    child: _buildSeekbar(context, mediaItem),
                   ),
                   const SizedBox(height: 30),
                   // Controls
-                  _buildControls(colorScheme),
+                  _buildControls(context, state, colorScheme),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -110,12 +110,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildArtwork(MediaItem mediaItem) {
+  Widget _buildArtwork(BuildContext context, MediaItem mediaItem) {
     return GestureDetector(
       onHorizontalDragEnd: (details) {
         if (details.primaryVelocity != null) {
-          if (details.primaryVelocity! > 200) _audioHandler.skipToPrevious();
-          if (details.primaryVelocity! < -200) _audioHandler.skipToNext();
+          if (details.primaryVelocity! > 200) {
+            context.read<PlayerBloc>().add(PlayerSkipPrevious());
+          }
+          if (details.primaryVelocity! < -200) {
+            context.read<PlayerBloc>().add(PlayerSkipNext());
+          }
         }
       },
       child: Hero(
@@ -156,7 +160,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final isOnline = mediaItem.extras?['isOnline'] == true;
     final videoId = mediaItem.extras?['videoId'] as String?;
 
-    // Always use videoId for like checks - liked songs are stored by videoId only
     // Always use videoId for like checks - liked songs are stored by videoId only
     if (isOnline && videoId != null) {
       // YouTube track - use FavoritesService
@@ -210,7 +213,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
-  Widget _buildTrackInfo(MediaItem mediaItem) {
+  Widget _buildTrackInfo(BuildContext context, MediaItem mediaItem) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -234,17 +237,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildSeekbar(MediaItem mediaItem) {
+  Widget _buildSeekbar(BuildContext context, MediaItem mediaItem) {
+    final playerBloc = context.read<PlayerBloc>();
     return StreamBuilder<Duration>(
       stream: Rx.combineLatest2<Duration, Duration?, Duration>(
-        _audioHandler.player.positionStream,
-        _audioHandler.player.durationStream,
+        playerBloc.positionStream,
+        playerBloc.durationStream,
         (pos, dur) => dur ?? mediaItem.duration ?? Duration.zero,
       ),
       builder: (context, snapshot) {
         final duration = snapshot.data ?? mediaItem.duration ?? Duration.zero;
         return StreamBuilder<Duration>(
-          stream: _audioHandler.player.positionStream,
+          stream: playerBloc.positionStream,
           builder: (context, posSnapshot) {
             final position = posSnapshot.data ?? Duration.zero;
             double sliderValue =
@@ -271,7 +275,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     value: sliderValue,
                     onChanged: (value) => setState(() => _dragValue = value),
                     onChangeEnd: (value) {
-                      _audioHandler.seek(Duration(milliseconds: value.round()));
+                      playerBloc.add(
+                          PlayerSeek(Duration(milliseconds: value.round())));
                       _dragValue = null;
                     },
                   ),
@@ -307,97 +312,91 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildControls(ColorScheme colorScheme) {
-    return StreamBuilder<PlaybackState>(
-      stream: _audioHandler.playbackState,
-      builder: (context, snapshot) {
-        final playbackState = snapshot.data;
-        final isPlaying = playbackState?.playing ?? false;
-        final repeatMode =
-            playbackState?.repeatMode ?? AudioServiceRepeatMode.none;
-        final shuffleMode =
-            playbackState?.shuffleMode ?? AudioServiceShuffleMode.none;
+  Widget _buildControls(
+      BuildContext context, PlayerState state, ColorScheme colorScheme) {
+    final playerBloc = context.read<PlayerBloc>();
+    final isPlaying = state.isPlaying;
+    final repeatMode = state.repeatMode;
+    final shuffleMode = state.shuffleMode;
 
-        return Column(
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.shuffle,
-                      color: shuffleMode != AudioServiceShuffleMode.none
-                          ? colorScheme.primary
-                          : Colors.white70),
-                  onPressed: () => _audioHandler.setShuffleMode(
-                      shuffleMode == AudioServiceShuffleMode.none
-                          ? AudioServiceShuffleMode.all
-                          : AudioServiceShuffleMode.none),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.skip_previous,
-                      color: Colors.white, size: 45),
-                  onPressed: _audioHandler.skipToPrevious,
-                ),
-                GestureDetector(
-                  onTap: isPlaying ? _audioHandler.pause : _audioHandler.play,
-                  child: Container(
-                    height: 80,
-                    width: 80,
-                    decoration: BoxDecoration(
-                        shape: BoxShape.circle, color: colorScheme.primary),
-                    child: Icon(isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: Colors.white, size: 50),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.skip_next,
-                      color: Colors.white, size: 45),
-                  onPressed: _audioHandler.skipToNext,
-                ),
-                IconButton(
-                  icon: Icon(
-                      repeatMode == AudioServiceRepeatMode.one
-                          ? Icons.repeat_one
-                          : Icons.repeat,
-                      color: repeatMode != AudioServiceRepeatMode.none
-                          ? colorScheme.primary
-                          : Colors.white70),
-                  onPressed: () {
-                    final modes = [
-                      AudioServiceRepeatMode.none,
-                      AudioServiceRepeatMode.all,
-                      AudioServiceRepeatMode.one
-                    ];
-                    _audioHandler.setRepeatMode(
-                        modes[(modes.indexOf(repeatMode) + 1) % modes.length]);
-                  },
-                ),
-              ],
+            IconButton(
+              icon: Icon(Icons.shuffle,
+                  color: shuffleMode != AudioServiceShuffleMode.none
+                      ? colorScheme.primary
+                      : Colors.white70),
+              onPressed: () => playerBloc.add(PlayerSetShuffleMode(
+                  shuffleMode == AudioServiceShuffleMode.none
+                      ? AudioServiceShuffleMode.all
+                      : AudioServiceShuffleMode.none)),
             ),
-            const SizedBox(height: 30),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                    icon: const Icon(Icons.equalizer, color: Colors.white54),
-                    onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const EqualizerScreen()))),
-                IconButton(
-                    icon:
-                        const Icon(Icons.playlist_play, color: Colors.white54),
-                    onPressed: () => _showQueue(context)),
-                IconButton(
-                    icon: const Icon(Icons.info_outline, color: Colors.white54),
-                    onPressed: () {
-                      _showDetailsSheet(context, _audioHandler.mediaItem.value);
-                    }),
-              ],
+            IconButton(
+              icon: const Icon(Icons.skip_previous,
+                  color: Colors.white, size: 45),
+              onPressed: () => playerBloc.add(PlayerSkipPrevious()),
+            ),
+            GestureDetector(
+              onTap: () =>
+                  playerBloc.add(isPlaying ? PlayerPause() : PlayerPlay()),
+              child: Container(
+                height: 80,
+                width: 80,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle, color: colorScheme.primary),
+                child: Icon(isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white, size: 50),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.skip_next, color: Colors.white, size: 45),
+              onPressed: () => playerBloc.add(PlayerSkipNext()),
+            ),
+            IconButton(
+              icon: Icon(
+                  repeatMode == AudioServiceRepeatMode.one
+                      ? Icons.repeat_one
+                      : Icons.repeat,
+                  color: repeatMode != AudioServiceRepeatMode.none
+                      ? colorScheme.primary
+                      : Colors.white70),
+              onPressed: () {
+                final modes = [
+                  AudioServiceRepeatMode.none,
+                  AudioServiceRepeatMode.all,
+                  AudioServiceRepeatMode.one
+                ];
+                final nextMode =
+                    modes[(modes.indexOf(repeatMode) + 1) % modes.length];
+                playerBloc.add(PlayerSetRepeatMode(nextMode));
+              },
             ),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: 30),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            IconButton(
+                icon: const Icon(Icons.equalizer, color: Colors.white54),
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const EqualizerScreen()))),
+            IconButton(
+                icon: const Icon(Icons.playlist_play, color: Colors.white54),
+                onPressed: () => _showQueue(context)),
+            IconButton(
+                icon: const Icon(Icons.info_outline, color: Colors.white54),
+                onPressed: () {
+                  _showDetailsSheet(context, state.mediaItem);
+                }),
+          ],
+        ),
+      ],
     );
   }
 
@@ -407,11 +406,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: Colors.grey[900],
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) {
-        return StreamBuilder<List<MediaItem>>(
-          stream: _audioHandler.queue,
-          builder: (context, snapshot) {
-            final currentQueue = snapshot.data ?? [];
+      builder: (_) {
+        // Use new context if needed, but we check bloc
+        return BlocBuilder<QueueBloc, QueueState>(
+          builder: (context, state) {
+            final currentQueue = state.queue;
             return Column(
               children: [
                 Padding(
@@ -427,8 +426,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     itemCount: currentQueue.length,
                     itemBuilder: (context, index) {
                       final item = currentQueue[index];
-                      final isCurrent =
-                          _audioHandler.mediaItem.value?.id == item.id;
+                      // We need current item to highlight
+                      final currentItem =
+                          context.read<PlayerBloc>().state.mediaItem;
+                      final isCurrent = currentItem?.id == item.id;
+
                       return ListTile(
                         leading: _buildQueueArtwork(item),
                         title: Text(item.title,
@@ -439,7 +441,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         subtitle: Text(item.artist ?? '',
                             style: const TextStyle(color: Colors.white70)),
                         onTap: () {
-                          _audioHandler.skipToQueueItem(index);
+                          // TODO: Implement skipToQueueItem in PlayerBloc or via handler?
+                          // PlayerBloc doesn't have skipToQueueItem event in my design yet??
+                          // Checking player_bloc.dart events... nope, only next/prev.
+                          // I should add it or use handler directly.
+                          // Ideally add to Bloc.
+                          GetIt.I<MyAudioHandler>().skipToQueueItem(index);
                           Navigator.pop(context);
                         },
                       );
@@ -470,6 +477,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _showOptionsSheet(BuildContext context) {
     final loc = AppLocalizations.of(context);
+    final mediaItem = context.read<PlayerBloc>().state.mediaItem;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.grey[900],
@@ -483,7 +492,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
             onTap: () async {
               Navigator.pop(context); // Close sheet
 
-              final mediaItem = _audioHandler.mediaItem.value;
               if (mediaItem == null || mediaItem.extras?['videoId'] == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(loc.cannotDownload)),
@@ -545,7 +553,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 style: const TextStyle(color: Colors.white)),
             onTap: () async {
               Navigator.pop(context);
-              final mediaItem = _audioHandler.mediaItem.value;
               final videoId = mediaItem?.extras?['videoId'] as String?;
               if (videoId != null && videoId.length == 11) {
                 final url = 'https://music.youtube.com/watch?v=$videoId';

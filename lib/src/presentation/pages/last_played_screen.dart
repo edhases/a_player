@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import '../../core/services/recommendation_service.dart';
+import '../../data/datasources/app_database.dart'; // Drift DB
+import 'package:drift/drift.dart' as drift; // Alias if needed
 import '../../core/utils/localization.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/compact_song_tile.dart';
 import '../../domain/entities/youtube_song.dart';
-import 'package:isar/isar.dart';
-import '../../data/models/listen_history.dart';
 
 class LastPlayedScreen extends StatelessWidget {
   const LastPlayedScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final recommendationService = GetIt.I<RecommendationService>();
+    final db = GetIt.I<AppDatabase>();
     final loc = AppLocalizations.of(context);
 
     return Scaffold(
@@ -24,50 +23,94 @@ class LastPlayedScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: FutureBuilder<List<ListenHistory>>(
-        future: recommendationService.isar?.listenHistorys
-            .where()
-            .sortByTimestampDesc()
-            .limit(100)
-            .findAll(),
+      body: FutureBuilder<List<PlaybackLogEntry>>(
+        // Example query: Join with YouTubeTracks to get metadata
+        future: (db.select(db.playbackLog).join([
+          drift.innerJoin(db.youTubeTracks,
+              db.youTubeTracks.videoId.equalsExp(db.playbackLog.videoId))
+        ])
+              ..orderBy([
+                drift.OrderingTerm(
+                    expression: db.playbackLog.playedAt,
+                    mode: drift.OrderingMode.desc)
+              ])
+              ..limit(100))
+            .get()
+            .then((rows) => rows.map((row) {
+                  final entry = row.readTable(db.playbackLog);
+                  return entry;
+                }) // We actually need to map to something useful, but for now lets just get the entries or safer, read both
+                    .toList()),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final history = snapshot.data ?? [];
+          // We need to fetch metadata for these items.
+          // Actually the join above returns TypedResult.
+          // Let's rewrite the query execution inside builder logic or helper to return full objects.
+          return FutureBuilder<List<YouTubeSong>>(
+            future: _getHistoryWithMetadata(db),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (history.isEmpty) {
-            return Center(
-                child: Text(loc.noHistory,
-                    style: const TextStyle(color: Colors.white)));
-          }
+              final history = snapshot.data ?? [];
 
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: history.length,
-            itemBuilder: (context, index) {
-              final item = history[index];
-              final song = YouTubeSong(
-                  videoId: item.videoId,
-                  title: item.title,
-                  artist: item.artist,
-                  thumbnailUrl: item.thumbnailUrl,
-                  category: "Song");
+              if (history.isEmpty) {
+                return Center(
+                    child: Text(loc.noHistory,
+                        style: const TextStyle(color: Colors.white)));
+              }
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: CompactSongTile(
-                  song: song,
-                  onTap: () => GetIt.I<MyAudioHandler>().playYouTubeSong(song),
-                  onMenuTap: () => _showContextMenu(context, song),
-                ),
+              return ListView.builder(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: history.length,
+                itemBuilder: (context, index) {
+                  final song = history[index];
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: CompactSongTile(
+                      song: song,
+                      onTap: () =>
+                          GetIt.I<MyAudioHandler>().playYouTubeSong(song),
+                      onMenuTap: () => _showContextMenu(context, song),
+                    ),
+                  );
+                },
               );
             },
           );
         },
       ),
     );
+  }
+
+  Future<List<YouTubeSong>> _getHistoryWithMetadata(AppDatabase db) async {
+    final query = db.select(db.playbackLog).join([
+      drift.innerJoin(db.youTubeTracks,
+          db.youTubeTracks.videoId.equalsExp(db.playbackLog.videoId))
+    ])
+      ..orderBy([
+        drift.OrderingTerm(
+            expression: db.playbackLog.playedAt, mode: drift.OrderingMode.desc)
+      ])
+      ..limit(100);
+
+    final rows = await query.get();
+    return rows.map((row) {
+      final track = row.readTable(db.youTubeTracks);
+      return YouTubeSong(
+          videoId: track.videoId,
+          title: track.title,
+          artist: track.artist,
+          thumbnailUrl: track.thumbnailUrl,
+          duration: track.duration,
+          category: "Song");
+    }).toList();
   }
 
   void _showContextMenu(BuildContext context, YouTubeSong song) {

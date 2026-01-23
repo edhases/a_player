@@ -24,7 +24,10 @@ class PagedSongList extends StatelessWidget {
 
     final pageCount = (songs.length / itemsPerPage).ceil();
     // Calculate approximate height: 72px per tile + padding
-    final double height = (itemsPerPage * 72.0) + 16.0;
+    // If total songs < itemsPerPage, shrink the height to fit content.
+    final effectiveItemsCount =
+        songs.length < itemsPerPage ? songs.length : itemsPerPage;
+    final double height = (effectiveItemsCount * 72.0) + 16.0;
 
     return SizedBox(
       height: height,
