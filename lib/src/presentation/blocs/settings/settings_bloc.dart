@@ -5,7 +5,6 @@ import 'package:get_it/get_it.dart';
 
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/log_service.dart';
-import '../../../core/services/audio_handler.dart';
 import 'settings_event.dart';
 import 'settings_state.dart';
 
@@ -142,11 +141,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       ChangeCrossfadeDuration event, Emitter<SettingsState> emit) async {
     await _settingsService.saveCrossfadeDuration(event.seconds);
     emit(state.copyWith(crossfadeDuration: event.seconds));
-
-    // Notify AudioHandler
-    if (GetIt.I.isRegistered<MyAudioHandler>()) {
-      GetIt.I<MyAudioHandler>().setCrossfadeDuration(event.seconds);
-    }
+    // TODO: Notify AudioHandler
   }
 
   Future<void> _onChangeWifiOnly(

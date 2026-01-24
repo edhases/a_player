@@ -239,6 +239,24 @@ class AppLocalizations {
   String get lyrics => translate('lyrics');
   String get noLyricsFound => translate('no_lyrics_found');
   String get errorLoadingLyrics => translate('error_loading_lyrics');
+  // User Manual
+  String get manualTitle => translate('manual_title');
+  String get manualIntroTitle => translate('manual_intro_title');
+  String get manualIntroDesc => translate('manual_intro_desc');
+  String get manualBasicsTitle => translate('manual_basics_title');
+  String get manualBasicsDesc => translate('manual_basics_desc');
+  String get manualLibraryTitle => translate('manual_library_title');
+  String get manualLibraryDesc => translate('manual_library_desc');
+  String get manualYoutubeTitle => translate('manual_youtube_title');
+  String get manualYoutubeDesc => translate('manual_youtube_desc');
+  String get manualPlaylistsTitle => translate('manual_playlists_title');
+  String get manualPlaylistsDesc => translate('manual_playlists_desc');
+  String get manualSettingsTitle => translate('manual_settings_title');
+  String get manualSettingsDesc => translate('manual_settings_desc');
+  String get manualTroubleshootingTitle =>
+      translate('manual_troubleshooting_title');
+  String get manualTroubleshootingDesc =>
+      translate('manual_troubleshooting_desc');
 }
 
 class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

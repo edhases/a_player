@@ -157,5 +157,20 @@
     "need_cookies": "• オフラインアクセスのための安全なCookie保存",
     "lyrics": "歌詞",
     "no_lyrics_found": "歌詞が見つかりません",
-    "error_loading_lyrics": "歌詞の読み込みエラー"
+    "error_loading_lyrics": "歌詞の読み込みエラー",
+    "manual_title": "ユーザーマニュアル",
+    "manual_intro_title": "ようこそ",
+    "manual_intro_desc": "Oxide Playerへようこそ！このガイドはアプリの使い方を説明します。",
+    "manual_basics_title": "音楽を再生",
+    "manual_basics_desc": "• **再生/一時停止**: 下の大きなボタンをタップします。\n• **次の曲**: 再生ボタンの横の矢印をタップします。\n• **音量**: 携帯電話の音量ボタンを使用します。",
+    "manual_library_title": "ライブラリ",
+    "manual_library_desc": "すべての音楽がここにあります：\n\n• **トラック**: すべての曲のリスト。\n• **アルバム**: アルバムごとの音楽。\n• **アーティスト**: アーティストごとの音楽。",
+    "manual_youtube_title": "YouTube & オンライン",
+    "manual_youtube_desc": "• **検索**: 右上の虫眼鏡をタップします。\n• **再生**: 結果の曲をタップします。",
+    "manual_playlists_title": "プレイリスト",
+    "manual_playlists_desc": "独自のコレクションを作成します。曲を長押しして「プレイリストに追加」を選択します。",
+    "manual_settings_title": "設定",
+    "manual_settings_desc": "テーマ、言語、イコライザーをここで変更します。",
+    "manual_troubleshooting_title": "トラブルシューティング",
+    "manual_troubleshooting_desc": "• **音楽がない**: /Music フォルダを確認してください。\n• **歌詞がない**: インターネットを確認してください。"
 }

@@ -133,22 +133,6 @@ class YouTubeSongMenu extends StatelessWidget {
               },
             ),
 
-            // Play Next
-            ListTile(
-              leading: const Icon(Icons.play_arrow_outlined),
-              title: Text(loc.playNext),
-              onTap: () {
-                audioHandler.playYouTubeNext(song);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(loc.willPlayNext),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              },
-            ),
-
             // Download
             ListTile(
               leading: const Icon(Icons.download),

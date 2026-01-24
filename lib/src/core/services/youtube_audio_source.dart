@@ -69,8 +69,7 @@ class YoutubeAudioSource extends StreamAudioSource {
       // If still null, fetch now
       if (_cachedUrl == null) {
         try {
-          debugPrint(
-              '[YoutubeAudioSource] Fetching URL in request() for $videoId...');
+          debugPrint('[YoutubeAudioSource] Fetching URL in request()...');
           _cachedUrl = await _ytHelper.getAudioUrl(videoId);
           _cacheTime = DateTime.now();
         } catch (e) {

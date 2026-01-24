@@ -2,11 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:get_it/get_it.dart';
 import '../blocs/lyrics/lyrics_bloc.dart';
 import '../../core/models/lyrics_model.dart';
 import '../../core/utils/localization.dart';
-import '../../core/services/audio_handler.dart';
 
 class LyricsView extends StatefulWidget {
   final MediaItem mediaItem;
@@ -20,32 +18,18 @@ class LyricsView extends StatefulWidget {
 class _LyricsViewState extends State<LyricsView> {
   final ScrollController _scrollController = ScrollController();
   StreamSubscription? _positionSubscription;
-  StreamSubscription? _mediaItemSubscription;
   int _currentIndex = -1;
   bool _isUserScrolling = false;
   Timer? _scrollResumeTimer;
-  String? _currentTrackId;
 
   @override
   void initState() {
     super.initState();
-    _currentTrackId = widget.mediaItem.id;
-
     // Trigger fetch on init
     context.read<LyricsBloc>().add(FetchLyrics(widget.mediaItem));
 
     // Listen to position for syncing
     _setupPositionListener();
-
-    // Listen to track changes
-    _mediaItemSubscription = GetIt.I<MyAudioHandler>().mediaItem.listen((item) {
-      if (!mounted || item == null) return;
-      if (item.id != _currentTrackId) {
-        _currentTrackId = item.id;
-        _currentIndex = -1;
-        context.read<LyricsBloc>().add(FetchLyrics(item));
-      }
-    });
   }
 
   @override
@@ -122,7 +106,6 @@ class _LyricsViewState extends State<LyricsView> {
   @override
   void dispose() {
     _positionSubscription?.cancel();
-    _mediaItemSubscription?.cancel();
     _scrollController.dispose();
     _scrollResumeTimer?.cancel();
     super.dispose();

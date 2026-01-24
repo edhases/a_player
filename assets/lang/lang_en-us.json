@@ -244,5 +244,20 @@
     "reset_confirm_action": "Reset Everything",
     "lyrics": "Lyrics",
     "no_lyrics_found": "No lyrics found",
-    "error_loading_lyrics": "Error loading lyrics"
+    "error_loading_lyrics": "Error loading lyrics",
+    "manual_title": "User Manual",
+    "manual_intro_title": "Welcome",
+    "manual_intro_desc": "Welcome to Oxide Player! This guide helps you use the app easily. Don't worry, you can't break anything by tapping buttons! Explore and enjoy your music.",
+    "manual_basics_title": "Playing Music",
+    "manual_basics_desc": "• **Play/Pause**: Tap the big circle button at the bottom. Triangle (▶) means Play. Two bars (II) means Pause.\n• **Change Song**: Tap the arrows next to the play button to go forward or backward.\n• **Volume**: Use the buttons on the side of your phone.\n• **Progress Bar**: The line shows how much of the song has played. Drag the circle to move forward or backward.",
+    "manual_library_title": "Your Library",
+    "manual_library_desc": "This is where all your music lives.\n\n• **Tracks**: A simple list of every song on your phone.\n• **Albums**: Tap an album picture to see all songs in that album.\n• **Artists**: Find songs by your favorite singers or bands.\n• **Folders**: If you organize music in folders on your computer, you can see them here exactly the same way.",
+    "manual_youtube_title": "YouTube & Online",
+    "manual_youtube_desc": "This app lets you listen to music from the internet too!\n\n• **Search**: Tap the magnifying glass icon at the top right. Type a song name.\n• **Play**: Tap any song in the results to listen.\n• **Recommendations**: The app learns what you like and suggests similar music.",
+    "manual_playlists_title": "Playlists",
+    "manual_playlists_desc": "You can create your own collections of songs. Long-press any song and select 'Add to Playlist' to start.",
+    "manual_settings_title": "Settings",
+    "manual_settings_desc": "In Settings, you can change the app's look (Theme), adjust sound (Equalizer), and manage your data (Backup/Restore).",
+    "manual_troubleshooting_title": "Troubleshooting",
+    "manual_troubleshooting_desc": "• **No Music Found**: Make sure your music is in the /Music/ folder on your phone and press 'Scan Library' above.\n• **Lyrics not showing**: Check your internet connection.\n• **App Crashes**: Please use 'Send Logs' below to help us fix it."
 }

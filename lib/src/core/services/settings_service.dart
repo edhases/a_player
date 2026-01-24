@@ -214,4 +214,6 @@ class SettingsService {
   String? loadString(String key) => _prefs.getString(key);
   Future<void> saveString(String key, String value) =>
       _prefs.setString(key, value);
+
+  Future<void> remove(String key) => _prefs.remove(key);
 }

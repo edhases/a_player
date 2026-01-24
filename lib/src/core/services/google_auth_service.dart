@@ -17,11 +17,13 @@ class GoogleAuthService {
 
   GoogleAuthService({FlutterSecureStorage? storage, GoogleSignIn? googleSignIn})
       : _storage = storage ?? const FlutterSecureStorage(),
-        _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
-
-  // Scopes are now handled during interaction/requests, or by the plugin configuration.
-  // For read-only access, we might need to request permissions explicitly if needed,
-  // but for now we follow v7 migration pattern of simple instantiation.
+        _googleSignIn = googleSignIn ??
+            GoogleSignIn(
+              scopes: [
+                'email',
+                'https://www.googleapis.com/auth/youtube.readonly',
+              ],
+            );
 
   /// Зберегти cookies після WebView логіну
   Future<void> saveCookies(String cookieHeader) async {
@@ -77,6 +79,7 @@ class GoogleAuthService {
 
   /// Generate SAPISIDHASH: Time_SHA1(Time + " " + SAPISID + " " + Origin)
   String _generateSapisidHash(String sapisid) {
+    // Current timestamp in seconds
     final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     const origin = 'https://music.youtube.com';
     final msg = '$timestamp $sapisid $origin';
@@ -104,9 +107,6 @@ class GoogleAuthService {
   Future<void> signOut() async {
     await _storage.delete(key: _cookieKey);
     await _storage.delete(key: _userEmailKey);
-    try {
-      await _googleSignIn.signOut();
-    } catch (_) {}
     _loginStatusController.add(false); // Added this line
     debugPrint('[GoogleAuthService] User signed out');
   }
@@ -114,22 +114,20 @@ class GoogleAuthService {
   /// Perform native Google Sign-In and cache the user's email.
   Future<GoogleSignInAccount?> signIn() async {
     try {
-      // Google Sign In v7 change: signIn() -> signIn() does not exist or behaves differently.
-      // v7 migration suggests initializing implicitly or handling flows differently.
-      // However, for this specific project, we primarily use the WebView Cookie method.
-      // The native sign in seems like a relic or secondary feature.
-
-      // Attempting standard sign in if available, otherwise return null
-      // NOTE: .signIn() was REMOVED in v7. We must use signInSilently() equivalent or manual authentication?
-      // Actually v7 docs say: replace signIn() with... nothing? Wait, checking errors.
-      // Checking the error log: "The method 'signIn' isn't defined".
-
-      // For now, disabling the native signIn call to fix the build, as the user primarily relies on Web Cookies.
-      debugPrint(
-          '[GoogleAuthService] Native Google Sign In is disabled in this version due to library update.');
-      return null;
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+      if (account != null) {
+        await saveUserEmail(account.email);
+        debugPrint(
+            '[GoogleAuthService] Native sign-in successful for ${account.email}');
+        // You might want to get tokens and use them with your backend or other services.
+        // final GoogleSignInAuthentication auth = await account.authentication;
+        // final String? idToken = auth.idToken;
+        // final String? accessToken = auth.accessToken;
+      }
+      return account;
     } catch (e) {
       debugPrint('[GoogleAuthService] Error during native sign-in: $e');
+      // Return null or rethrow a custom exception to be handled by the UI.
       return null;
     }
   }

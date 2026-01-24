@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
+import 'manual_screen.dart';
 import '../../core/services/music_finder.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/services/google_auth_service.dart';
@@ -473,44 +474,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader(context, loc.playback),
           BlocBuilder<SettingsBloc, SettingsState>(
             builder: (context, state) {
-              return Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.equalizer),
-                    title: Text(loc.equalizer),
-                    subtitle: Text(loc.adjustEqualizer),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const EqualizerScreen()),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.timelapse),
-                    title: Text(loc.translate('crossfade')),
-                    subtitle: Text(state.crossfadeDuration == 0
-                        ? loc.off
-                        : loc.translate('crossfade_desc',
-                            args: {'seconds': state.crossfadeDuration})),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Slider(
-                      value: state.crossfadeDuration.toDouble(),
-                      min: 0,
-                      max: 12,
-                      divisions: 12,
-                      label: '${state.crossfadeDuration}s',
-                      onChanged: (val) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(ChangeCrossfadeDuration(val.toInt()));
-                      },
-                    ),
-                  ),
-                ],
+              return ListTile(
+                leading: const Icon(Icons.equalizer),
+                title: Text(loc.equalizer),
+                subtitle: Text(loc.adjustEqualizer),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const EqualizerScreen()),
+                  );
+                },
               );
             },
           ),
@@ -781,6 +754,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // About Section
           _buildSectionHeader(context, loc.about),
+          ListTile(
+            leading: const Icon(Icons.menu_book),
+            title: Text(loc.manualTitle),
+            subtitle: const Text('Detailed guide & help'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ManualScreen()),
+              );
+            },
+          ),
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (context, snapshot) {

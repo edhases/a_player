@@ -123,11 +123,32 @@ class LogService {
     }
   }
 
-  void _sendToTelegram(String message) {
+  /// Patterns to filter out from Telegram notifications (expected/non-critical errors)
+  static final List<RegExp> _telegramFilterPatterns = [
+    RegExp(r'android.*client', caseSensitive: false),
+    RegExp(r'ANDROID_MUSIC', caseSensitive: false),
+    RegExp(r'TV_EMBEDDED', caseSensitive: false),
+    RegExp(r'fallback', caseSensitive: false),
+  ];
+
+  void _sendToTelegram(String message) async {
     try {
+      // Filter out expected/non-critical errors
+      for (final pattern in _telegramFilterPatterns) {
+        if (pattern.hasMatch(message)) {
+          debugPrint(
+              '[LogService] Telegram notification filtered: ${pattern.pattern}');
+          return;
+        }
+      }
+
       if (GetIt.I.isRegistered<TelegramService>()) {
-        GetIt.I<TelegramService>()
-            .sendMessage('🚨 <b>ERROR</b>\n<pre>$message</pre>');
+        final deviceInfo = await getDeviceInfoSummary();
+        final formattedMessage = '🚨 <b>ERROR</b>\n'
+            '📱 <i>$deviceInfo</i>\n'
+            '🕐 ${DateTime.now().toIso8601String()}\n\n'
+            '<pre>$message</pre>';
+        GetIt.I<TelegramService>().sendMessage(formattedMessage);
       }
     } catch (e) {
       // Ignore telegram errors to avoid loops

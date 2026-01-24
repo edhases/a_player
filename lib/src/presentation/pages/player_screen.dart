@@ -170,40 +170,47 @@ class _PlayerScreenState extends State<PlayerScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[600],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+        return BlocBuilder<PlayerBloc, PlayerState>(
+          builder: (context, state) {
+            final currentItem = state.mediaItem;
+            if (currentItem == null) return const SizedBox.shrink();
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.6,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[900],
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(24)),
                   ),
-                  const SizedBox(height: 12),
-                  const Text('Lyrics',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18)),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: LyricsView(mediaItem: mediaItem),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[600],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Lyrics',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18)),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: LyricsView(mediaItem: currentItem),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -496,13 +503,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           fontWeight: FontWeight.bold)),
                 ),
                 Expanded(
-                  child: ReorderableListView.builder(
+                  child: ListView.builder(
                     itemCount: currentQueue.length,
-                    onReorder: (oldIndex, newIndex) {
-                      context
-                          .read<QueueBloc>()
-                          .add(QueueReorder(oldIndex, newIndex));
-                    },
                     itemBuilder: (context, index) {
                       final item = currentQueue[index];
                       // We need current item to highlight
@@ -511,7 +513,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       final isCurrent = currentItem?.id == item.id;
 
                       return ListTile(
-                        key: ValueKey(item.id),
                         leading: _buildQueueArtwork(item),
                         title: Text(item.title,
                             style: TextStyle(
@@ -520,12 +521,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     : Colors.white)),
                         subtitle: Text(item.artist ?? '',
                             style: const TextStyle(color: Colors.white70)),
-                        trailing: ReorderableDragStartListener(
-                          index: index,
-                          child: const Icon(Icons.drag_handle,
-                              color: Colors.white54),
-                        ),
                         onTap: () {
+                          // TODO: Implement skipToQueueItem in PlayerBloc or via handler?
+                          // PlayerBloc doesn't have skipToQueueItem event in my design yet??
+                          // Checking player_bloc.dart events... nope, only next/prev.
+                          // I should add it or use handler directly.
+                          // Ideally add to Bloc.
                           GetIt.I<MyAudioHandler>().skipToQueueItem(index);
                           Navigator.pop(context);
                         },

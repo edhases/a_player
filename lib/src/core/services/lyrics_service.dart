@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import '../models/lyrics_model.dart';
-import 'log_service.dart';
 
 class LyricsService {
   static const String _lrclibUrl = 'https://lrclib.net/api';
@@ -13,11 +11,6 @@ class LyricsService {
 
   // In-memory cache: key = "artist|title" or trackId
   final Map<String, LyricsModel> _cache = {};
-  final LogService? _logService;
-
-  LyricsService({LogService? logService})
-      : _logService = logService ??
-            (GetIt.I.isRegistered<LogService>() ? GetIt.I<LogService>() : null);
 
   /// Generate cache key from track info
   String _cacheKey(String trackName, String artistName) {
@@ -129,7 +122,6 @@ class LyricsService {
       }
     } catch (e) {
       debugPrint('[LyricsService] lrclib exception: $e');
-      _logService?.error('LyricsService lrclib exception', error: e);
       return null;
     }
   }
@@ -216,14 +208,17 @@ class LyricsService {
       );
     } catch (e) {
       debugPrint('[Genius] Exception: $e');
-      _logService?.error('Genius Exception', error: e);
       return null;
     }
   }
 
   Future<int?> _searchGeniusSong(String trackName, String artistName) async {
     try {
-      final query = '$artistName $trackName';
+      // 1. Clean up query (remove 'feat.', brackets, etc for better search results)
+      final cleanTrack = _cleanString(trackName);
+      final cleanArtist = _cleanString(artistName);
+
+      final query = '$cleanArtist $cleanTrack';
       final uri = Uri.parse('$_geniusUrl/search').replace(queryParameters: {
         'q': query,
       });
@@ -238,10 +233,24 @@ class LyricsService {
         final hits = data['response']?['hits'] as List?;
 
         if (hits != null && hits.isNotEmpty) {
-          // Return first result's song ID
-          final songId = hits[0]['result']?['id'] as int?;
-          debugPrint('[Genius] Found song ID: $songId');
-          return songId;
+          debugPrint(
+              '[Genius] Found ${hits.length} partial hits. Validating...');
+
+          for (var hit in hits) {
+            final result = hit['result'];
+            final hitTitle = result['title'] as String? ?? '';
+            final hitArtist =
+                result['primary_artist']?['name'] as String? ?? '';
+
+            debugPrint('[Genius] Checking: "$hitTitle" by "$hitArtist"');
+
+            if (_isValidMatch(trackName, artistName, hitTitle, hitArtist)) {
+              final songId = result['id'] as int?;
+              debugPrint('[Genius] ✅ Valid match found: ID $songId');
+              return songId;
+            }
+          }
+          debugPrint('[Genius] ❌ No valid match found in hits.');
         }
       } else {
         debugPrint('[Genius] Search error: ${response.statusCode}');
@@ -250,6 +259,53 @@ class LyricsService {
       debugPrint('[Genius] Search exception: $e');
     }
     return null;
+  }
+
+  bool _isValidMatch(String targetTrack, String targetArtist, String hitTrack,
+      String hitArtist) {
+    if (targetTrack.isEmpty || hitTrack.isEmpty) return false;
+
+    final tTrack = _normalize(targetTrack);
+    final hTrack = _normalize(hitTrack);
+    final tArtist = _normalize(targetArtist);
+    final hArtist = _normalize(hitArtist);
+
+    // 1. Direct containment check (ignoring case & punctuation)
+    bool titleMatch =
+        tTrack == hTrack || hTrack.contains(tTrack) || tTrack.contains(hTrack);
+
+    // 2. Transliteration check (Simple heuristic for Cyrillic/Latin)
+    // If titles are completely different in length/content, skip
+    if (!titleMatch) {
+      // Allow for some difference if the strings are very similar (e.g. Typos)
+      // This is a placeholder for Levenshtein if needed, but for now strict containment is safer
+      return false;
+    }
+
+    // 3. Artist check ( looser because of "feat" and variations)
+    bool artistMatch = tArtist == hArtist ||
+        hArtist.contains(tArtist) ||
+        tArtist.contains(hArtist);
+
+    // If strict artist check failed, try to be more lenient if title is EXACT match
+    if (!artistMatch && tTrack == hTrack) {
+      return true;
+    }
+
+    return titleMatch && artistMatch;
+  }
+
+  String _cleanString(String s) {
+    return s.replaceAll(RegExp(r'\(.*?\)'), '').trim();
+  }
+
+  String _normalize(String s) {
+    return s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\w\s\u0400-\u04FF]'),
+            '') // Keep alphanumeric and Cyrillic
+        .replaceAll(RegExp(r'\s+'), ' ') // Normalize spaces
+        .trim();
   }
 
   Future<Map<String, dynamic>?> _getGeniusSongDetails(int songId) async {
@@ -288,76 +344,67 @@ class LyricsService {
 
       if (response.statusCode == 200) {
         final html = response.body;
+        final allLyrics = StringBuffer();
 
-        // Extract lyrics using split approach (handles nested divs better)
-        // Find all sections that start with data-lyrics-container
-        final List<String> lyricsContents = [];
-        final containerStart = 'data-lyrics-container="true"';
-
-        int searchIndex = 0;
+        // Find all data-lyrics-container sections
+        // Use indexOf approach to handle nested divs properly
+        int searchStart = 0;
         while (true) {
-          final startIdx = html.indexOf(containerStart, searchIndex);
-          if (startIdx == -1) break;
+          final containerStart =
+              html.indexOf('data-lyrics-container="true"', searchStart);
+          if (containerStart == -1) break;
 
-          // Find the > that ends this opening tag
-          final tagEnd = html.indexOf('>', startIdx);
-          if (tagEnd == -1) break;
+          // Find the opening > of this div
+          final contentStart = html.indexOf('>', containerStart);
+          if (contentStart == -1) break;
 
-          // Now find the matching closing </div> - count nested divs
-          int divCount = 1;
-          int pos = tagEnd + 1;
-          int contentStart = pos;
+          // Now find the matching closing </div> by counting nesting
+          int depth = 1;
+          int pos = contentStart + 1;
+          int contentEnd = -1;
 
-          while (divCount > 0 && pos < html.length) {
+          while (pos < html.length && depth > 0) {
             final nextOpen = html.indexOf('<div', pos);
             final nextClose = html.indexOf('</div>', pos);
 
             if (nextClose == -1) break;
 
             if (nextOpen != -1 && nextOpen < nextClose) {
-              divCount++;
+              // Found nested div
+              depth++;
               pos = nextOpen + 4;
             } else {
-              divCount--;
-              if (divCount == 0) {
-                final content = html.substring(contentStart, nextClose);
-                lyricsContents.add(content);
+              // Found closing div
+              depth--;
+              if (depth == 0) {
+                contentEnd = nextClose;
               }
               pos = nextClose + 6;
             }
           }
 
-          searchIndex = pos;
-        }
-
-        debugPrint('[Genius] Found ${lyricsContents.length} lyrics containers');
-
-        if (lyricsContents.isEmpty) {
-          // Try alternative pattern
-          final altPattern = RegExp(
-            r'class="Lyrics__Container[^"]*"[^>]*>(.*?)</div>',
-            dotAll: true,
-          );
-          final altMatches = altPattern.allMatches(html);
-          if (altMatches.isEmpty) {
-            debugPrint('[Genius] No lyrics container found');
-            return null;
+          if (contentEnd != -1) {
+            final content = html.substring(contentStart + 1, contentEnd);
+            final cleanContent = _cleanHtml(content);
+            if (cleanContent.isNotEmpty) {
+              if (allLyrics.isNotEmpty) allLyrics.write('\n');
+              allLyrics.write(cleanContent);
+            }
           }
 
-          final lyrics = altMatches
-              .map((m) => _cleanHtml(m.group(1) ?? ''))
-              .join('\n')
-              .trim();
-          return lyrics.isNotEmpty ? lyrics : null;
+          searchStart = contentEnd != -1 ? contentEnd : containerStart + 30;
         }
 
-        final lyrics =
-            lyricsContents.map((c) => _cleanHtml(c)).join('\n').trim();
-        return lyrics.isNotEmpty ? lyrics : null;
+        if (allLyrics.isEmpty) {
+          debugPrint('[Genius] No lyrics found in containers');
+          return null;
+        }
+
+        debugPrint('[Genius] Extracted ${allLyrics.length} chars of lyrics');
+        return allLyrics.toString();
       }
     } catch (e) {
       debugPrint('[Genius] Scrape exception: $e');
-      _logService?.error('Genius Scrape exception', error: e);
     }
     return null;
   }
@@ -378,7 +425,7 @@ class LyricsService {
         .replaceAll('&nbsp;', ' ');
 
     // Clean up Genius-specific metadata artifacts
-    // Remove lines like "1 ContributorSong Title Lyrics"
+    // Be very precise to avoid removing actual lyrics
     final lines = text.split('\n');
     final cleanedLines = <String>[];
 
@@ -391,19 +438,17 @@ class LyricsService {
         continue;
       }
 
-      // Skip lines containing "Contributor" (metadata header)
-      if (trimmed.contains('Contributor')) continue;
+      // Skip lines that are EXACTLY metadata patterns (very specific)
+      // Pattern: "N Contributor(s)SongTitle Lyrics" at the very start
+      if (RegExp(r'^\d+\s*Contributor').hasMatch(trimmed)) continue;
 
-      // Skip lines that are ONLY the song title header (ends with "Lyrics" preceded by parentheses)
-      // Example: "Хороший громадянин (A good citizen) Lyrics" or "1 ContributorSong Lyrics"
-      // But NOT regular lyrics that happen to contain the word "Lyrics"
-      if (RegExp(r'^\d*\s*Contributor').hasMatch(trimmed)) continue;
-      if (RegExp(r'\)\s*Lyrics$').hasMatch(trimmed))
-        continue; // Parentheses before Lyrics = title
+      // Skip lines that are ONLY "Lyrics" (title marker)
       if (trimmed == 'Lyrics') continue;
 
-      // Skip embed/share buttons
-      if (trimmed.contains('Embed') || trimmed.contains('Share')) continue;
+      // Skip Genius embed button (exact match)
+      if (trimmed == 'Embed' || trimmed == 'EmbedShare URLCopyEmbedCopy') {
+        continue;
+      }
 
       cleanedLines.add(line);
     }

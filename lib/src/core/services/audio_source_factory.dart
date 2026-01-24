@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
@@ -25,14 +26,23 @@ class AudioSourceFactory {
       final videoId = item.extras!['videoId'] as String;
 
       // Check cache first
-      if (await _cacheService.isCached(videoId)) {
+      final isCached = await _cacheService.isCached(videoId);
+      debugPrint('[AudioSourceFactory] Cache check for $videoId: $isCached');
+
+      if (isCached) {
         final path = await _cacheService.getCachedFilePath(videoId);
+        debugPrint('[AudioSourceFactory] Cache path: $path');
+
         if (path != null) {
-          debugPrint('[AudioSourceFactory] Playing from cache: $path');
-          // Update last played in cache service if needed?
-          // Maybe better in AudioHandler when playback starts, but here is fine for now.
-          _cacheService.updateLastPlayed(videoId);
-          return AudioSource.uri(Uri.file(path), tag: item);
+          final file = File(path); // Use dart:io File
+          if (await file.exists()) {
+            debugPrint('[AudioSourceFactory] Playing from cache: $path');
+            _cacheService.updateLastPlayed(videoId);
+            return AudioSource.uri(Uri.file(path), tag: item);
+          } else {
+            debugPrint(
+                '[AudioSourceFactory] File NOT found at: $path (despite canCached=true?)');
+          }
         }
       }
 

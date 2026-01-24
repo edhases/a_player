@@ -157,5 +157,20 @@
     "need_cookies": "• Bezpieczne przechowywanie plików cookie dla dostępu offline",
     "lyrics": "Tekst",
     "no_lyrics_found": "Nie znaleziono tekstu",
-    "error_loading_lyrics": "Błąd ładowania tekstu"
+    "error_loading_lyrics": "Błąd ładowania tekstu",
+    "manual_title": "Instrukcja obsługi",
+    "manual_intro_title": "Witamy",
+    "manual_intro_desc": "Witamy w Oxide Player! Ten przewodnik pomoże Ci łatwo korzystać z aplikacji.",
+    "manual_basics_title": "Odtwarzanie muzyki",
+    "manual_basics_desc": "• **Graj/Pauza**: Stuknij duże koło na dole.\n• **Następny utwór**: Stuknij strzałki obok przycisku odtwarzania.\n• **Głośność**: Użyj przycisków głośności telefonu.",
+    "manual_library_title": "Twoja biblioteka",
+    "manual_library_desc": "Tutaj znajduje się cała Twoja muzyka:\n\n• **Utwory**: Lista wszystkich piosenek.\n• **Albumy**: Muzyka pogrupowana albumami.\n• **Artyści**: Muzyka wg wykonawców.",
+    "manual_youtube_title": "YouTube i Online",
+    "manual_youtube_desc": "• **Szukaj**: Stuknij lupę w prawym górnym rogu.\n• **Odtwórz**: Stuknij utwór w wynikach.",
+    "manual_playlists_title": "Listy odtwarzania",
+    "manual_playlists_desc": "Twórz własne kolekcje. Przytrzymaj utwór i wybierz 'Dodaj do listy'.",
+    "manual_settings_title": "Ustawienia",
+    "manual_settings_desc": "Zmień motyw, język lub korektor graficzny.",
+    "manual_troubleshooting_title": "Rozwiązywanie problemów",
+    "manual_troubleshooting_desc": "• **Brak muzyki**: Sprawdź folder /Music.\n• **Brak tekstu**: Sprawdź internet."
 }

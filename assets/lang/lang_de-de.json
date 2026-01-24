@@ -157,5 +157,20 @@
     "need_cookies": "• Sichere Cookie-Speicherung für Offline-Zugriff",
     "lyrics": "Liedtext",
     "no_lyrics_found": "Kein Liedtext gefunden",
-    "error_loading_lyrics": "Fehler beim Laden des Liedtexts"
+    "error_loading_lyrics": "Fehler beim Laden des Textes",
+    "manual_title": "Benutzerhandbuch",
+    "manual_intro_title": "Willkommen",
+    "manual_intro_desc": "Willkommen bei Oxide Player! Diese Anleitung hilft Ihnen, die App einfach zu bedienen.",
+    "manual_basics_title": "Musik abspielen",
+    "manual_basics_desc": "• **Play/Pause**: Tippen Sie auf den großen Kreis unten.\n• **Nächstes Lied**: Tippen Sie auf die Pfeile neben dem Play-Button.\n• **Lautstärke**: Nutzen Sie die Lautstärketasten Ihres Handys.",
+    "manual_library_title": "Ihre Bibliothek",
+    "manual_library_desc": "Hier finden Sie all Ihre Musik:\n\n• **Titel**: Liste aller Lieder.\n• **Alben**: Musik nach Alben gruppiert.\n• **Künstler**: Musik nach Interpreten.",
+    "manual_youtube_title": "YouTube & Online",
+    "manual_youtube_desc": "• **Suche**: Tippen Sie auf die Lupe oben rechts.\n• **Abspielen**: Tippen Sie auf ein Lied in den Ergebnissen.",
+    "manual_playlists_title": "Wiedergabelisten",
+    "manual_playlists_desc": "Erstellen Sie eigene Sammlungen. Halten Sie ein Lied gedrückt und wählen Sie 'Zur Playlist hinzufügen'.",
+    "manual_settings_title": "Einstellungen",
+    "manual_settings_desc": "Ändern Sie hier das Design, die Sprache oder den Equalizer.",
+    "manual_troubleshooting_title": "Fehlerbehebung",
+    "manual_troubleshooting_desc": "• **Keine Musik**: Prüfen Sie den Ordner /Music.\n• **Keine Texte**: Internetverbindung prüfen."
 }

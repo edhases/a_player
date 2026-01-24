@@ -10,7 +10,6 @@ import 'rate_limiter.dart';
 import 'package:logger/logger.dart';
 import '../utils/result.dart';
 import 'settings_service.dart';
-import 'log_service.dart';
 
 import '../../data/datasources/app_database.dart';
 
@@ -20,7 +19,6 @@ class InnerTubeService {
   final RateLimiter _rateLimiter = RateLimiter();
   final AppDatabase _db;
   final SettingsService _settingsService;
-  final LogService? _logService;
   final _logger = Logger(
     printer: PrettyPrinter(
         methodCount: 0,
@@ -37,17 +35,18 @@ class InnerTubeService {
   // IMPORTANT: For /browse, use browser-style UAs. YouTube Music app UA is only for /player.
   static const String _webUserAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+  static const String _androidUserAgent =
+      'Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
+  static const String _tvUserAgent =
+      'Mozilla/5.0 (X11; CrOS x86_64 15136.72.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6045.90 Safari/537.36';
 
   InnerTubeService(
       {GoogleAuthService? googleAuthService,
       AppDatabase? db,
-      LogService? logService,
       required SettingsService settingsService})
       : _googleAuthService = googleAuthService ?? GetIt.I<GoogleAuthService>(),
         _db = db ?? GetIt.I<AppDatabase>(),
         _settingsService = settingsService,
-        _logService = logService ??
-            (GetIt.I.isRegistered<LogService>() ? GetIt.I<LogService>() : null),
         _dio = Dio(BaseOptions(
           baseUrl: 'https://music.youtube.com/youtubei/v1',
           connectTimeout: const Duration(seconds: 10),
@@ -82,58 +81,41 @@ class InnerTubeService {
   /// Universal POST request method with automatic auth header and User-Agent selection
   Future<Map<String, dynamic>> _postRequest(
       String endpoint, Map<String, dynamic> body,
-      {bool useAuth = true}) async {
+      {bool useAuth = true, String? customUserAgent}) async {
     await _rateLimiter.throttle();
 
     if (useAuth) {
       await _addAuthHeaders();
     }
 
-    // Force WEB client usage as ANDROID client is unreliable
-    const clientName = 'WEB_REMIX';
-    final clientVersion = '1.20240422.01.00';
-    final userAgent = _webUserAgent;
+    // Add Visitor ID header
+    if (_visitorId != null) {
+      _dio.options.headers['X-Goog-Visitor-Id'] = _visitorId!;
+    }
 
-    // Construct the context
-    final context = {
-      'client': {
-        'clientName': clientName,
-        'clientVersion': clientVersion,
-        'hl': _settingsService.loadString('language_code') ?? "en",
-        'gl': _settingsService.loadString('country_code') ?? "US",
-        'userAgent': userAgent,
-        'osName': 'Windows',
-        'osVersion': '10.0',
-        'platform': 'DESKTOP',
-        // Visitor ID is critical for some unauthenticated requests
-        if (_visitorId != null) 'visitorData': _visitorId,
-        // UTC offset minutes (generic)
-        'utcOffsetMinutes': 120,
-      },
-    };
-
-    // Merge the new context into the request body
-    body['context'] = context;
-
-    // Set the User-Agent header
+    // Select User-Agent based on client context if not provided
+    String userAgent = customUserAgent ?? _webUserAgent;
+    if (customUserAgent == null && body.containsKey('context')) {
+      final clientName = body['context']?['client']?['clientName'];
+      switch (clientName) {
+        case 'WEB_REMIX':
+          userAgent = _webUserAgent;
+          break;
+        case 'ANDROID_MUSIC':
+          userAgent = _androidUserAgent;
+          break;
+        case 'TVHTML5':
+          userAgent = _tvUserAgent;
+          break;
+      }
+    }
     _dio.options.headers['User-Agent'] = userAgent;
 
     try {
       final response = await _dio.post(endpoint, data: body);
       return response.data;
-    } on DioException catch (e) {
-      final body = e.requestOptions.data;
-      final headers = e.requestOptions.headers;
+    } catch (e) {
       debugPrint('InnerTube API $endpoint Error: $e');
-      debugPrint('Error Body: $body');
-      _logService?.error('InnerTube API $endpoint Error (400?)',
-          error:
-              'Code: ${e.response?.statusCode}, Body: $body, Headers: $headers');
-      rethrow;
-    } catch (e, stack) {
-      debugPrint('InnerTube API $endpoint General Error: $e');
-      _logService?.error('InnerTube API $endpoint General Error',
-          error: e, stackTrace: stack);
       rethrow;
     }
   }
@@ -143,11 +125,11 @@ class InnerTubeService {
       "context": {
         "client": {
           "clientName": "WEB_REMIX",
-          "clientVersion": "1.20240422.01.00",
+          "clientVersion": "1.20241111.01.00",
           "hl": _settingsService.loadString('language_code') ?? "en",
           "gl": "US",
           "browserName": "Chrome",
-          "browserVersion": "124.0.0.0",
+          "browserVersion": "120.0.0.0",
           "screenWidthPoints": 1920,
           "screenHeightPoints": 1080,
           "screenPixelDensity": 1,
@@ -162,10 +144,10 @@ class InnerTubeService {
       "context": {
         "client": {
           "clientName": "ANDROID_MUSIC",
-          "clientVersion": "6.33.52",
+          "clientVersion": "9.02.50",
           "hl": _settingsService.loadString('language_code') ?? "en",
           "gl": "US",
-          "androidSdkVersion": 34
+          "androidSdkVersion": 33
         }
       },
       "playbackContext": {
@@ -514,10 +496,8 @@ class InnerTubeService {
           }
         }
       }
-    } catch (e, stack) {
+    } catch (e) {
       debugPrint('Parsing Error: $e');
-      _logService?.error('InnerTube parsing error',
-          error: e, stackTrace: stack);
     }
     return results;
   }
@@ -575,8 +555,6 @@ class InnerTubeService {
       }
     } catch (e) {
       _logger.e('InnerTube getHomeData Error (ANDROID_MUSIC)', error: e);
-      _logService?.error('InnerTube getHomeData Error (ANDROID_MUSIC)',
-          error: e);
       _logger.i('[InnerTube] Trying WEB_REMIX fallback after error...');
       return await _getHomeDataWebFallback();
     }
@@ -598,8 +576,6 @@ class InnerTubeService {
           'No home data found (both ANDROID_MUSIC and WEB_REMIX failed)');
     } catch (e) {
       _logger.e('InnerTube getHomeData Error (WEB_REMIX Fallback)', error: e);
-      _logService?.error('InnerTube getHomeData Error (WEB_REMIX Fallback)',
-          error: e);
       return Result.failure(e.toString());
     }
   }
@@ -2108,18 +2084,9 @@ class InnerTubeService {
       } else if (parts.length == 3) {
         return parts[0] * 3600 + parts[1] * 60 + parts[2];
       }
-      return 0;
     } catch (e) {
-      return 0;
+      // Ignore parsing errors
     }
-  }
-
-  Future<List<YouTubeSong>> getArtistTracks(String artistId) async {
-    return _fetchFullTracks(artistId,
-        params: "EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D"); // Filter for songs
-  }
-
-  Future<List<YouTubeSong>> getAlbumTracks(String albumId) async {
-    return _fetchFullTracks(albumId);
+    return 0;
   }
 }
