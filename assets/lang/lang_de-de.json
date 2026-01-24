@@ -154,5 +154,8 @@
     "what_we_need": "Was wir benötigen:",
     "need_access": "• Zugriff auf Ihr YouTube Music-Konto über einen sicheren Browser",
     "need_playlists": "• Möglichkeit, Ihre Wiedergabelisten zu laden",
-    "need_cookies": "• Sichere Cookie-Speicherung für Offline-Zugriff"
+    "need_cookies": "• Sichere Cookie-Speicherung für Offline-Zugriff",
+    "lyrics": "Liedtext",
+    "no_lyrics_found": "Kein Liedtext gefunden",
+    "error_loading_lyrics": "Fehler beim Laden des Liedtexts"
 }

@@ -154,5 +154,8 @@
     "what_we_need": "Czego potrzebujemy:",
     "need_access": "• Dostęp do konta YouTube Music przez bezpieczną przeglądarkę",
     "need_playlists": "• Możliwość ładowania Twoich playlist",
-    "need_cookies": "• Bezpieczne przechowywanie plików cookie dla dostępu offline"
+    "need_cookies": "• Bezpieczne przechowywanie plików cookie dla dostępu offline",
+    "lyrics": "Tekst",
+    "no_lyrics_found": "Nie znaleziono tekstu",
+    "error_loading_lyrics": "Błąd ładowania tekstu"
 }

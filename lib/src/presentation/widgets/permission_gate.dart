@@ -10,7 +10,7 @@ class PermissionGate extends StatefulWidget {
   const PermissionGate({super.key, required this.child});
 
   @override
-  _PermissionGateState createState() => _PermissionGateState();
+  State<PermissionGate> createState() => _PermissionGateState();
 }
 
 class _PermissionGateState extends State<PermissionGate>

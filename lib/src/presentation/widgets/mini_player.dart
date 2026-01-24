@@ -59,20 +59,22 @@ class MiniPlayer extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Progress bar at top
-                // For smoother progress bar we might still want a StreamBuilder or Ticker
-                // leveraging the position from Bloc + timestamp or just StreamBuilder on audioHandler if available?
-                // But we want to decouple.
-                // Let's use the state.position for now, accepting it update frequency (which is tied to handler stream).
-                LinearProgressIndicator(
-                  value: (state.duration.inMilliseconds > 0)
-                      ? (state.position.inMilliseconds /
-                              state.duration.inMilliseconds)
-                          .clamp(0.0, 1.0)
-                      : 0.0,
-                  minHeight: 2,
-                  backgroundColor: Colors.grey[800],
-                  valueColor: AlwaysStoppedAnimation(colorScheme.primary),
+                // Progress bar at top - using StreamBuilder for smooth updates
+                StreamBuilder<Duration>(
+                  stream: context.read<PlayerBloc>().positionStream,
+                  builder: (context, snapshot) {
+                    final position = snapshot.data ?? state.position;
+                    return LinearProgressIndicator(
+                      value: (state.duration.inMilliseconds > 0)
+                          ? (position.inMilliseconds /
+                                  state.duration.inMilliseconds)
+                              .clamp(0.0, 1.0)
+                          : 0.0,
+                      minHeight: 2,
+                      backgroundColor: Colors.grey[800],
+                      valueColor: AlwaysStoppedAnimation(colorScheme.primary),
+                    );
+                  },
                 ),
                 // Main content
                 Padding(

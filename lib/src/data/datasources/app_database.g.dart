@@ -346,6 +346,29 @@ class Track extends DataClass implements Insertable<Track> {
         lastPlayed: lastPlayed.present ? lastPlayed.value : this.lastPlayed,
         isExcluded: isExcluded ?? this.isExcluded,
       );
+  Track copyWithCompanion(TracksCompanion data) {
+    return Track(
+      path: data.path.present ? data.path.value : this.path,
+      title: data.title.present ? data.title.value : this.title,
+      artist: data.artist.present ? data.artist.value : this.artist,
+      album: data.album.present ? data.album.value : this.album,
+      duration: data.duration.present ? data.duration.value : this.duration,
+      folderPath:
+          data.folderPath.present ? data.folderPath.value : this.folderPath,
+      artworkUri:
+          data.artworkUri.present ? data.artworkUri.value : this.artworkUri,
+      isFavorite:
+          data.isFavorite.present ? data.isFavorite.value : this.isFavorite,
+      mediaStoreId: data.mediaStoreId.present
+          ? data.mediaStoreId.value
+          : this.mediaStoreId,
+      lastPlayed:
+          data.lastPlayed.present ? data.lastPlayed.value : this.lastPlayed,
+      isExcluded:
+          data.isExcluded.present ? data.isExcluded.value : this.isExcluded,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('Track(')
@@ -885,6 +908,28 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
         isFavorite: isFavorite ?? this.isFavorite,
         likedAt: likedAt.present ? likedAt.value : this.likedAt,
       );
+  YouTubeTrack copyWithCompanion(YouTubeTracksCompanion data) {
+    return YouTubeTrack(
+      videoId: data.videoId.present ? data.videoId.value : this.videoId,
+      title: data.title.present ? data.title.value : this.title,
+      artist: data.artist.present ? data.artist.value : this.artist,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
+      duration: data.duration.present ? data.duration.value : this.duration,
+      downloadPath: data.downloadPath.present
+          ? data.downloadPath.value
+          : this.downloadPath,
+      fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      lastPlayed:
+          data.lastPlayed.present ? data.lastPlayed.value : this.lastPlayed,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+      isFavorite:
+          data.isFavorite.present ? data.isFavorite.value : this.isFavorite,
+      likedAt: data.likedAt.present ? data.likedAt.value : this.likedAt,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('YouTubeTrack(')
@@ -1225,6 +1270,14 @@ class HomeCacheEntry extends DataClass implements Insertable<HomeCacheEntry> {
         data: data ?? this.data,
         timestamp: timestamp ?? this.timestamp,
       );
+  HomeCacheEntry copyWithCompanion(HomeCacheCompanion data) {
+    return HomeCacheEntry(
+      id: data.id.present ? data.id.value : this.id,
+      data: data.data.present ? data.data.value : this.data,
+      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('HomeCacheEntry(')
@@ -1462,6 +1515,15 @@ class RadioStation extends DataClass implements Insertable<RadioStation> {
         streamUrl: streamUrl ?? this.streamUrl,
         imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
       );
+  RadioStation copyWithCompanion(RadioStationsCompanion data) {
+    return RadioStation(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      streamUrl: data.streamUrl.present ? data.streamUrl.value : this.streamUrl,
+      imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('RadioStation(')
@@ -1687,6 +1749,14 @@ class PlaybackLogEntry extends DataClass
         videoId: videoId ?? this.videoId,
         playedAt: playedAt ?? this.playedAt,
       );
+  PlaybackLogEntry copyWithCompanion(PlaybackLogCompanion data) {
+    return PlaybackLogEntry(
+      id: data.id.present ? data.id.value : this.id,
+      videoId: data.videoId.present ? data.videoId.value : this.videoId,
+      playedAt: data.playedAt.present ? data.playedAt.value : this.playedAt,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('PlaybackLogEntry(')
@@ -1991,6 +2061,23 @@ class TrackOverride extends DataClass implements Insertable<TrackOverride> {
         youtubeId: youtubeId.present ? youtubeId.value : this.youtubeId,
         updatedAt: updatedAt ?? this.updatedAt,
       );
+  TrackOverride copyWithCompanion(TrackOverridesCompanion data) {
+    return TrackOverride(
+      filePath: data.filePath.present ? data.filePath.value : this.filePath,
+      correctTitle: data.correctTitle.present
+          ? data.correctTitle.value
+          : this.correctTitle,
+      correctArtist: data.correctArtist.present
+          ? data.correctArtist.value
+          : this.correctArtist,
+      thumbnailUrl: data.thumbnailUrl.present
+          ? data.thumbnailUrl.value
+          : this.thumbnailUrl,
+      youtubeId: data.youtubeId.present ? data.youtubeId.value : this.youtubeId,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('TrackOverride(')

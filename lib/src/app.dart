@@ -17,6 +17,8 @@ import 'presentation/blocs/library/library_bloc.dart';
 import 'presentation/blocs/settings/settings_bloc.dart';
 import 'presentation/blocs/settings/settings_event.dart';
 import 'presentation/blocs/settings/settings_state.dart';
+import 'presentation/blocs/lyrics/lyrics_bloc.dart';
+import 'core/services/lyrics_service.dart';
 
 import 'presentation/pages/home_screen.dart';
 import 'presentation/widgets/permission_gate.dart';
@@ -57,6 +59,12 @@ class OxidePlayerApp extends StatelessWidget {
             settings: GetIt.I<SettingsService>(),
           ),
         ),
+        BlocProvider<LyricsBloc>(
+          create: (context) => LyricsBloc(
+            GetIt.I<LyricsService>(),
+            GetIt.I<MyAudioHandler>(),
+          ),
+        ),
       ],
       child: BlocBuilder<SettingsBloc, SettingsState>(
         builder: (context, settingsState) {
@@ -64,7 +72,16 @@ class OxidePlayerApp extends StatelessWidget {
             title: 'Oxide Player',
             debugShowCheckedModeBanner: false,
             // Use state from SettingsBloc
-            theme: AppTheme.darkTheme,
+            theme: AppTheme.create(
+              isDark: false,
+              amoled: settingsState.amoledMode,
+              accentColor: settingsState.accentColor,
+            ),
+            darkTheme: AppTheme.create(
+              isDark: true,
+              amoled: settingsState.amoledMode,
+              accentColor: settingsState.accentColor,
+            ),
             themeMode: settingsState.themeMode,
             locale: settingsState.locale,
             supportedLocales: const [
@@ -81,6 +98,14 @@ class OxidePlayerApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            builder: (context, child) {
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(settingsState.fontScale),
+                ),
+                child: child!,
+              );
+            },
             home: PermissionGate(
               child: Scaffold(
                 body: Stack(

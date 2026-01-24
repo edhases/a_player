@@ -45,21 +45,8 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   }
 
   Future<void> _onReorder(QueueReorder event, Emitter<QueueState> emit) async {
-    // AudioHandler might not have direct reorder method in base class if not extended.
-    // MyAudioHandler mixes in QueueHandler which usually has it?
-    // Let's check MyAudioHandler methods. BaseAudioHandler has generic methods but implementation depends.
-    // Usually standard idiom is:
-    final currentQueue = List<MediaItem>.from(state.queue);
-    if (event.oldIndex < currentQueue.length &&
-        event.newIndex <= currentQueue.length) {
-      final item = currentQueue.removeAt(event.oldIndex);
-      int insertIndex = event.newIndex;
-      if (event.newIndex > event.oldIndex) {
-        insertIndex -= 1;
-      }
-      currentQueue.insert(insertIndex, item);
-      await _audioHandler.updateQueue(currentQueue);
-    }
+    // Use the efficient reorder method in MyAudioHandler
+    await _audioHandler.reorderQueue(event.oldIndex, event.newIndex);
   }
 
   Future<void> _onClear(QueueClear event, Emitter<QueueState> emit) async {

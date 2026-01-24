@@ -8,19 +8,38 @@ class AppTheme {
   static const Color surfaceColor = Color(0xFF1E1E1E);
   static const Color cardColor = Color(0xFF1E1E1E);
 
-  static ThemeData get darkTheme {
+  static ThemeData create({
+    required bool isDark,
+    bool amoled = false,
+    int? accentColor,
+  }) {
+    // Default seed or user selected
+    final seed =
+        accentColor != null ? Color(accentColor) : const Color(0xFFFF6B00);
+    final brightness = isDark ? Brightness.dark : Brightness.light;
+
+    // Background colors
+    final bgColor = isDark
+        ? (amoled ? Colors.black : const Color(0xFF121212))
+        : const Color(0xFFF7F2FA); // Standard M3 light bg
+
+    final surfaceColor = isDark
+        ? (amoled ? Colors.black : const Color(0xFF1E1E1E))
+        : Colors.white;
+
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: primaryColor,
-      brightness: Brightness.dark,
+      seedColor: seed,
+      brightness: brightness,
     );
+
+    final baseTextTheme =
+        isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme;
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: backgroundColor,
-      textTheme: GoogleFonts.interTextTheme(
-        ThemeData.dark().textTheme,
-      ),
+      scaffoldBackgroundColor: bgColor,
+      textTheme: GoogleFonts.interTextTheme(baseTextTheme),
       appBarTheme: AppBarTheme(
         backgroundColor: surfaceColor,
         elevation: 0,
@@ -28,18 +47,21 @@ class AppTheme {
         titleTextStyle: GoogleFonts.inter(
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          color: Colors.white,
+          color: isDark ? Colors.white : Colors.black,
+        ),
+        iconTheme: IconThemeData(
+          color: isDark ? Colors.white : Colors.black,
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: surfaceColor,
-        indicatorColor: primaryColor.withValues(alpha: 0.2),
+        indicatorColor: colorScheme.primaryContainer,
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(fontSize: 11),
         ),
       ),
       cardTheme: CardThemeData(
-        color: cardColor,
+        color: surfaceColor,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -48,13 +70,10 @@ class AppTheme {
       listTileTheme: const ListTileThemeData(
         contentPadding: EdgeInsets.symmetric(horizontal: 16),
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-      ),
+      // Keep default FAB behavior or override
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        contentTextStyle: const TextStyle(color: Colors.white),
+        backgroundColor: colorScheme.inverseSurface,
+        contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,9 +16,12 @@ import '../../core/services/log_service.dart';
 import '../../core/services/telegram_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'webview_login_screen.dart';
 import 'cached_tracks_screen.dart';
 import 'equalizer_screen.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../core/services/data_management_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -368,16 +372,163 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
+          // Appearance Section
+          _buildSectionHeader(context, loc.translate('appearance')),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, state) {
+              return Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.palette),
+                    title: Text(loc.translate('theme')),
+                    subtitle: Text(_getThemeName(state.themeMode, loc)),
+                    trailing: DropdownButton<ThemeMode>(
+                      value: state.themeMode,
+                      items: [
+                        DropdownMenuItem(
+                          value: ThemeMode.system,
+                          child: Text(loc.translate('theme_system')),
+                        ),
+                        DropdownMenuItem(
+                          value: ThemeMode.light,
+                          child: Text(loc.translate('theme_light')),
+                        ),
+                        DropdownMenuItem(
+                          value: ThemeMode.dark,
+                          child: Text(loc.translate('theme_dark')),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          context
+                              .read<SettingsBloc>()
+                              .add(ChangeThemeMode(val));
+                        }
+                      },
+                      underline: const SizedBox(),
+                    ),
+                  ),
+                  if (state.themeMode == ThemeMode.dark ||
+                      state.themeMode == ThemeMode.system)
+                    SwitchListTile(
+                      title: Text(loc.translate('amoled_mode')),
+                      subtitle: Text(loc.translate('amoled_mode_desc')),
+                      value: state.amoledMode,
+                      onChanged: (val) {
+                        context.read<SettingsBloc>().add(ChangeAmoledMode(val));
+                      },
+                      secondary: const Icon(Icons.brightness_2),
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.format_size),
+                    title: Text(
+                        '${loc.translate('font_size')} (${(state.fontScale * 100).toInt()}%)'),
+                    subtitle: Slider(
+                      value: state.fontScale,
+                      min: 0.8,
+                      max: 1.4,
+                      divisions: 6,
+                      label: '${(state.fontScale * 100).toInt()}%',
+                      onChanged: (val) {
+                        context.read<SettingsBloc>().add(ChangeFontScale(val));
+                      },
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.color_lens),
+                    title: Text(loc.translate('accent_color')),
+                    subtitle: SizedBox(
+                      height: 50,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          _buildColorOption(context, null,
+                              state.accentColor), // Dynamic/Default
+                          _buildColorOption(context, Colors.blue.toARGB32(),
+                              state.accentColor),
+                          _buildColorOption(context, Colors.red.toARGB32(),
+                              state.accentColor),
+                          _buildColorOption(context, Colors.green.toARGB32(),
+                              state.accentColor),
+                          _buildColorOption(context, Colors.orange.toARGB32(),
+                              state.accentColor),
+                          _buildColorOption(context, Colors.purple.toARGB32(),
+                              state.accentColor),
+                          _buildColorOption(context, Colors.teal.toARGB32(),
+                              state.accentColor),
+                          _buildColorOption(context, Colors.pink.toARGB32(),
+                              state.accentColor),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const Divider(),
+
           // Playback Section
           _buildSectionHeader(context, loc.playback),
-          ListTile(
-            leading: const Icon(Icons.equalizer),
-            title: Text(loc.equalizer),
-            subtitle: Text(loc.adjustEqualizer),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const EqualizerScreen()),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, state) {
+              return Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.equalizer),
+                    title: Text(loc.equalizer),
+                    subtitle: Text(loc.adjustEqualizer),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const EqualizerScreen()),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.timelapse),
+                    title: Text(loc.translate('crossfade')),
+                    subtitle: Text(state.crossfadeDuration == 0
+                        ? loc.off
+                        : loc.translate('crossfade_desc',
+                            args: {'seconds': state.crossfadeDuration})),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Slider(
+                      value: state.crossfadeDuration.toDouble(),
+                      min: 0,
+                      max: 12,
+                      divisions: 12,
+                      label: '${state.crossfadeDuration}s',
+                      onChanged: (val) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(ChangeCrossfadeDuration(val.toInt()));
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const Divider(),
+
+          // Network Section
+          _buildSectionHeader(context, loc.translate('network')),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, state) {
+              return SwitchListTile(
+                title: Text(loc.translate('wifi_only')),
+                subtitle: Text(loc.translate('wifi_only_desc')),
+                value: state.wifiOnly,
+                onChanged: (val) {
+                  context.read<SettingsBloc>().add(ChangeWifiOnly(val));
+                },
+                secondary: const Icon(Icons.wifi),
               );
             },
           ),
@@ -431,8 +582,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
-          // Logs Section
-          _buildSectionHeader(context, loc.logs),
           // Logs Section
           _buildSectionHeader(context, loc.logs),
           BlocBuilder<SettingsBloc, SettingsState>(
@@ -496,17 +645,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.send),
             title: Text(loc.sendLogs),
-            subtitle: Text(GetIt.I.isRegistered<TelegramService>() &&
-                    GetIt.I<TelegramService>().isConfigured
-                ? loc.sendLogsDesc
-                : loc.telegramNotConfigured),
+            subtitle: Text(loc.sendLogsDesc),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
-              if (!GetIt.I.isRegistered<TelegramService>() ||
-                  !GetIt.I<TelegramService>().isConfigured) {
-                _showTelegramConfigDialog(context);
-                return;
-              }
+              if (!GetIt.I.isRegistered<TelegramService>()) return;
+
               final success = await GetIt.I<TelegramService>().sendLogs();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -532,13 +675,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.settings),
-            title: Text(loc.configureTelegram),
-            subtitle: Text(loc.configureTelegramDesc),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showTelegramConfigDialog(context),
-          ),
-          ListTile(
             leading: const Icon(Icons.delete_outline),
             title: Text(loc.clearLogs),
             subtitle: Text(loc.clearLogsDesc),
@@ -555,20 +691,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
+          // Data Management
+          _buildSectionHeader(context, loc.translate('data_management')),
+          ListTile(
+            leading: const Icon(Icons.backup),
+            title: Text(loc.translate('backup_data')),
+            subtitle: Text(loc.translate('backup_desc')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              if (GetIt.I.isRegistered<DataManagementService>()) {
+                final file =
+                    await GetIt.I<DataManagementService>().createBackup();
+                if (file != null && context.mounted) {
+                  await Share.shareXFiles([XFile(file.path)],
+                      text: 'Oxide Player Backup');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(loc.translate('backup_success'))));
+                  }
+                }
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.restore),
+            title: Text(loc.translate('restore_data')),
+            subtitle: Text(loc.translate('restore_desc')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              try {
+                final result = await FilePicker.platform.pickFiles();
+                if (result != null && result.files.single.path != null) {
+                  final file = File(result.files.single.path!);
+                  if (GetIt.I.isRegistered<DataManagementService>()) {
+                    final success = await GetIt.I<DataManagementService>()
+                        .restoreBackup(file);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(success
+                            ? loc.translate('restore_success_restart')
+                            : loc.translate('error',
+                                args: {'error': 'Restore failed'})),
+                        backgroundColor: success ? Colors.green : Colors.red,
+                      ));
+                    }
+                  }
+                }
+              } catch (e) {
+                debugPrint('Pick file error: $e');
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_forever, color: Colors.red),
+            title: Text(loc.translate('factory_reset'),
+                style: const TextStyle(color: Colors.red)),
+            subtitle: Text(loc.translate('reset_desc')),
+            onTap: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(loc.translate('reset_confirm_title')),
+                  content: Text(loc.translate('reset_confirm_message')),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(loc.cancel)),
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(loc.translate('reset_confirm_action'),
+                            style: const TextStyle(color: Colors.red))),
+                  ],
+                ),
+              );
+
+              if (confirmed == true &&
+                  GetIt.I.isRegistered<DataManagementService>()) {
+                await GetIt.I<DataManagementService>().factoryReset();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Reset complete. Exiting...')));
+                  await Future.delayed(const Duration(seconds: 2));
+                  exit(0);
+                }
+              }
+            },
+          ),
+          const Divider(),
+
           // About Section
           _buildSectionHeader(context, loc.about),
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (context, snapshot) {
-              final version = snapshot.data?.version ?? '...';
+              final version = snapshot.data?.version ?? '';
               final build = snapshot.data?.buildNumber ?? '';
+              final displayVersion =
+                  version.isEmpty ? 'Debug Build' : '$version ($build)';
               return ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('Oxide Player'),
-                subtitle: Text(loc.translate('version',
-                    args: {'version': '$version ($build)'})),
+                subtitle: Text(loc
+                    .translate('version', args: {'version': displayVersion})),
               );
             },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final url = Uri.parse(
+                      'https://www.paypal.com/donate/?hosted_button_id=MUGPMK7UPCYUW');
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
+                icon: const Icon(Icons.favorite, color: Colors.pink),
+                label: const Text('Donate via PayPal'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).cardColor,
+                  foregroundColor: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -707,73 +951,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  void _showTelegramConfigDialog(BuildContext context) {
-    final loc = AppLocalizations.of(context);
-    final tokenController = TextEditingController();
-    final chatIdController = TextEditingController();
+  Widget _buildColorOption(
+      BuildContext context, int? colorValue, int? selectedValue) {
+    // If colorValue is null, it represents "System/Default"
+    final isSelected = colorValue == selectedValue;
+    final color = colorValue != null
+        ? Color(colorValue)
+        : Theme.of(context).colorScheme.primary;
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(loc.configureTelegram),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: tokenController,
-                decoration: InputDecoration(
-                  labelText: loc.telegramBotToken,
-                  hintText: '123456:ABC-DEF...',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: chatIdController,
-                decoration: InputDecoration(
-                  labelText: loc.telegramChatId,
-                  hintText: '-1001234567890',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(loc.cancel),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (tokenController.text.isEmpty ||
-                    chatIdController.text.isEmpty) {
-                  return;
-                }
-                if (GetIt.I.isRegistered<TelegramService>()) {
-                  await GetIt.I<TelegramService>().configure(
-                    botToken: tokenController.text.trim(),
-                    chatId: chatIdController.text.trim(),
-                  );
-                  final success =
-                      await GetIt.I<TelegramService>().testConnection();
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(success
-                            ? loc.telegramTestSuccess
-                            : loc.telegramTestFailed),
-                        backgroundColor: success ? Colors.green : Colors.red,
-                      ),
-                    );
-                    setState(() {}); // Refresh UI
-                  }
-                }
-              },
-              child: Text(loc.ok),
-            ),
-          ],
-        );
+    return GestureDetector(
+      onTap: () {
+        context.read<SettingsBloc>().add(ChangeAccentColor(colorValue));
       },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: isSelected
+                ? Border.all(
+                    color: Theme.of(context).colorScheme.onSurface, width: 2)
+                : null,
+            boxShadow: [
+              if (colorValue == null) // Special style for dynamic/default
+                BoxShadow(
+                    color: Colors.grey.withValues(alpha: 0.5), blurRadius: 2)
+            ]),
+        child: colorValue == null
+            ? const Icon(Icons.auto_awesome, size: 16, color: Colors.white)
+            : (isSelected
+                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                : null),
+      ),
     );
+  }
+
+  String _getThemeName(ThemeMode mode, AppLocalizations loc) {
+    switch (mode) {
+      case ThemeMode.system:
+        return loc.translate('theme_system');
+      case ThemeMode.light:
+        return loc.translate('theme_light');
+      case ThemeMode.dark:
+        return loc.translate('theme_dark');
+    }
   }
 }

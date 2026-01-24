@@ -154,5 +154,8 @@
     "what_we_need": "Lo que necesitamos:",
     "need_access": "• Acceso a tu cuenta de YouTube Music a través de navegador seguro",
     "need_playlists": "• Capacidad para cargar tus listas de reproducción",
-    "need_cookies": "• Almacenamiento seguro de cookies para acceso sin conexión"
+    "need_cookies": "• Almacenamiento seguro de cookies para acceso sin conexión",
+    "lyrics": "Letra",
+    "no_lyrics_found": "No se encontró la letra",
+    "error_loading_lyrics": "Error al cargar la letra"
 }

@@ -26,7 +26,7 @@ class TelegramService {
     try {
       _botToken = await _storage.read(key: _botTokenKey);
       _chatId = await _storage.read(key: _chatIdKey);
-      debugPrint('[TelegramService] Initialized, configured: ${isConfigured}');
+      debugPrint('[TelegramService] Initialized, configured: $isConfigured');
     } catch (e) {
       debugPrint('[TelegramService] Failed to init: $e');
     }

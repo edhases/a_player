@@ -15,7 +15,7 @@ void main(List<String> args) async {
   print('🔢 Build Number: $buildNumber');
 
   final process = await Process.start(
-    'flutter',
+    Platform.isWindows ? 'flutter.bat' : 'flutter',
     [
       'build',
       'apk',

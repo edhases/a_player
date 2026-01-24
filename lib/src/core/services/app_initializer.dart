@@ -11,6 +11,7 @@ import 'download_service.dart';
 import 'favorites_service.dart';
 import 'google_auth_service.dart';
 import 'innertube_service.dart';
+import 'data_management_service.dart';
 
 import 'log_service.dart';
 import 'metadata_matching_service.dart';
@@ -21,6 +22,7 @@ import 'sleep_timer_service.dart';
 import 'smart_play_service.dart';
 import 'telegram_service.dart';
 import 'youtube_helper.dart';
+import 'lyrics_service.dart';
 
 import '../../data/datasources/app_database.dart';
 import '../../data/repositories/music_repository_impl.dart';
@@ -113,6 +115,11 @@ class AppInitializer {
     await favoritesService.init();
     GetIt.I.registerSingleton<FavoritesService>(favoritesService);
 
+    // DataManagementService
+    final dataManagementService =
+        DataManagementService(GetIt.I<SettingsService>(), db);
+    GetIt.I.registerSingleton<DataManagementService>(dataManagementService);
+
     // CacheService
     final cacheService = CacheService();
     await cacheService.init();
@@ -122,6 +129,9 @@ class AppInitializer {
     GetIt.I.registerSingleton<AudioSourceFactory>(
       AudioSourceFactory(youtubeHelper, cacheService),
     );
+
+    // LyricsService
+    GetIt.I.registerSingleton<LyricsService>(LyricsService());
   }
 
   static Future<void> _initAudioHandler(AppDatabase db) async {
@@ -143,6 +153,7 @@ class AppInitializer {
         androidNotificationChannelId: 'com.example.oxide_player.channel.audio',
         androidNotificationChannelName: 'Audio Playback',
         androidNotificationOngoing: true,
+        androidNotificationIcon: 'mipmap/launcher_icon',
       ),
     );
     GetIt.I.registerSingleton<MyAudioHandler>(handler);

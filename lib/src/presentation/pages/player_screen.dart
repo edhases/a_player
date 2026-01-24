@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:rxdart/rxdart.dart';
+
 import '../../core/services/audio_handler.dart';
 import '../../data/datasources/app_database.dart';
 import 'equalizer_screen.dart';
@@ -15,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:get_it/get_it.dart';
 import '../blocs/player/player_bloc.dart';
 import '../blocs/queue/queue_bloc.dart';
+import '../widgets/lyrics_view.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -75,7 +76,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 10),
-                  // Album Art
+                  // Artwork with Swipe Up for Lyrics
                   Expanded(
                     flex: 6,
                     child: _buildArtwork(context, mediaItem),
@@ -122,6 +123,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
           }
         }
       },
+      onVerticalDragEnd: (details) {
+        if (details.primaryVelocity != null &&
+            details.primaryVelocity! < -200) {
+          // Swipe Up detected
+          _showLyricsSheet(context, mediaItem);
+        }
+      },
       child: Hero(
         tag: widget.heroTag,
         child: Container(
@@ -156,40 +164,107 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  void _showLyricsSheet(BuildContext context, MediaItem mediaItem) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[600],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Lyrics',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18)),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: LyricsView(mediaItem: mediaItem),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildFavoriteButton(MediaItem mediaItem) {
     final isOnline = mediaItem.extras?['isOnline'] == true;
     final videoId = mediaItem.extras?['videoId'] as String?;
 
-    // Always use videoId for like checks - liked songs are stored by videoId only
+    // Always use videoId for like checks
     if (isOnline && videoId != null) {
-      // YouTube track - use FavoritesService
       final favService = GetIt.I<FavoritesService>();
       return StreamBuilder<bool>(
         stream: favService.isLikedStream(videoId),
         builder: (context, snapshot) {
           final isLiked = snapshot.data ?? false;
-          return IconButton(
-            icon: Icon(
-              isLiked ? Icons.favorite : Icons.favorite_border,
-              color: isLiked ? Colors.red : Colors.white70,
-              size: 28,
-            ),
-            onPressed: () {
-              favService.toggleFavorite(
-                videoId: videoId,
-                title: mediaItem.title,
-                artist: mediaItem.artist ?? 'Unknown',
-                thumbnailUrl: mediaItem.artUri?.toString() ?? '',
-              );
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(isLiked
-                      ? AppLocalizations.of(context).removedFromFavorites
-                      : AppLocalizations.of(context).addedToFavorites),
-                  duration: const Duration(seconds: 1),
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Dislike Button
+              IconButton(
+                icon: const Icon(Icons.heart_broken,
+                    color: Colors.white70, size: 24),
+                onPressed: () {
+                  favService.dislikeTrack(videoId);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(AppLocalizations.of(context)
+                          .removedFromFavorites), // Generic message for now
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                },
+              ),
+              // Like Button
+              IconButton(
+                icon: Icon(
+                  isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: isLiked ? Colors.red : Colors.white70,
+                  size: 28,
                 ),
-              );
-            },
+                onPressed: () {
+                  favService.toggleFavorite(
+                    videoId: videoId,
+                    title: mediaItem.title,
+                    artist: mediaItem.artist ?? 'Unknown',
+                    thumbnailUrl: mediaItem.artUri?.toString() ?? '',
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isLiked
+                          ? AppLocalizations.of(context).removedFromFavorites
+                          : AppLocalizations.of(context).addedToFavorites),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                },
+              ),
+            ],
           );
         },
       );
@@ -240,73 +315,63 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Widget _buildSeekbar(BuildContext context, MediaItem mediaItem) {
     final playerBloc = context.read<PlayerBloc>();
     return StreamBuilder<Duration>(
-      stream: Rx.combineLatest2<Duration, Duration?, Duration>(
-        playerBloc.positionStream,
-        playerBloc.durationStream,
-        (pos, dur) => dur ?? mediaItem.duration ?? Duration.zero,
-      ),
+      stream: playerBloc.positionStream,
       builder: (context, snapshot) {
-        final duration = snapshot.data ?? mediaItem.duration ?? Duration.zero;
-        return StreamBuilder<Duration>(
-          stream: playerBloc.positionStream,
-          builder: (context, posSnapshot) {
-            final position = posSnapshot.data ?? Duration.zero;
-            double sliderValue =
-                _dragValue ?? position.inMilliseconds.toDouble();
-            double maxSliderValue = duration.inMilliseconds.toDouble();
+        final position = snapshot.data ?? Duration.zero;
+        final duration = mediaItem.duration ?? Duration.zero;
 
-            if (maxSliderValue <= 0) maxSliderValue = 1.0;
-            sliderValue = sliderValue.clamp(0.0, maxSliderValue);
+        double sliderValue = _dragValue ?? position.inMilliseconds.toDouble();
+        double maxSliderValue = duration.inMilliseconds.toDouble();
 
-            return Column(
-              children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 4,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 7),
-                    activeTrackColor: Theme.of(context).colorScheme.primary,
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: Colors.white,
+        if (maxSliderValue <= 0) maxSliderValue = 1.0;
+        sliderValue = sliderValue.clamp(0.0, maxSliderValue);
+
+        return Column(
+          children: [
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                activeTrackColor: Theme.of(context).colorScheme.primary,
+                inactiveTrackColor: Colors.white24,
+                thumbColor: Colors.white,
+              ),
+              child: Slider(
+                min: 0.0,
+                max: maxSliderValue,
+                value: sliderValue,
+                onChanged: (value) => setState(() => _dragValue = value),
+                onChangeEnd: (value) {
+                  playerBloc
+                      .add(PlayerSeek(Duration(milliseconds: value.round())));
+                  _dragValue = null;
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(
+                        Duration(milliseconds: sliderValue.round())),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
                   ),
-                  child: Slider(
-                    min: 0.0,
-                    max: maxSliderValue,
-                    value: sliderValue,
-                    onChanged: (value) => setState(() => _dragValue = value),
-                    onChangeEnd: (value) {
-                      playerBloc.add(
-                          PlayerSeek(Duration(milliseconds: value.round())));
-                      _dragValue = null;
-                    },
+                  Text(
+                    _formatDuration(duration),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _formatDuration(
-                            Duration(milliseconds: sliderValue.round())),
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        _formatDuration(duration),
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
@@ -387,6 +452,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     MaterialPageRoute(
                         builder: (context) => const EqualizerScreen()))),
             IconButton(
+                icon: const Icon(Icons.lyrics_outlined, color: Colors.white54),
+                tooltip: AppLocalizations.of(context).lyrics,
+                onPressed: () {
+                  final mediaItem = state.mediaItem;
+                  if (mediaItem != null) {
+                    _showLyricsSheet(context, mediaItem);
+                  }
+                }),
+            IconButton(
                 icon: const Icon(Icons.playlist_play, color: Colors.white54),
                 onPressed: () => _showQueue(context)),
             IconButton(
@@ -422,8 +496,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           fontWeight: FontWeight.bold)),
                 ),
                 Expanded(
-                  child: ListView.builder(
+                  child: ReorderableListView.builder(
                     itemCount: currentQueue.length,
+                    onReorder: (oldIndex, newIndex) {
+                      context
+                          .read<QueueBloc>()
+                          .add(QueueReorder(oldIndex, newIndex));
+                    },
                     itemBuilder: (context, index) {
                       final item = currentQueue[index];
                       // We need current item to highlight
@@ -432,6 +511,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       final isCurrent = currentItem?.id == item.id;
 
                       return ListTile(
+                        key: ValueKey(item.id),
                         leading: _buildQueueArtwork(item),
                         title: Text(item.title,
                             style: TextStyle(
@@ -440,12 +520,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     : Colors.white)),
                         subtitle: Text(item.artist ?? '',
                             style: const TextStyle(color: Colors.white70)),
+                        trailing: ReorderableDragStartListener(
+                          index: index,
+                          child: const Icon(Icons.drag_handle,
+                              color: Colors.white54),
+                        ),
                         onTap: () {
-                          // TODO: Implement skipToQueueItem in PlayerBloc or via handler?
-                          // PlayerBloc doesn't have skipToQueueItem event in my design yet??
-                          // Checking player_bloc.dart events... nope, only next/prev.
-                          // I should add it or use handler directly.
-                          // Ideally add to Bloc.
                           GetIt.I<MyAudioHandler>().skipToQueueItem(index);
                           Navigator.pop(context);
                         },
@@ -583,41 +663,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
           valueListenable: sleepTimer.remainingTime,
           builder: (context, remaining, child) {
             return SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                        remaining != null
-                            ? '${loc.sleepTimer}: ${_formatDuration(remaining)}'
-                            : loc.setSleepTimer,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                  if (remaining != null)
-                    ListTile(
-                        title: Text(loc.stopTimer,
-                            style: const TextStyle(color: Colors.red)),
-                        leading: const Icon(Icons.timer_off, color: Colors.red),
-                        onTap: () {
-                          sleepTimer.cancelTimer();
-                          Navigator.pop(context);
-                        }),
-                  ...[15, 30, 45, 60].map((minutes) => ListTile(
-                        leading: const Icon(Icons.access_time,
-                            color: Colors.white70),
-                        title: Text('$minutes ${loc.minutesSuffix}',
-                            style: const TextStyle(color: Colors.white)),
-                        onTap: () {
-                          sleepTimer.startTimer(Duration(minutes: minutes));
-                          Navigator.pop(context);
-                        },
-                      )),
-                  // Optional: Custom Time? Keeping it simple for now as requested.
-                ],
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  // Default to 15 minutes or keep previous state if we could persist it
+                  // For now, simple local state reset on open is fine, or we could lift it.
+                  // Since we are inside builder, we need a variable outside or init here.
+                  // But set state inside StatefulBuilder re-runs this builder.
+
+                  // Initialize checking mainly if we need a variable that persists
+                  // through slider changes.
+                  // We can't easily init state here without it resetting.
+                  // Actually, let's use a variable captured from closure if we want defaults,
+                  // but for a simple slider in a dialog, we can assume a default
+                  // and modifying it requires a state holder.
+                  // Let's assume we initialize `selectedMinutes` to 15.
+
+                  return _SleepTimerContent(
+                    sleepTimer: sleepTimer,
+                    loc: loc,
+                    remaining: remaining,
+                  );
+                },
               ),
             );
           }),
@@ -669,6 +735,124 @@ class _PlayerScreenState extends State<PlayerScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+}
+
+class _SleepTimerContent extends StatefulWidget {
+  final SleepTimerService sleepTimer;
+  final AppLocalizations loc;
+  final Duration? remaining;
+
+  const _SleepTimerContent({
+    required this.sleepTimer,
+    required this.loc,
+    required this.remaining,
+  });
+
+  @override
+  State<_SleepTimerContent> createState() => _SleepTimerContentState();
+}
+
+class _SleepTimerContentState extends State<_SleepTimerContent> {
+  double _selectedMinutes = 30.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            widget.remaining != null
+                ? '${widget.loc.sleepTimer}: ${_formatDuration(widget.remaining!)}'
+                : widget.loc.setSleepTimer,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        if (widget.remaining != null)
+          ListTile(
+            title: Text(
+              widget.loc.stopTimer,
+              style: const TextStyle(color: Colors.red),
+            ),
+            leading: const Icon(Icons.timer_off, color: Colors.red),
+            onTap: () {
+              widget.sleepTimer.cancelTimer();
+              Navigator.pop(context);
+            },
+          )
+        else ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              children: [
+                Text(
+                  '${_selectedMinutes.round()} ${widget.loc.minutesSuffix}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Slider(
+                  value: _selectedMinutes,
+                  min: 1,
+                  max: 120,
+                  divisions: 119,
+                  activeColor: Theme.of(context).colorScheme.primary,
+                  inactiveColor: Colors.white24,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedMinutes = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  widget.sleepTimer.startTimer(
+                    Duration(minutes: _selectedMinutes.round()),
+                  );
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  widget.loc.startTimer,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 

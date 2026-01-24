@@ -64,6 +64,30 @@ class FavoritesService {
     }
   }
 
+  Future<void> dislikeTrack(String videoId) async {
+    final isValidVideoId = _isValidYouTubeVideoId(videoId);
+    if (_innerTubeService != null &&
+        !videoId.startsWith('local:') &&
+        isValidVideoId) {
+      debugPrint('[FavoritesService] Sending DISLIKE to YouTube for: $videoId');
+      _innerTubeService!.rateSong(videoId, 'DISLIKE').then((success) {
+        debugPrint(
+            '[FavoritesService] YouTube DISLIKE ${success ? 'succeeded' : 'failed'} for $videoId');
+      });
+
+      final isLiked = await this.isLiked(videoId);
+      if (isLiked) {
+        await _db.into(_db.youTubeTracks).insertOnConflictUpdate(
+              YouTubeTracksCompanion(
+                videoId: Value(videoId),
+                isFavorite: const Value(false),
+                likedAt: const Value(null),
+              ),
+            );
+      }
+    }
+  }
+
   bool _isValidYouTubeVideoId(String id) {
     if (id.startsWith('MPRE') ||
         id.startsWith('VL') ||

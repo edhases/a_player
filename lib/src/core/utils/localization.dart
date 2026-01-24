@@ -232,6 +232,13 @@ class AppLocalizations {
   String get presetClassical => translate('preset_classical');
   String get presetMetal => translate('preset_metal');
   String get presetHipHop => translate('preset_hip_hop');
+
+  String get startTimer => translate('start_timer');
+
+  // Lyrics
+  String get lyrics => translate('lyrics');
+  String get noLyricsFound => translate('no_lyrics_found');
+  String get errorLoadingLyrics => translate('error_loading_lyrics');
 }
 
 class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -1,16 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart'; // Drift models
 import '../../domain/entities/youtube_song.dart';
 
 class MediaItemAdapter {
   static MediaItem fromYouTubeSong(YouTubeSong song) {
+    debugPrint(
+        '[MediaItemAdapter] Adapting ${song.videoId}: duration=${song.duration} (seconds)');
     return MediaItem(
       id: song.videoId,
       album:
           song.artist, // YouTube Music often puts artist as album for singles
       title: song.title,
       artist: song.artist,
-      duration: Duration(milliseconds: song.duration),
+      duration: Duration(seconds: song.duration),
       artUri:
           song.thumbnailUrl.isNotEmpty ? Uri.parse(song.thumbnailUrl) : null,
       extras: {

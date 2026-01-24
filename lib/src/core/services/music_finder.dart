@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'dart:io';
+import 'dart:ui';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
-import 'package:get_it/get_it.dart';
+
 import '../../data/datasources/app_database.dart';
-import 'localization_service.dart';
+
 import '../utils/localization.dart';
 
 /// Service for finding and scanning music files.
@@ -24,7 +26,13 @@ class MusicFinder {
 
     try {
       isScanning.value = true;
-      scanStatus.value = _getLoc().scanQuerying;
+      final localeCode = Platform.localeName.split('_')[0];
+      // Default to English if parsing fails or specialized handling needed,
+      // but delegate handles fallback.
+      final loc =
+          await const AppLocalizationsDelegate().load(Locale(localeCode));
+
+      scanStatus.value = loc.scanQuerying;
 
       // Query all songs from MediaStore
       final songs = await _audioQuery.querySongs(
@@ -36,7 +44,7 @@ class MusicFinder {
 
       debugPrint('[MusicFinder] Found ${songs.length} songs in MediaStore');
       scanStatus.value =
-          _getLoc().translate('scan_found', args: {'count': songs.length});
+          loc.translate('scan_found', args: {'count': songs.length});
 
       if (songs.isEmpty) {
         debugPrint('[MusicFinder] No songs found in MediaStore');
@@ -45,13 +53,13 @@ class MusicFinder {
 
       // Process in Isolate to avoid blocking UI
       // We also removed per-item UI updates to prevent 60fps rebuilds
-      scanStatus.value = _getLoc().scanProcessing;
+      scanStatus.value = loc.scanProcessing;
 
       final trackCompanions = await compute(_mapSongsToCompanions, songs);
 
       // Insert into database
       if (trackCompanions.isNotEmpty) {
-        scanStatus.value = _getLoc()
+        scanStatus.value = loc
             .translate('scan_saving', args: {'count': trackCompanions.length});
 
         await _db.batch((batch) {
@@ -115,10 +123,5 @@ class MusicFinder {
     }
 
     return list;
-  }
-
-  AppLocalizations _getLoc() {
-    final service = GetIt.I<LocalizationService>();
-    return AppLocalizations(service.currentLocale, service.localizedStrings);
   }
 }

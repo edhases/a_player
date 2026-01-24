@@ -10,7 +10,6 @@ import '../../data/datasources/app_database.dart';
 import 'settings_service.dart';
 import 'equalizer_service.dart';
 import 'log_service.dart';
-import '../../core/services/youtube_helper.dart';
 
 import '../../domain/entities/youtube_song.dart';
 import '../utils/media_item_adapter.dart';
@@ -44,6 +43,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   // YouTube playback history tracking
   final Set<String> _reportedVideoIds = {};
   int? _lastReportedIndex;
+
+  // Crossfade
+  int _crossfadeDuration = 0; // 0 = disabled
+  bool _isCrossfading = false;
+  Timer? _crossfadeTimer;
 
   MyAudioHandler({
     required AppDatabase db,
@@ -97,17 +101,31 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       debugPrint('[AudioHandler] AudioSession error: $e');
     }
 
-    // Broadcast playback state changes
+    // Track consecutive playback errors to prevent infinite skip loops
+    int consecutiveErrors = 0;
+
     player.playbackEventStream.listen((event) {
+      if (player.playing && player.processingState == ProcessingState.ready) {
+        consecutiveErrors = 0; // Reset on success
+      }
       _broadcastState(event);
     }, onError: (Object e, StackTrace st) {
-      debugPrint('[AudioHandler] PLAYER ERROR: $e. Skipping to the next item.');
-      // If an error occurs (e.g., 403 Forbidden on a YouTube link),
-      // automatically skip to the next track in the queue.
+      debugPrint('[AudioHandler] PLAYER ERROR: $e');
+      consecutiveErrors++;
+
+      if (consecutiveErrors >= 3) {
+        _logError(
+            '[AudioHandler] Too many consecutive errors ($consecutiveErrors). Stopping playback.',
+            e);
+        stop();
+        consecutiveErrors = 0;
+        return;
+      }
+
       if (player.hasNext) {
+        debugPrint('[AudioHandler] Skipping to next due to error...');
         skipToNext();
       } else {
-        // If there's no next track, stop playback.
         stop();
       }
     });
@@ -115,6 +133,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     player.shuffleModeEnabledStream
         .listen((_) => _broadcastState(player.playbackEvent));
     player.loopModeStream.listen((_) => _broadcastState(player.playbackEvent));
+
+    // Auto-play random track when queue ends
+    player.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed && !player.hasNext) {
+        debugPrint(
+            '[AudioHandler] Queue ended, auto-playing random from Home...');
+        _autoPlayRandomTrack();
+      }
+    });
 
     // Update current song info immediately when index changes
     player.currentIndexStream.distinct().listen((index) {
@@ -133,14 +160,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Separately update duration when it becomes available
     player.durationStream.listen((duration) {
-      if (duration != null) {
+      if (duration != null && duration > Duration.zero) {
         final index = player.currentIndex;
         if (index != null && index < queue.value.length) {
           final item = queue.value[index];
+          // Only update if duration is significantly different or item duration was zero
           if (item.duration != duration) {
+            // Check if we already had a valid duration (e.g. > 10s) and new one represents known length
+            // just_audio might emit precise duration after buffering.
             debugPrint(
-                '[AudioHandler] Duration updated for ${item.title}: $duration');
+                '[AudioHandler] Duration updated for ${item.title}: $duration (was ${item.duration})');
             mediaItem.add(item.copyWith(duration: duration));
+
+            // Should we also update the queue item?
+            // Yes, otherwise switching back to this track might revert duration.
+            final newItem = item.copyWith(duration: duration);
+            final newQueue = List<MediaItem>.from(queue.value);
+            newQueue[index] = newItem;
+            queue.add(newQueue);
+            // Also update current MediaItem to reflect change in UI
+            mediaItem.add(newItem);
           }
         }
       }
@@ -183,6 +222,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         .distinct()
         .listen((position) => _reportPlaybackHistory());
 
+    // Crossfade monitor
+    player.positionStream.listen(_checkCrossfade);
+
+    // Load crossfade setting
+    _crossfadeDuration = _settingsService.loadCrossfadeDuration();
+
     queue.stream.listen((q) {
       final trackIds = q.map((item) => item.id).toList();
       _settingsService.saveQueue(trackIds);
@@ -224,17 +269,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (index >= queue.value.length) return;
     final item = queue.value[index];
 
-    // Only report YouTube tracks
-    final isOnline = item.extras?['isOnline'] == true;
+    // Only report YouTube tracks (online or cached)
     final videoId = item.extras?['videoId'] as String?;
 
-    if (!isOnline || videoId == null) return;
+    if (videoId == null) return;
+
+    // Check if we are online before reporting?
+    // InnerTubeService handles errors, so we can just fire and forget.
+    // Ideally we should check connectivity to avoid log spam, but Dio handles it.
 
     // Don't report same video twice
     if (_reportedVideoIds.contains(videoId)) return;
 
     debugPrint(
-        '[AudioHandler] Reporting playback history for: $videoId (${item.title})');
+        '[AudioHandler] Reporting playback history for: $videoId (${item.title}), Cached: ${!(item.extras?['isOnline'] ?? false)}');
     _lastReportedIndex = index;
     _reportedVideoIds.add(videoId);
 
@@ -244,6 +292,56 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _innerTubeService.reportPlayback(trackingUrl);
       }
     });
+  }
+
+  /// Check if we should start crossfade based on current position
+  void _checkCrossfade(Duration position) {
+    if (_crossfadeDuration <= 0 || _isCrossfading) return;
+    if (!player.hasNext) return;
+
+    final duration = player.duration;
+    if (duration == null) return;
+
+    final timeLeft = duration - position;
+    if (timeLeft.inSeconds <= _crossfadeDuration && timeLeft.inSeconds > 0) {
+      _startCrossfade();
+    }
+  }
+
+  /// Start crossfade animation
+  void _startCrossfade() {
+    if (_isCrossfading) return;
+    _isCrossfading = true;
+
+    debugPrint('[AudioHandler] Starting crossfade...');
+
+    final steps = 20; // Number of volume steps
+    final stepDuration =
+        Duration(milliseconds: (_crossfadeDuration * 1000 ~/ steps));
+    var currentStep = 0;
+
+    _crossfadeTimer?.cancel();
+    _crossfadeTimer = Timer.periodic(stepDuration, (timer) {
+      currentStep++;
+      final volume = 1.0 - (currentStep / steps);
+
+      if (currentStep >= steps) {
+        timer.cancel();
+        // Skip to next and restore volume
+        player.setVolume(1.0);
+        skipToNext();
+        _isCrossfading = false;
+        debugPrint('[AudioHandler] Crossfade complete');
+      } else {
+        player.setVolume(volume.clamp(0.0, 1.0));
+      }
+    });
+  }
+
+  /// Set crossfade duration (called from settings)
+  void setCrossfadeDuration(int seconds) {
+    _crossfadeDuration = seconds;
+    debugPrint('[AudioHandler] Crossfade set to ${seconds}s');
   }
 
   void _broadcastState(PlaybackEvent event) {
@@ -346,7 +444,54 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   @override
+  Future<void> removeQueueItemAt(int index) async {
+    if (index < 0 || index >= queue.value.length) return;
+
+    final newQueue = List<MediaItem>.from(queue.value);
+    newQueue.removeAt(index);
+    queue.add(newQueue);
+
+    try {
+      await _playlist.removeAt(index);
+      debugPrint('[AudioHandler] Removed item at index $index');
+    } catch (e) {
+      debugPrint('[AudioHandler] removeQueueItemAt error: $e');
+    }
+  }
+
+  Future<void> reorderQueue(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= queue.value.length) return;
+    if (newIndex < 0 || newIndex > queue.value.length)
+      return; // newIndex can be length (append)
+
+    // Adjust newIndex if moving downwards because removing the item shifts indices
+    int insertIndex = newIndex;
+    if (newIndex > oldIndex) {
+      insertIndex -= 1;
+    }
+
+    // 1. Update MediaItem Queue
+    final newQueue = List<MediaItem>.from(queue.value);
+    final item = newQueue.removeAt(oldIndex);
+    newQueue.insert(insertIndex, item);
+    queue.add(newQueue);
+
+    // 2. Update just_audio Playlist (move is safe during playback)
+    try {
+      _logService?.info(
+          '[AudioHandler] reorderQueue: moving from $oldIndex to $insertIndex');
+      await _playlist.move(oldIndex, insertIndex);
+      debugPrint(
+          '[AudioHandler] Reordered queue from $oldIndex to $insertIndex');
+    } catch (e) {
+      debugPrint('[AudioHandler] reorderQueue error: $e');
+    }
+  }
+
+  @override
   Future<void> updateQueue(List<MediaItem> queue) async {
+    _logService?.info(
+        '[AudioHandler] updateQueue CRITICAL: called with ${queue.length} items. THIS REBUILDS THE ENTIRE PLAYLIST!');
     debugPrint('[AudioHandler] updateQueue called with ${queue.length} items');
 
     if (const ListEquality().equals(this.queue.value, queue)) {
@@ -380,6 +525,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> addQueueItem(MediaItem mediaItem) async {
+    _logService?.info('[AudioHandler] addQueueItem: ${mediaItem.title}');
+    debugPrint(
+        '[AudioHandler] addQueueItem: ${mediaItem.title}, duration IN QUEUE=${mediaItem.duration}');
     await super.addQueueItem(mediaItem);
     try {
       final source = await _audioSourceFactory.createSource(mediaItem);
@@ -400,17 +548,46 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> playNext(Track track) async {
     final override = await _getOverride(track.path);
     final item = MediaItemAdapter.fromTrack(track, override);
-    final index = player.currentIndex ?? 0;
 
-    // Insert after current item
-    await insertQueueItem(index + 1, item);
+    // Use the player's current index or default to 0
+    final currentIndex = player.currentIndex ?? 0;
+    final insertIndex = currentIndex + 1;
 
+    // 1. Update MediaItem Queue (Sync with UI)
+    final newQueue = List<MediaItem>.from(queue.value);
+    newQueue.insert(insertIndex, item);
+    queue.add(newQueue);
+
+    // 2. Update just_audio Playlist (Sync with Playback)
     try {
       final source = await _audioSourceFactory.createSource(item);
-      await _playlist.insert(index + 1, source);
-      debugPrint('[AudioHandler] Playing next: ${track.title}');
+      await _playlist.insert(insertIndex, source);
+      debugPrint(
+          '[AudioHandler] Playing Next (Local): ${track.title} at index $insertIndex');
     } catch (e) {
       debugPrint('[AudioHandler] playNext error: $e');
+    }
+  }
+
+  Future<void> playYouTubeNext(YouTubeSong song) async {
+    final item = MediaItemAdapter.fromYouTubeSong(song);
+
+    final currentIndex = player.currentIndex ?? 0;
+    final insertIndex = currentIndex + 1;
+
+    // 1. Update MediaItem Queue
+    final newQueue = List<MediaItem>.from(queue.value);
+    newQueue.insert(insertIndex, item);
+    queue.add(newQueue);
+
+    // 2. Update just_audio Playlist
+    try {
+      final source = await _audioSourceFactory.createSource(item);
+      await _playlist.insert(insertIndex, source);
+      debugPrint(
+          '[AudioHandler] Playing Next (YouTube): ${song.title} at index $insertIndex');
+    } catch (e) {
+      debugPrint('[AudioHandler] playYouTubeNext error: $e');
     }
   }
 
@@ -515,7 +692,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final radioTracks = await _innerTubeService.getRadioTracks(videoId);
 
       if (radioTracks.isEmpty) {
-        debugPrint('[AudioHandler] No radio tracks found');
+        debugPrint(
+            '[AudioHandler] No radio tracks found, trying fallback from Home...');
+        await _loadFallbackQueue();
         return;
       }
 
@@ -531,6 +710,83 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     } catch (e) {
       debugPrint('[AudioHandler] Error loading radio queue: $e');
+      // Try fallback on error
+      await _loadFallbackQueue();
+    }
+  }
+
+  /// Fallback: load random tracks from Home feed when radio queue fails
+  Future<void> _loadFallbackQueue() async {
+    try {
+      debugPrint('[AudioHandler] Loading fallback queue from Home feed...');
+      final sections = await _recommendationService.getPersonalizedFeed();
+
+      // Collect all playable songs from all sections
+      final allSongs = <YouTubeSong>[];
+      for (final section in sections) {
+        for (final song in section.songs) {
+          // Skip local and radio tracks
+          if (!song.videoId.startsWith('local:') &&
+              !song.videoId.startsWith('radio:') &&
+              song.videoId.length == 11) {
+            allSongs.add(song);
+          }
+        }
+      }
+
+      if (allSongs.isEmpty) {
+        debugPrint('[AudioHandler] No fallback songs found');
+        return;
+      }
+
+      // Shuffle and take random tracks
+      allSongs.shuffle();
+      final currentIds = queue.value.map((m) => m.id).toSet();
+      final tracksToAdd = allSongs
+          .where((t) => !currentIds.contains(t.videoId))
+          .take(15)
+          .toList();
+
+      for (final track in tracksToAdd) {
+        final mi = MediaItemAdapter.fromYouTubeSong(track);
+        await addQueueItem(mi);
+      }
+      debugPrint('[AudioHandler] Added ${tracksToAdd.length} fallback tracks');
+    } catch (e) {
+      debugPrint('[AudioHandler] Fallback queue error: $e');
+    }
+  }
+
+  /// Auto-play a random track from Home when queue ends
+  Future<void> _autoPlayRandomTrack() async {
+    try {
+      debugPrint('[AudioHandler] Fetching random track from Home...');
+      final sections = await _recommendationService.getPersonalizedFeed();
+
+      // Collect all playable YouTube songs
+      final allSongs = <YouTubeSong>[];
+      for (final section in sections) {
+        for (final song in section.songs) {
+          if (!song.videoId.startsWith('local:') &&
+              !song.videoId.startsWith('radio:') &&
+              song.videoId.length == 11) {
+            allSongs.add(song);
+          }
+        }
+      }
+
+      if (allSongs.isEmpty) {
+        debugPrint('[AudioHandler] No songs found for auto-play');
+        return;
+      }
+
+      // Pick a random song and play it (this will trigger radio queue)
+      allSongs.shuffle();
+      final randomSong = allSongs.first;
+      debugPrint('[AudioHandler] Auto-playing: ${randomSong.title}');
+      await playYouTubeSong(randomSong, loadRadioQueue: true);
+    } catch (e) {
+      debugPrint('[AudioHandler] Auto-play error: $e');
     }
   }
 

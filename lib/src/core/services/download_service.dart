@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:get_it/get_it.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 
 import '../../domain/entities/youtube_song.dart';
 import 'youtube_helper.dart';
@@ -12,6 +13,7 @@ import 'youtube_helper.dart';
 /// Service for downloading YouTube tracks as MP3 with ID3 metadata
 class DownloadService {
   final YouTubeHelper _ytHelper;
+  final OnAudioQuery _audioQuery = OnAudioQuery();
   // final Audiotagger _tagger = Audiotagger(); // Removed
 
   DownloadService({YouTubeHelper? ytHelper})
@@ -89,6 +91,14 @@ class DownloadService {
       // Consider using ffmpeg_kit_flutter or a native platform channel for tagging.
       debugPrint(
           '[DownloadService] ID3 tagging skipped (library incompatible)');
+
+      // Notify MediaStore so the file appears in library after scan
+      try {
+        final scanned = await _audioQuery.scanMedia(finalPath);
+        debugPrint('[DownloadService] MediaStore scan: $scanned');
+      } catch (e) {
+        debugPrint('[DownloadService] MediaStore scan error (non-fatal): $e');
+      }
 
       onProgress?.call(1.0);
 

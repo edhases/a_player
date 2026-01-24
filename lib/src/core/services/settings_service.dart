@@ -122,6 +122,11 @@ class SettingsService {
     return _prefs.getStringList(kExcludedFoldersKey) ?? [];
   }
 
+  Future<void> saveExcludedFolders(List<String> paths) async {
+    await _prefs.setStringList(kExcludedFoldersKey, paths);
+    _notify();
+  }
+
   // --- Cache Limit ---
   Future<void> saveMaxCacheSize(int bytes) async {
     await _prefs.setInt(kMaxCacheSizeKey, bytes);
@@ -142,6 +147,64 @@ class SettingsService {
   int loadMaxLogSize() {
     // Default 10MB
     return _prefs.getInt(kMaxLogSizeKey) ?? 10 * 1024 * 1024;
+  }
+
+  // --- Appearance ---
+  Future<void> saveThemeMode(int mode) async {
+    await _prefs.setInt('theme_mode', mode);
+    _notify();
+  }
+
+  int loadThemeMode() {
+    return _prefs.getInt('theme_mode') ?? 0; // 0 = System
+  }
+
+  Future<void> saveAmoledMode(bool enabled) async {
+    await _prefs.setBool('amoled_mode', enabled);
+    _notify();
+  }
+
+  bool loadAmoledMode() {
+    return _prefs.getBool('amoled_mode') ?? false;
+  }
+
+  Future<void> saveAccentColor(int colorValue) async {
+    await _prefs.setInt('accent_color', colorValue);
+    _notify();
+  }
+
+  int? loadAccentColor() {
+    return _prefs.getInt('accent_color');
+  }
+
+  Future<void> saveFontSizeScale(double scale) async {
+    await _prefs.setDouble('font_scale', scale);
+    _notify();
+  }
+
+  double loadFontSizeScale() {
+    return _prefs.getDouble('font_scale') ?? 1.0;
+  }
+
+  // --- Playback ---
+  Future<void> saveCrossfadeDuration(int seconds) async {
+    await _prefs.setInt('crossfade_duration', seconds);
+    _notify();
+  }
+
+  int loadCrossfadeDuration() {
+    return _prefs.getInt('crossfade_duration') ?? 0;
+  }
+
+  // --- Network ---
+  Future<void> saveWifiOnly(bool enabled) async {
+    await _prefs.setBool('wifi_only', enabled);
+    _notify();
+  }
+
+  bool loadWifiOnly() {
+    return _prefs.getBool('wifi_only') ??
+        false; // Default false for now to avoid confusion
   }
 
   // --- Generic Storage ---

@@ -39,19 +39,16 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
   void initState() {
     super.initState();
     if (widget.preloadedTracks != null && widget.preloadedTracks!.isNotEmpty) {
-      _tracks = widget.preloadedTracks!;
+      // Apply the same patching logic to preloaded tracks
+      _tracks = _patchTracks(widget.preloadedTracks!);
       _isLoading = false;
     } else {
       _loadTracks();
     }
   }
 
-  Future<void> _loadTracks() async {
-    setState(() => _isLoading = true);
-    var fetchedTracks = await _innerTube.getPlaylistTracks(widget.playlistId);
-
-    // Patch missing artist/thumbnail data using knownMetadata
-    fetchedTracks = fetchedTracks.map((song) {
+  List<YouTubeSong> _patchTracks(List<YouTubeSong> rawTracks) {
+    return rawTracks.map((song) {
       var updatedSong = song;
 
       // Apply Artist Fallback
@@ -62,13 +59,21 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
       }
 
       // Apply Thumbnail Fallback
-      // Checks if empty or if it's a generic default if we had one (usually empty)
       if (updatedSong.thumbnailUrl.isEmpty && widget.knownThumbnail != null) {
         updatedSong = updatedSong.copyWith(thumbnailUrl: widget.knownThumbnail);
       }
 
       return updatedSong;
     }).toList();
+  }
+
+  Future<void> _loadTracks() async {
+    setState(() => _isLoading = true);
+    var fetchedTracks = await _innerTube.getPlaylistTracks(widget.playlistId);
+
+    // Patch missing artist/thumbnail data using knownMetadata
+    // fetchedTracks = fetchedTracks.map((song) { ... } // Replaced by helper
+    fetchedTracks = _patchTracks(fetchedTracks);
 
     _tracks = fetchedTracks;
 

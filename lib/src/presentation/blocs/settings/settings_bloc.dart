@@ -5,6 +5,7 @@ import 'package:get_it/get_it.dart';
 
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/log_service.dart';
+import '../../../core/services/audio_handler.dart';
 import 'settings_event.dart';
 import 'settings_state.dart';
 
@@ -18,6 +19,11 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<ChangeThemeMode>(_onChangeThemeMode);
     on<ToggleMiniPlayer>(_onToggleMiniPlayer);
     on<ChangeMaxLogSize>(_onChangeMaxLogSize);
+    on<ChangeAmoledMode>(_onChangeAmoledMode);
+    on<ChangeAccentColor>(_onChangeAccentColor);
+    on<ChangeFontScale>(_onChangeFontScale);
+    on<ChangeCrossfadeDuration>(_onChangeCrossfadeDuration);
+    on<ChangeWifiOnly>(_onChangeWifiOnly);
   }
 
   Future<void> _onLoadSettings(
@@ -40,13 +46,30 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       locale = const Locale('en', ''); // Default
     }
 
-    // Load Theme (Future proofing, for now defaults to dark)
-    // final themeIndex = _settingsService.loadInt('theme_mode') ?? ThemeMode.dark.index;
+    // Load Appearance
+    final themeIndex = _settingsService.loadThemeMode();
+    final themeMode = ThemeMode.values[themeIndex];
+    final amoledMode = _settingsService.loadAmoledMode();
+    final accentColor = _settingsService.loadAccentColor();
+    final fontScale = _settingsService.loadFontSizeScale();
+
+    // Load Playback & Network
+    final crossfade = _settingsService.loadCrossfadeDuration();
+    final wifiOnly = _settingsService.loadWifiOnly();
 
     // Load Log Size
     final maxLogSize = _settingsService.loadMaxLogSize();
 
-    emit(state.copyWith(locale: locale, maxLogSize: maxLogSize));
+    emit(state.copyWith(
+      locale: locale,
+      themeMode: themeMode,
+      amoledMode: amoledMode,
+      accentColor: accentColor,
+      fontScale: fontScale,
+      maxLogSize: maxLogSize,
+      crossfadeDuration: crossfade,
+      wifiOnly: wifiOnly,
+    ));
   }
 
   Future<void> _onChangeLocale(
@@ -64,12 +87,12 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emit(state.copyWith(locale: event.locale));
   }
 
-  void _onChangeThemeMode(
+  Future<void> _onChangeThemeMode(
     ChangeThemeMode event,
     Emitter<SettingsState> emit,
-  ) {
+  ) async {
+    await _settingsService.saveThemeMode(event.themeMode.index);
     emit(state.copyWith(themeMode: event.themeMode));
-    // Persist if needed
   }
 
   void _onToggleMiniPlayer(
@@ -88,5 +111,47 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       GetIt.I<LogService>().setMaxFileSize(event.size);
     }
     emit(state.copyWith(maxLogSize: event.size));
+  }
+
+  Future<void> _onChangeAmoledMode(
+      ChangeAmoledMode event, Emitter<SettingsState> emit) async {
+    await _settingsService.saveAmoledMode(event.enabled);
+    emit(state.copyWith(amoledMode: event.enabled));
+  }
+
+  Future<void> _onChangeAccentColor(
+      ChangeAccentColor event, Emitter<SettingsState> emit) async {
+    if (event.color != null) {
+      await _settingsService.saveAccentColor(event.color!);
+    } else {
+      // Logic for removing/nullifying could be handled by passing a specific value or separate method,
+      // but SharedPreferences doesn't support 'remove' easily via simple setInt.
+      // We'll treat 0 or specific negative as null/dynamic if needed, or update Service to support remove.
+      // For now, let's assume we always save a value if picked.
+    }
+    emit(state.copyWith(accentColor: event.color));
+  }
+
+  Future<void> _onChangeFontScale(
+      ChangeFontScale event, Emitter<SettingsState> emit) async {
+    await _settingsService.saveFontSizeScale(event.scale);
+    emit(state.copyWith(fontScale: event.scale));
+  }
+
+  Future<void> _onChangeCrossfadeDuration(
+      ChangeCrossfadeDuration event, Emitter<SettingsState> emit) async {
+    await _settingsService.saveCrossfadeDuration(event.seconds);
+    emit(state.copyWith(crossfadeDuration: event.seconds));
+
+    // Notify AudioHandler
+    if (GetIt.I.isRegistered<MyAudioHandler>()) {
+      GetIt.I<MyAudioHandler>().setCrossfadeDuration(event.seconds);
+    }
+  }
+
+  Future<void> _onChangeWifiOnly(
+      ChangeWifiOnly event, Emitter<SettingsState> emit) async {
+    await _settingsService.saveWifiOnly(event.enabled);
+    emit(state.copyWith(wifiOnly: event.enabled));
   }
 }

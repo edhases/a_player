@@ -154,5 +154,8 @@
     "what_we_need": "必要なもの:",
     "need_access": "• 安全なブラウザ経由でのYouTube Musicアカウントへのアクセス",
     "need_playlists": "• プレイリストの読み込み機能",
-    "need_cookies": "• オフラインアクセスのための安全なCookie保存"
+    "need_cookies": "• オフラインアクセスのための安全なCookie保存",
+    "lyrics": "歌詞",
+    "no_lyrics_found": "歌詞が見つかりません",
+    "error_loading_lyrics": "歌詞の読み込みエラー"
 }
