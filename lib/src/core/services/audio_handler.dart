@@ -381,17 +381,58 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final sources = await Future.wait(
           queue.map((item) => _audioSourceFactory.createSource(item)));
 
-      // 2. Update Playlist
+      // 2. Update Queue (UI) FIRST - CRITICAL!
+      // This must happen BEFORE playlist modification so that
+      // currentIndexStream listener has valid queue data when just_audio
+      // auto-seeks to index 0 after playlist clear/add.
+      this.queue.add(queue);
+
+      // 3. Update Playlist
       await _playlist.clear();
       await _playlist.addAll(sources);
 
-      // 3. Update Queue (UI) only after success
-      this.queue.add(queue);
-
-      debugPrint('[AudioHandler] updateQueue: _playlist and queue updated');
+      debugPrint('[AudioHandler] updateQueue: queue and _playlist updated');
     } catch (e) {
       debugPrint('[AudioHandler] updateQueue error: $e');
-      // Do not update queue if audio source creation failed
+      // Rollback queue on failure
+      this.queue.add([]);
+    }
+  }
+
+  /// Atomically set queue and start playing from a specific index.
+  /// This prevents the ExoPlayer init race condition where index resets to 0.
+  Future<void> playQueueFromIndex(
+      List<MediaItem> newQueue, int startIndex) async {
+    debugPrint(
+        '[AudioHandler] playQueueFromIndex: ${newQueue.length} items, startIndex=$startIndex');
+
+    if (newQueue.isEmpty) return;
+    final safeIndex = startIndex.clamp(0, newQueue.length - 1);
+
+    try {
+      // 1. Update UI queue first
+      queue.add(newQueue);
+
+      // 2. Create audio sources
+      final sources = await Future.wait(
+          newQueue.map((item) => _audioSourceFactory.createSource(item)));
+
+      // 3. Clear and rebuild playlist
+      await _playlist.clear();
+      await _playlist.addAll(sources);
+
+      // 4. Set audio source with initial index - THIS IS THE KEY!
+      // Using setAudioSource instead of just seek ensures ExoPlayer
+      // initializes with the correct starting position.
+      await player.setAudioSource(_playlist, initialIndex: safeIndex);
+
+      // 5. Start playback
+      await player.play();
+
+      debugPrint(
+          '[AudioHandler] playQueueFromIndex: started at index $safeIndex');
+    } catch (e) {
+      debugPrint('[AudioHandler] playQueueFromIndex error: $e');
     }
   }
 

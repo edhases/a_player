@@ -95,10 +95,8 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
       );
     }).toList();
 
-    // Update queue and skip to the selected song
-    await _audioHandler.updateQueue(queue);
-    await _audioHandler.skipToQueueItem(index);
-    _audioHandler.play();
+    // Use atomic method to set queue and start from correct index
+    await _audioHandler.playQueueFromIndex(queue, index);
   }
 
   @override
