@@ -1,7 +1,7 @@
 {
-    "versionName": "1.0.20260126",
+    "versionName": "20260126",
     "versionCode": 20260126,
-    "apkUrl": "https://github.com/edhases/a_player/releases/latest/download/app-release.apk",
+    "apkUrl": "https://github.com/edhases/a_player/releases/download/20260126/app-release.apk",
     "apkSha256": "473D631E1120E0ED9D4A6FE63B5D9FAA8C94F55045F0538B7A350AFE7B47BDFF",
     "changelog": "- Auto-updates enabled\n- Improved backup system\n- Date-based versioning",
     "minSupportedVersionCode": 1
