@@ -71,6 +71,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
 
     if (Platform.isAndroid) {
+      if (sdkInt >= 26) {
+        permissions.add(Permission.requestInstallPackages);
+      }
+
       if (sdkInt >= 30) {
         permissions.add(Permission.manageExternalStorage);
       }

@@ -65,3 +65,11 @@ lib/src/core/config/app_secrets.dart
 
 # Secrets
 lib/src/core/config/app_secrets.dart
+
+# Scripts
+scripts/build_release.dart
+
+# Tools
+tools/release_manager
+
+tools/release_manager/

@@ -1,48 +1,40 @@
 # Release Instructions for Oxide Player
 
-Follow these steps to build and publish a new version of the application.
+Follow these steps to build and publish a new version of the application using the automated script.
 
-## 1. Prepare Version
-Run the version bumping script to set the version based on today's date:
+## 1. Run Build Script
+This script handles version bumping, building, APK renaming, hashing, and updating `update.json` automatically.
+
+**Windows (PowerShell):**
 ```powershell
-dart scripts/bump_version.dart
+# Ensure you have Rust installed and in PATH if needed
+$env:Path += ";$HOME\.cargo\bin"
+dart scripts/build_release.dart
 ```
-This will update `pubspec.yaml` to something like `1.0.YYYYMMDD+YYYYMMDD`.
-> [!NOTE]
-> Flutter requires a 3-part version number (X.Y.Z) for the version name. We use `1.0.YYYYMMDD` to include the date while remaining compliant.
 
-## 2. Build Release APK
-Clean and build the release version of the app:
+The script will:
+1. Update `pubspec.yaml` version to `1.0.YYYYMMDD+YYYYMMDD`.
+2. Build the release APK.
+3. Rename the APK to `oxide_player_vYYYYMMDD.apk` in `build/app/outputs/flutter-apk/`.
+4. Calculate SHA-256 hash.
+5. Update `update.json` with the new URL and hash.
+
+## 2. Publish to GitHub
+After the script finishes successfully:
+
+1. **Commit changes:**
 ```powershell
-flutter clean
-flutter pub get
-flutter build apk --release
+git add .
+git commit -m "Release YYYYMMDD"
+git push origin YTM-integation
 ```
-The resulting APK will be located at:
-`build/app/outputs/flutter-apk/app-release.apk`
 
-## 3. Calculate SHA-256 Checksum
-The app verifies the APK integrity using a SHA-256 hash. Generate it using PowerShell:
-```powershell
-Get-FileHash build/app/outputs/flutter-apk/app-release.apk -Algorithm SHA256
-```
-Copy the `Hash` value.
-
-## 4. Prepare update.json
-Update the `update.json` file in your repository:
-- `versionName`: Should match the YYYYMMDD part in `pubspec.yaml`.
-- `versionCode`: Should match the build number (YYYYMMDD).
-- `apkUrl`: URL to the APK file in GitHub Releases.
-- `apkSha256`: The hash you calculated in step 3.
-- `changelog`: Describe what's new.
-
-## 5. Publish to GitHub
-1. Commit and push your changes (including the updated `pubspec.yaml` and `update.json`).
-2. Create a new Release on GitHub.
-3. Use `YYYYMMDD` as the tag (e.g., `20260126`).
-4. Upload `app-release.apk` to the Assets section of the release.
-5. Ensure `update.json` is accessible via the raw URL configured in the app.
+2. **Create Release:**
+   - Go to GitHub Releases.
+   - Create a new release with tag `YYYYMMDD` (e.g., `20260126`).
+   - Title: `YYYYMMDD`.
+   - Upload the generated APK: `build/app/outputs/flutter-apk/oxide_player_vYYYYMMDD.apk`.
 
 > [!IMPORTANT]
-> The app is currently configured to look for `update.json` in the `YTM-integation` branch.
-> Raw URL: `https://raw.githubusercontent.com/edhases/a_player/YTM-integation/update.json`
+> The app looks for updates at:
+> `https://raw.githubusercontent.com/edhases/a_player/YTM-integation/update.json`

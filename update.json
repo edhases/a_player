@@ -2,7 +2,7 @@
     "versionName": "20260126",
     "versionCode": 20260126,
     "apkUrl": "https://github.com/edhases/a_player/releases/download/20260126/oxide_player_v20260126.apk",
-    "apkSha256": "473D631E1120E0ED9D4A6FE63B5D9FAA8C94F55045F0538B7A350AFE7B47BDFF",
-    "changelog": "- Auto-updates enabled\n- Improved backup system\n- Date-based versioning",
+    "apkSha256": "B5430772E02A86B38750CF4E87795C97FA8D3A04DB4FEEE2B07C03C8824FBB2E",
+    "changelog": "- Add cache busting to update.json fetch URL\n- Handle string response in update info parsing\n- Fix OTA: Use direct tag URL and display version 20260126\n- Add update system, backup improvements, and versioning\n- Release 20260126: OTA updates, backup enhancements, and localization",
     "minSupportedVersionCode": 1
 }
