@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
+import '../config/app_secrets.dart';
 import 'log_service.dart';
 
 /// Service for sending logs to Telegram Bot
@@ -11,10 +12,9 @@ class TelegramService {
   static const String _chatIdKey = 'telegram_chat_id';
   static const String _baseUrl = 'https://api.telegram.org/bot';
 
-  // Default credentials for sending logs to developer
-  static const String _defaultBotToken =
-      '8319336094:AAFjsqn5zKEGOwc5yZu0dbDIby00gv8KrUg';
-  static const String _defaultChatId = '-1003668290632';
+  // Default credentials from secrets
+  static const String _defaultBotToken = AppSecrets.telegramBotToken;
+  static const String _defaultChatId = AppSecrets.telegramChatId;
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 

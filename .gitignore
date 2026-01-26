@@ -61,3 +61,7 @@ build_output.txt
 
 
 audite.md
+lib/src/core/config/app_secrets.dart
+
+# Secrets
+lib/src/core/config/app_secrets.dart
