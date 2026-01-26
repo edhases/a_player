@@ -265,30 +265,57 @@ class LyricsService {
       String hitArtist) {
     if (targetTrack.isEmpty || hitTrack.isEmpty) return false;
 
-    final tTrack = _normalize(targetTrack);
-    final hTrack = _normalize(hitTrack);
+    // 1. Clean Inputs: Remove brackets content (e.g. "(Official Video)", "(Sea)")
+    // and normalize for comparison
     final tArtist = _normalize(targetArtist);
     final hArtist = _normalize(hitArtist);
 
-    // 1. Direct containment check (ignoring case & punctuation)
-    bool titleMatch =
-        tTrack == hTrack || hTrack.contains(tTrack) || tTrack.contains(hTrack);
-
-    // 2. Transliteration check (Simple heuristic for Cyrillic/Latin)
-    // If titles are completely different in length/content, skip
-    if (!titleMatch) {
-      // Allow for some difference if the strings are very similar (e.g. Typos)
-      // This is a placeholder for Levenshtein if needed, but for now strict containment is safer
-      return false;
+    // Clean target track: Remove artist name if present as prefix to avoid "SadSvit - Море" issues
+    String cleanTargetTrack = _cleanString(targetTrack);
+    // If target track starts with artist name (loosely), strip it
+    if (cleanTargetTrack.toLowerCase().startsWith(targetArtist.toLowerCase())) {
+      cleanTargetTrack = cleanTargetTrack.substring(targetArtist.length).trim();
+      // Remove leading dash if present " - Море"
+      if (cleanTargetTrack.startsWith('-')) {
+        cleanTargetTrack = cleanTargetTrack.substring(1).trim();
+      }
     }
 
-    // 3. Artist check ( looser because of "feat" and variations)
+    final tTrack = _normalize(cleanTargetTrack);
+
+    // Prepare Hit Track: compare both raw (normalized) and clean (no brackets)
+    final hTrackRaw = _normalize(hitTrack);
+    final hTrackClean = _normalize(_cleanString(hitTrack));
+
+    // --- Artist Check ---
+    // Looser check:
+    // 1. Exact or containment
+    // 2. Or if hit artist is "Genius ..." (translation entries)
     bool artistMatch = tArtist == hArtist ||
         hArtist.contains(tArtist) ||
         tArtist.contains(hArtist);
 
+    // --- Title Check ---
+    // Check against both raw and cleaned hit title
+    bool titleMatch = tTrack == hTrackRaw ||
+        hTrackRaw.contains(tTrack) ||
+        tTrack.contains(hTrackRaw) ||
+        tTrack == hTrackClean ||
+        hTrackClean.contains(tTrack) ||
+        tTrack.contains(hTrackClean);
+
+    // Special case: If target is "Море" and Hit is "Море (Sea)", hTrackClean is "море".
+    // tTrack "море" == hTrackClean "море" -> Match.
+
     // If strict artist check failed, try to be more lenient if title is EXACT match
-    if (!artistMatch && tTrack == hTrack) {
+    if (!artistMatch && (tTrack == hTrackClean || tTrack == hTrackRaw)) {
+      // Maybe allow?
+      // But verify if it's a translation entry like "Genius English Translations"
+      if (hArtist.contains('genius') || hArtist.contains('translation')) {
+        return true; // Often these have the correct lyrics
+      }
+      // If the title is very unique/long, maybe safe. For short titles like "More", risky.
+      // Let's stick to returning true if title is exact match to the CLEAN hit.
       return true;
     }
 

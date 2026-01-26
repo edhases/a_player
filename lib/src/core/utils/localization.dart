@@ -257,6 +257,30 @@ class AppLocalizations {
       translate('manual_troubleshooting_title');
   String get manualTroubleshootingDesc =>
       translate('manual_troubleshooting_desc');
+
+  // System Permissions
+  String get system => translate('system');
+  String get checkPermissions => translate('check_permissions');
+  String get checkPermissionsDesc => translate('check_permissions_desc');
+  String get allPermissionsGranted => translate('all_permissions_granted');
+  String get requestingPermissions => translate('requesting_permissions');
+  String get permissionsGranted => translate('permissions_granted');
+  String get permissionsDenied => translate('permissions_denied');
+  String get denied => translate('denied');
+  String get settingsBtn => translate('settings_btn');
+  String get permissionsRequired => translate('permissions_required');
+  String get edit => translate('edit');
+  String get save => translate('save');
+  String get name => translate('name');
+  String get imageUrlOptional => translate('image_url_optional');
+  String get pickImage => translate('pick_image');
+  String get emailOptional => translate('email_optional');
+  String get problem => translate('problem');
+  String get description => translate('description');
+  String get detailedGuide => translate('detailed_guide');
+  String get addRadio => translate('add_radio');
+  String get permissionsPermanentlyDenied =>
+      translate('permissions_permanently_denied');
 }
 
 class AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

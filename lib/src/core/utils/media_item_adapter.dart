@@ -4,9 +4,20 @@ import '../../data/datasources/app_database.dart'; // Drift models
 import '../../domain/entities/youtube_song.dart';
 
 class MediaItemAdapter {
-  static MediaItem fromYouTubeSong(YouTubeSong song) {
+  static MediaItem fromYouTubeSong(YouTubeSong song, {String? cachedUrl}) {
     debugPrint(
         '[MediaItemAdapter] Adapting ${song.videoId}: duration=${song.duration} (seconds)');
+    final extras = <String, dynamic>{
+      'isOnline': true,
+      'videoId': song.videoId,
+      'thumbnailUrl': song.thumbnailUrl,
+      'playlistId': song.playlistId,
+    };
+
+    if (cachedUrl != null) {
+      extras['cachedUrl'] = cachedUrl;
+    }
+
     return MediaItem(
       id: song.videoId,
       album:
@@ -16,12 +27,7 @@ class MediaItemAdapter {
       duration: Duration(seconds: song.duration),
       artUri:
           song.thumbnailUrl.isNotEmpty ? Uri.parse(song.thumbnailUrl) : null,
-      extras: {
-        'isOnline': true,
-        'videoId': song.videoId,
-        'thumbnailUrl': song.thumbnailUrl,
-        'playlistId': song.playlistId,
-      },
+      extras: extras,
     );
   }
 

@@ -371,15 +371,11 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
             '[SearchDelegate] Duration: $duration, User-Agent: $userAgent');
 
         final mediaItem = await _ytHelper.createMediaItem(song.videoId,
-            customTitle: song.title, customArtist: song.artist);
+            customTitle: song.title, customArtist: song.artist, cachedUrl: url);
 
-        if (widget.audioHandler.playbackState.value.processingState !=
-            AudioProcessingState.idle) {
-          widget.audioHandler.stop();
-        }
-        await widget.audioHandler.updateQueue([mediaItem]);
-        // Don't await play() here as it might hang 20s on emulators
-        widget.audioHandler.play();
+        // Use unified playback start
+        // This handles stopping, queue clearing, and starting correctly.
+        await widget.audioHandler.playQueueFromIndex([mediaItem], 0);
         if (mounted) {
           widget.onClose();
         }

@@ -103,7 +103,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
   Future<void> _onAddRadioStation(
       LibraryAddRadioStation event, Emitter<LibraryState> emit) async {
-    await _db.addRadioStation(event.name, event.url);
+    await _db.addRadioStation(event.name, event.url, imageUrl: event.imageUrl);
     add(LibraryLoadData()); // Reload
   }
 

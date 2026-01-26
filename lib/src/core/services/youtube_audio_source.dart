@@ -16,8 +16,12 @@ class YoutubeAudioSource extends StreamAudioSource {
   bool _isPrefetching = false;
   Completer<void>? _prefetchCompleter;
 
-  YoutubeAudioSource(this.videoId, this._ytHelper, {dynamic tag})
-      : super(tag: tag ?? videoId);
+  final http.Client? _sharedClient;
+
+  YoutubeAudioSource(this.videoId, this._ytHelper,
+      {dynamic tag, http.Client? client})
+      : _sharedClient = client,
+        super(tag: tag ?? videoId);
 
   /// Prefetch the audio URL before playback starts.
   /// This prevents race conditions where the player tries to stream
@@ -90,46 +94,53 @@ class YoutubeAudioSource extends StreamAudioSource {
       headers['Range'] = 'bytes=${start ?? 0}-${end ?? ""}';
     }
 
-    final client = http.Client();
+    // Use shared client if available, otherwise create a local one.
+    final client = _sharedClient ?? http.Client();
     final request = http.Request('GET', uri)..headers.addAll(headers);
-    final response = await client.send(request);
 
-    final contentLength = response.contentLength;
-    final statusCode = response.statusCode;
+    try {
+      final response = await client.send(request);
 
-    // Check if the server supports range requests and returned a partial response.
-    if (statusCode < 200 || statusCode >= 300) {
-      client.close();
-      throw Exception('HTTP request failed with status: $statusCode');
-    }
+      final contentLength = response.contentLength;
+      final statusCode = response.statusCode;
 
-    final contentRange = response.headers['content-range'];
-    int? totalLength;
-    if (contentRange != null) {
-      final parts = contentRange.split('/');
-      if (parts.length == 2) {
-        try {
-          totalLength = int.parse(parts[1]);
-        } catch (_) {
-          // Ignore parsing errors.
+      // Check if the server supports range requests and returned a partial response.
+      if (statusCode < 200 || statusCode >= 300) {
+        if (_sharedClient == null) client.close(); // Only close if local
+        throw Exception('HTTP request failed with status: $statusCode');
+      }
+
+      final contentRange = response.headers['content-range'];
+      int? totalLength;
+      if (contentRange != null) {
+        final parts = contentRange.split('/');
+        if (parts.length == 2) {
+          try {
+            totalLength = int.parse(parts[1]);
+          } catch (_) {
+            // Ignore parsing errors.
+          }
         }
       }
-    }
 
-    return StreamAudioResponse(
-      sourceLength: totalLength,
-      contentLength: contentLength,
-      offset: start ?? 0,
-      stream: response.stream.handleError((error) {
-        client.close();
-        throw error;
-      }, test: (error) => true).transform(StreamTransformer.fromHandlers(
-        handleDone: (sink) {
-          client.close();
-          sink.close();
-        },
-      )),
-      contentType: response.headers['content-type'] ?? 'audio/mpeg',
-    );
+      return StreamAudioResponse(
+        sourceLength: totalLength,
+        contentLength: contentLength,
+        offset: start ?? 0,
+        stream: response.stream.handleError((error) {
+          if (_sharedClient == null) client.close();
+          throw error;
+        }, test: (error) => true).transform(StreamTransformer.fromHandlers(
+          handleDone: (sink) {
+            if (_sharedClient == null) client.close();
+            sink.close();
+          },
+        )),
+        contentType: response.headers['content-type'] ?? 'audio/mpeg',
+      );
+    } catch (e) {
+      if (_sharedClient == null) client.close();
+      rethrow;
+    }
   }
 }

@@ -102,6 +102,7 @@ class TelegramService {
       final request = http.MultipartRequest('POST', url);
       request.fields['chat_id'] = _effectiveChatId;
       request.fields['caption'] = caption;
+      request.fields['parse_mode'] = 'HTML';
       request.files
           .add(await http.MultipartFile.fromPath('document', file.path));
 

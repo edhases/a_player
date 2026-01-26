@@ -9,7 +9,9 @@ import 'package:oxide_player/src/core/services/audio_source_factory.dart';
 import 'package:oxide_player/src/core/services/recommendation_service.dart';
 import 'package:oxide_player/src/core/services/innertube_service.dart';
 import 'package:oxide_player/src/core/services/metadata_matching_service.dart';
-import 'package:oxide_player/src/core/services/log_service.dart';
+
+import 'package:oxide_player/src/core/services/widget_service.dart';
+import 'package:oxide_player/src/core/services/tag_editor_service.dart';
 
 // Mocks
 class MockAppDatabase extends Mock implements AppDatabase {}
@@ -25,9 +27,11 @@ class MockInnerTubeService extends Mock implements InnerTubeService {}
 class MockMetadataMatchingService extends Mock
     implements MetadataMatchingService {}
 
-class MockLogService extends Mock implements LogService {}
-
 class MockAudioPlayer extends Mock implements AudioPlayer {}
+
+class MockWidgetService extends Mock implements WidgetService {}
+
+class MockTagEditorService extends Mock implements TagEditorService {}
 
 // Fakes
 class FakeMediaItem extends Fake implements MediaItem {}
@@ -42,8 +46,10 @@ void main() {
   late MockRecommendationService mockRecommendationService;
   late MockInnerTubeService mockInnerTubeService;
   late MockMetadataMatchingService mockMetadataMatchingService;
-  late MockLogService mockLogService;
+
   late MockAudioPlayer mockAudioPlayer;
+  late MockWidgetService mockWidgetService;
+  late MockTagEditorService mockTagEditorService;
 
   setUpAll(() {
     registerFallbackValue(Duration.zero);
@@ -58,8 +64,10 @@ void main() {
     mockRecommendationService = MockRecommendationService();
     mockInnerTubeService = MockInnerTubeService();
     mockMetadataMatchingService = MockMetadataMatchingService();
-    mockLogService = MockLogService();
+
     mockAudioPlayer = MockAudioPlayer();
+    mockWidgetService = MockWidgetService();
+    mockTagEditorService = MockTagEditorService();
 
     // Setup default behaviors for Settings
     when(() => mockSettings.loadQueue()).thenReturn([]);
@@ -105,8 +113,9 @@ void main() {
       recommendationService: mockRecommendationService,
       innerTubeService: mockInnerTubeService,
       metadataMatchingService: mockMetadataMatchingService,
-      logService: mockLogService,
       audioPlayer: mockAudioPlayer,
+      widgetService: mockWidgetService,
+      tagEditorService: mockTagEditorService,
     );
   });
 

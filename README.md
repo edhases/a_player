@@ -1,165 +1,120 @@
 # Oxide Player
 
-Кросплатформний музичний плеєр (Android, iOS, Windows, Linux, Web) на Flutter з гібридним відтворенням локальних файлів та YouTube.
+Cross‑platform music player built with Flutter for Android, iOS, Windows, Linux, and Web. Oxide Player combines local playback with YouTube Music streaming and offline caching.
 
-## Особливості
+## Table of Contents
 
-- 🎵 **Гібридне відтворення** — Локальні файли + YouTube стрімінг
-- 💾 **Офлайн-кешування** — Завантаження треків для офлайн-доступу
-- 🎚️ **Еквалайзер** — Налаштування звуку
-- 😴 **Таймер сну** — Автоматична зупинка відтворення
-- 📱 **Кросплатформність** — Android, iOS, Windows, Linux, Web
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Run](#run)
+- [Build](#build)
+- [Configuration](#configuration)
+- [Project Structure](#project-structure)
+- [Localization](#localization)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
----
+## Features
 
-## Архітектура
+- 🎵 Hybrid playback: local files + YouTube Music
+- 💾 Offline cache (download for offline listening)
+- 🎚️ Equalizer, crossfade, and sleep timer
+- 🧭 Smart Play for albums/playlists
+- 📌 Queue management with reordering
+- ❤️ Favorites, history, and recommendations
+- 📄 Lyrics (when available)
+- 📡 Custom radio stations
+- 🌍 Multi‑language UI
 
-Проєкт використовує Clean Architecture:
-
-```
-lib/src/
-├── core/           # Сервіси, утиліти, константи
-├── data/           # База даних, API, моделі
-├── domain/         # Сутності, інтерфейси репозиторіїв
-└── presentation/   # UI, екрани, віджети
-```
-
----
-
-## Основні сервіси
-
-### Core Services (`lib/src/core/services/`)
-
-| Сервіс | Опис |
-|--------|------|
-| `audio_handler.dart` | Головний контролер аудіо (черга, фонове відтворення) |
-| `smart_play_service.dart` | **[NEW]** Централізована логіка Smart Play для плейлистів/синглів |
-| `innertube_service.dart` | YouTube Innertube API (пошук, метадані, стріми) |
-| `youtube_helper.dart` | Отримання URL аудіопотоків через youtube_explode |
-| `music_finder.dart` | Сканування локальних аудіофайлів |
-| `cache_service.dart` | Кешування треків для офлайн-доступу |
-| `equalizer_service.dart` | Еквалайзер (частоти, пресети) |
-| `google_auth_service.dart` | Google авторизація |
-| `recommendation_service.dart` | Персоналізовані рекомендації |
-| `favorites_service.dart` | Вподобані пісні |
-| `settings_service.dart` | Налаштування користувача |
-| `sleep_timer_service.dart` | Таймер сну |
-
-### Data Layer (`lib/src/data/`)
-
-| Модуль | Опис |
-|--------|------|
-| `app_database.dart` | Локальна БД (Drift) |
-| `cached_track.dart` | Завантажені треки |
-| `liked_song.dart` | Вподобані пісні |
-| `listen_history.dart` | Історія прослуховування |
-| `local_track_override.dart` | Користувацькі метадані |
-
-### Presentation Layer (`lib/src/presentation/`)
-
-**Екрани:**
-- `player_screen.dart` — Основний плеєр
-- `home_feed_screen.dart` — Головна з рекомендаціями
-- `youtube_hub_screen.dart` — YouTube контент
-- `library_screen.dart` — Бібліотека користувача
-- `liked_songs_screen.dart` — Вподобані пісні
-- `settings_screen.dart` — Налаштування
-
-**Віджети:**
-- `mini_player.dart` — Компактний плеєр
-- `youtube_song_menu.dart` — **[NEW]** Централізоване контекстне меню
-- `square_song_card.dart` — Картка треку
-- `common_artwork.dart` — Обкладинки
-
----
-
-## Data Flow
-
-### Відтворення YouTube треку
-
-```
-User Tap → SmartPlayService → InnertubeService → AudioHandler → Player
-                ↓
-         (Single?) → Play directly
-         (Album?)  → Navigate to PlaylistTracksScreen
-```
-
-### Сканування локальної музики
-
-```
-LibraryScreen → PermissionGate → MusicFinder → MusicRepository → UI
-```
-
----
-
-## Швидкий старт
-
-```bash
-# 1. Встановити залежності
-flutter pub get
-
-# 2. Генерація коду (БД, JSON)
-dart run build_runner build --delete-conflicting-outputs
-
-# 3. Запуск
-flutter run
-```
-
----
-
-## Технічний стек
+## Tech Stack
 
 - **Framework:** Flutter (Dart)
 - **Audio:** just_audio, audio_service
-- **Database:** Drift (SQL)
-- **YouTube:** Innertube API (reverse engineered)
-- **State:** GetIt + Provider
+- **Database:** Drift (SQLite)
+- **Networking:** Dio + InnerTube API
+- **DI/State:** GetIt + Bloc
 - **Code Gen:** build_runner
 
----
+## Getting Started
 
-## Платформи
+### Prerequisites
 
-| Платформа | Статус |
-|-----------|--------|
-| Android | ✅ |
-| iOS | ✅ |
-| Windows | ✅ |
-| Linux | ✅ |
-| Web | 🔄 |
+- Flutter SDK (stable)
+- Dart (bundled with Flutter)
+- Platform SDKs (Android Studio / Xcode / Windows / Linux tooling as needed)
 
----
+### Install
 
-## Структура папок
+1) Install dependencies:
 
-```
-a_player/
-├── lib/
-│   ├── main.dart
-│   └── src/
-│       ├── core/
-│       │   ├── services/      # Бізнес-логіка
-│       │   ├── theme/         # Теми
-│       │   └── utils/         # Утиліти
-│       ├── data/
-│       │   ├── datasources/   # БД
-│       │   ├── models/        # Моделі даних
-│       │   └── repositories/  # Реалізація репозиторіїв
-│       ├── domain/
-│       │   ├── entities/      # Сутності
-│       │   └── repositories/  # Інтерфейси
-│       └── presentation/
-│           ├── pages/         # Екрани
-│           └── widgets/       # Компоненти
-├── android/
-├── ios/
-├── windows/
-├── linux/
-└── web/
+```bash
+flutter pub get
 ```
 
----
+2) Generate code:
 
-## Ліцензія
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
 
-MIT
+## Run
+
+```bash
+flutter run
+```
+
+## Build
+
+```bash
+# Android
+flutter build apk
+
+# iOS
+flutter build ios
+
+# Windows
+flutter build windows
+
+# Linux
+flutter build linux
+
+# Web
+flutter build web
+```
+
+## Configuration
+
+- **Permissions:** grant storage/audio permissions for local library scanning.
+- **YouTube Music:** sign in to access personalized recommendations and playlists.
+- **Cache:** configure max cache size and optionally enable Wi‑Fi‑only downloads.
+- **Logs:** share or send logs from Settings for debugging.
+
+## Project Structure
+
+```
+lib/src/
+├── core/           # Services, utilities, constants
+├── data/           # Database, models, repositories
+├── domain/         # Entities, repository interfaces
+└── presentation/   # UI, screens, widgets
+```
+
+## Localization
+
+Localization files are in [assets/lang](assets/lang). Add or update strings per locale to extend translations.
+
+## Troubleshooting
+
+- **No music found:** grant permissions and run **Scan Library** in Settings.
+- **YouTube not loading:** check network and sign in again.
+- **Downloads fail:** verify Wi‑Fi‑only mode and cache limits.
+
+## Contributing
+
+Issues and pull requests are welcome. Please describe the problem clearly and include logs if possible.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

@@ -407,10 +407,12 @@ class AppDatabase extends _$AppDatabase {
   }
 
   // --- RADIO STATION METHODS ---
-  Future<int> addRadioStation(String name, String streamUrl) {
+  Future<int> addRadioStation(String name, String streamUrl,
+      {String? imageUrl}) {
     return into(radioStations).insert(RadioStationsCompanion.insert(
       name: name,
       streamUrl: streamUrl,
+      imageUrl: Value(imageUrl),
     ));
   }
 
@@ -418,8 +420,17 @@ class AppDatabase extends _$AppDatabase {
     return (delete(radioStations)..where((r) => r.id.equals(id))).go();
   }
 
+  Future<bool> updateRadioStation(RadioStationsCompanion station) {
+    return update(radioStations).replace(station);
+  }
+
   Stream<List<RadioStation>> watchRadioStations() {
     return select(radioStations).watch();
+  }
+
+  Future<RadioStation?> getRadioStation(int id) {
+    return (select(radioStations)..where((r) => r.id.equals(id)))
+        .getSingleOrNull();
   }
 
   Future<List<RadioStation>> getAllRadioStations() {

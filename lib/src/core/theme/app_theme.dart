@@ -70,10 +70,35 @@ class AppTheme {
       listTileTheme: const ListTileThemeData(
         contentPadding: EdgeInsets.symmetric(horizontal: 16),
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        titleTextStyle: GoogleFonts.inter(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white : Colors.black,
+        ),
+        contentTextStyle: GoogleFonts.inter(
+          fontSize: 15,
+          height: 1.5,
+          color: isDark ? Colors.white70 : Colors.black87,
+        ),
+      ),
       // Keep default FAB behavior or override
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: colorScheme.inverseSurface,
-        contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
+        backgroundColor: surfaceColor,
+        contentTextStyle: TextStyle(
+          color: isDark ? Colors.white70 : Colors.black87,
+        ),
+        actionTextColor: colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
       ),
     );
   }

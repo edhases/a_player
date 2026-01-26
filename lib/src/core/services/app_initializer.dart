@@ -22,7 +22,11 @@ import 'sleep_timer_service.dart';
 import 'smart_play_service.dart';
 import 'telegram_service.dart';
 import 'youtube_helper.dart';
+import 'widget_service.dart';
+import 'tag_editor_service.dart';
 import 'lyrics_service.dart';
+import 'package:metadata_god/metadata_god.dart';
+import 'prefetch_manager.dart';
 
 import '../../data/datasources/app_database.dart';
 import '../../data/repositories/music_repository_impl.dart';
@@ -39,6 +43,12 @@ class AppInitializer {
 
     // 2. Initialize core services
     await _initCoreServices();
+
+    try {
+      MetadataGod.initialize();
+    } catch (e) {
+      debugPrint('[AppInitializer] MetadataGod init failed: $e');
+    }
 
     // 3. Initialize Data Layer (Database)
     final db = AppDatabase();
@@ -128,10 +138,23 @@ class AppInitializer {
     // AudioSourceFactory
     GetIt.I.registerSingleton<AudioSourceFactory>(
       AudioSourceFactory(youtubeHelper, cacheService),
+      dispose: (factory) => factory.dispose(),
+    );
+
+    // PrefetchManager
+    GetIt.I.registerSingleton<PrefetchManager>(
+      PrefetchManager(youtubeHelper, cacheService),
+      dispose: (manager) => manager.dispose(),
     );
 
     // LyricsService
     GetIt.I.registerSingleton<LyricsService>(LyricsService());
+
+    // WidgetService
+    GetIt.I.registerSingleton<WidgetService>(WidgetService());
+
+    // TagEditorService
+    GetIt.I.registerSingleton<TagEditorService>(TagEditorService());
   }
 
   static Future<void> _initAudioHandler(AppDatabase db) async {
@@ -146,8 +169,9 @@ class AppInitializer {
         metadataMatchingService: GetIt.I.isRegistered<MetadataMatchingService>()
             ? GetIt.I<MetadataMatchingService>()
             : null,
-        logService:
-            GetIt.I.isRegistered<LogService>() ? GetIt.I<LogService>() : null,
+        prefetchManager: GetIt.I<PrefetchManager>(),
+        widgetService: GetIt.I<WidgetService>(),
+        tagEditorService: GetIt.I<TagEditorService>(),
       ),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.example.oxide_player.channel.audio',

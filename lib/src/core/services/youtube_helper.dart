@@ -15,13 +15,27 @@ class YouTubeHelper {
   YouTubeHelper(this._db);
   final RateLimiter _rateLimiter = RateLimiter();
 
+  final Map<String, _CachedUrl> _urlCache = {};
+
   /// Отримати URL для потокування аудіо
   Future<String?> getAudioUrl(String videoId) async {
     try {
+      // 1. Check shared cache
+      final now = DateTime.now();
+      if (_urlCache.containsKey(videoId)) {
+        final cached = _urlCache[videoId]!;
+        if (cached.expiry.isAfter(now)) {
+          debugPrint('[YouTubeHelper] using shared cached URL for: $videoId');
+          return cached.url;
+        } else {
+          _urlCache.remove(videoId);
+        }
+      }
+
       await _rateLimiter.throttle();
       debugPrint('[YouTubeHelper] Getting audio URL for: $videoId');
 
-      // Отримати маніфест потоків з multi-client strategy
+      // 2. Fetch from YouTube
       final manifest = await _yt.videos.streams.getManifest(
         videoId,
         ytClients: [
@@ -31,11 +45,21 @@ class YouTubeHelper {
         ],
       );
 
-      // Вибрати найкращий аудіопотік за бітрейтом
       final audioStream = manifest.audioOnly.withHighestBitrate();
+      final url = audioStream.url.toString();
+
       debugPrint(
           '[YouTubeHelper] Found audio stream: ${audioStream.bitrate} bps');
-      return audioStream.url.toString();
+
+      // 3. Save to cache (default TTL 1 hour or stream expiry if parseable)
+      // YouTube URLs usually have 'expire' param, but a safe default is good.
+      _urlCache[videoId] = _CachedUrl(
+        url: url,
+        expiry: now
+            .add(const Duration(minutes: 45)), // slightly less than typical 1h
+      );
+
+      return url;
     } catch (e) {
       debugPrint('[YouTubeHelper] Error getting audio URL: $e');
       return null;
@@ -297,6 +321,7 @@ class YouTubeHelper {
     Duration? customDuration,
     String? customThumbnail,
     Map<String, dynamic>? extras,
+    String? cachedUrl, // New parameter
   }) async {
     try {
       // Спочатку перевірити кеш
@@ -350,6 +375,7 @@ class YouTubeHelper {
         'isOnline': localPath == null,
         'videoId': videoId,
         'user_agent': desktopUA,
+        'cachedUrl': cachedUrl, // Ensure cachedUrl is passed to extras
       };
 
       if (extras != null) {
@@ -373,4 +399,11 @@ class YouTubeHelper {
       );
     }
   }
+}
+
+class _CachedUrl {
+  final String url;
+  final DateTime expiry;
+
+  _CachedUrl({required this.url, required this.expiry});
 }

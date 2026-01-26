@@ -172,11 +172,10 @@ class InnerTubeService {
       if (results.isNotEmpty) {
         return Result.success(results);
       }
-      debugPrint(
-          '[InnerTube] Android Music search with filter returned empty. Trying fallback...');
+      // debugPrint('[InnerTube] Android Music search with filter returned empty. Trying fallback...');
     } catch (e) {
-      debugPrint(
-          '[InnerTube] Android Music filter search failed: $e. Trying fallback...');
+      // Ignored: Expected fallback behavior for some contexts
+      // debugPrint('[InnerTube] Android Music filter search failed: $e. Trying fallback...');
     }
 
     // Strategy 2: Fallback to broad search (Top Results) with ANDROID_MUSIC
@@ -511,6 +510,8 @@ class InnerTubeService {
     return _googleAuthService.isSignedIn();
   }
 
+  bool _hasFallbackMode = false;
+
   Future<Result<List<Map<String, dynamic>>>> getHomeData() async {
     try {
       // Check if user is logged in to determine whether to bypass cache
@@ -537,6 +538,13 @@ class InnerTubeService {
       _logger.i(
           '[InnerTubeService] Fetching fresh home data (cache bypassed for logged-in user).');
 
+      // Optimization: If earlier requests failed with 400, skip directly to fallback
+      if (_hasFallbackMode) {
+        _logger.w(
+            '[InnerTube] Fallback mode active. Skipping ANDROID_MUSIC and going to WEB_REMIX.');
+        return await _getHomeDataWebFallback();
+      }
+
       // Use ANDROID_MUSIC context like the legacy implementation
       final body = _androidContextBody();
       body['browseId'] = "FEmusic_home";
@@ -554,6 +562,14 @@ class InnerTubeService {
         return await _getHomeDataWebFallback();
       }
     } catch (e) {
+      // If ANDROID_MUSIC failed, enable fallback mode for future requests
+      if (e is DioException && e.response?.statusCode == 400) {
+        _hasFallbackMode = true;
+        // Downgraded to debug to reduce noise as this is handled behavior
+        debugPrint(
+            '[InnerTube] ANDROID_MUSIC 400 Error. Fallback mode ENABLED for session.');
+        return await _getHomeDataWebFallback();
+      }
       _logger.e('InnerTube getHomeData Error (ANDROID_MUSIC)', error: e);
       _logger.i('[InnerTube] Trying WEB_REMIX fallback after error...');
       return await _getHomeDataWebFallback();
@@ -1769,21 +1785,20 @@ class InnerTubeService {
           }
         }
       }
-
       if (duration == 0) {
-        debugPrint(
-            '[InnerTube] WARNING: Duration is 0 for $videoId ($title). Raw lengthText: $lengthText');
-        debugPrint('[InnerTube] Keys: ${mrlir.keys.toList()}');
-        if (subtitleRuns != null) {
-          debugPrint(
-              '[InnerTube] Subtitle runs: ${subtitleRuns.map((r) => r['text']).toList()}');
-        }
-        if (mrlir['fixedColumns'] != null) {
-          debugPrint(
-              '[InnerTube] Fixed Columns found (potential duration source).');
-        }
+        // debugPrint(
+        //     '[InnerTube] WARNING: Duration is 0 for $videoId ($title). Raw lengthText: $lengthText');
+        // debugPrint('[InnerTube] Keys: ${mrlir.keys.toList()}');
+        // if (subtitleRuns != null) {
+        //   debugPrint(
+        //       '[InnerTube] Subtitle runs: ${subtitleRuns.map((r) => r['text']).toList()}');
+        // }
+        // if (mrlir['fixedColumns'] != null) {
+        //   debugPrint(
+        //       '[InnerTube] Fixed Columns found (potential duration source).');
+        // }
       } else {
-        debugPrint('[InnerTube] Parsed duration: $duration s for $videoId');
+        // debugPrint('[InnerTube] Parsed duration: $duration s for $videoId');
       }
 
       final isPlaylist =

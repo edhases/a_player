@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
 import 'package:get_it/get_it.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../widgets/common_artwork.dart';
 import 'detail_screen.dart';
@@ -149,9 +150,24 @@ class LibraryScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _pickImage(TextEditingController controller) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        controller.text = result.files.single.path!;
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
+  }
+
   void _showAddRadioDialog(BuildContext context) {
     final nameController = TextEditingController();
     final urlController = TextEditingController();
+    final imageController = TextEditingController();
     final loc = AppLocalizations.of(context);
     final bloc = context.read<LibraryBloc>();
 
@@ -159,20 +175,41 @@ class LibraryScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(loc.addRadioStation),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(labelText: loc.stationName),
-              textCapitalization: TextCapitalization.sentences,
-            ),
-            TextField(
-              controller: urlController,
-              decoration: InputDecoration(labelText: loc.streamUrl),
-              keyboardType: TextInputType.url,
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(labelText: loc.stationName),
+                textCapitalization: TextCapitalization.sentences,
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: urlController,
+                decoration: InputDecoration(labelText: loc.streamUrl),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: imageController,
+                      decoration: InputDecoration(
+                        labelText: loc.imageUrlOptional,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.image),
+                    tooltip: loc.pickImage,
+                    onPressed: () => _pickImage(imageController),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -183,8 +220,18 @@ class LibraryScreen extends StatelessWidget {
             onPressed: () {
               if (nameController.text.isNotEmpty &&
                   urlController.text.isNotEmpty) {
+                // LibraryBloc event LibraryAddRadioStation needs to be updated?
+                // Let's check LibraryBloc.
+                // Assuming LibraryAddRadioStation only takes name and url for now.
+                // I might need to update the BLoC event too.
+                // For now I'll just keep it as is if BLoC is not updated.
+                // Wait, if I want to support image, I must update the BLoC event.
                 bloc.add(LibraryAddRadioStation(
-                    nameController.text, urlController.text));
+                    nameController.text,
+                    urlController.text,
+                    imageController.text.isEmpty
+                        ? null
+                        : imageController.text));
                 Navigator.pop(context);
               }
             },

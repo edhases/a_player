@@ -46,7 +46,6 @@ dependencies:
   path: ^1.9.0
   flutter_cache_manager: ^3.3.1
   share_plus: ^12.0.1
-  # audiotagger: ^2.2.1 
 
   # YouTube Integration
   dio: ^5.4.0
@@ -59,8 +58,10 @@ dependencies:
     sdk: flutter
   equatable: ^2.0.8
   package_info_plus: ^9.0.0
+  archive: ^4.0.4
   url_launcher: ^6.3.2
   home_widget: ^0.9.0
+  metadata_god: ^1.1.0
 
 dev_dependencies:
   flutter_test:

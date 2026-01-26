@@ -23,6 +23,8 @@ import 'cached_tracks_screen.dart';
 import 'equalizer_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/services/data_management_service.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -47,6 +49,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() {
           _cacheUsage = usage;
         });
+      }
+    }
+  }
+
+  Future<void> _checkPermissions(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final Map<String, PermissionStatus> statuses = {};
+
+    // Determine Android SDK level
+    int sdkInt = 0;
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      sdkInt = androidInfo.version.sdkInt;
+    }
+
+    final List<Permission> permissions = [
+      Permission.notification,
+    ];
+
+    if (Platform.isAndroid) {
+      if (sdkInt >= 30) {
+        permissions.add(Permission.manageExternalStorage);
+      }
+
+      if (sdkInt >= 33) {
+        permissions.add(Permission.audio);
+      } else {
+        if (sdkInt < 30) {
+          permissions.add(Permission.storage);
+        }
+        if (!permissions.contains(Permission.manageExternalStorage)) {
+          permissions.add(Permission.storage);
+        }
+      }
+    }
+
+    bool allGranted = true;
+    bool requestNeeded = false;
+
+    for (final perm in permissions) {
+      final status = await perm.status;
+      statuses[perm.toString()] = status;
+      if (!status.isGranted) {
+        allGranted = false;
+        if (!status.isPermanentlyDenied) {
+          requestNeeded = true;
+        }
+      }
+    }
+
+    if (allGranted) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(loc.allPermissionsGranted),
+              backgroundColor: Colors.green),
+        );
+      }
+      return;
+    }
+
+    if (requestNeeded) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(loc.requestingPermissions)),
+        );
+      }
+
+      Map<Permission, PermissionStatus> result = await permissions.request();
+
+      // Re-verify
+      bool nowGranted = true;
+      result.forEach((key, value) {
+        if (!value.isGranted) nowGranted = false;
+      });
+
+      if (context.mounted) {
+        if (nowGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(loc.permissionsGranted),
+                backgroundColor: Colors.green),
+          );
+        } else {
+          final denied = result.entries
+              .where((e) => !e.value.isGranted)
+              .map((e) => e.key.toString())
+              .join(', ');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text(loc.translate('denied', args: {'permissions': denied})),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(
+                label: loc.settingsBtn,
+                textColor: Colors.white,
+                onPressed: () => openAppSettings(),
+              ),
+            ),
+          );
+        }
+      }
+    } else {
+      if (context.mounted) {
+        showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+                  title: Text(loc.permissionsRequired),
+                  content: Text(loc.permissionsPermanentlyDenied),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(loc.cancel)),
+                    TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          openAppSettings();
+                        },
+                        child: Text(loc.openSettings)),
+                  ],
+                ));
       }
     }
   }
@@ -253,120 +377,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
-          // Cache Section
-          _buildSectionHeader(context, loc.cache),
-          StatefulBuilder(builder: (context, setState) {
-            final currentSize = settingsService.loadMaxCacheSize();
-            return Column(
-              children: [
-                ListTile(
-                  title: Text(loc.maxCacheSize),
-                  subtitle: Text(loc.translate('cache_usage', args: {
-                    'used': _formatBytes(_cacheUsage),
-                    'total': _formatBytes(currentSize)
-                  })),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Slider(
-                    value: currentSize.toDouble(),
-                    min: 512 * 1024 * 1024,
-                    max: 24 * 1024 * 1024 * 1024,
-                    divisions: 47,
-                    label: _formatBytes(currentSize),
-                    onChanged: (val) {
-                      final newSize = val.toInt();
-                      settingsService.saveMaxCacheSize(newSize);
-                      if (GetIt.I.isRegistered<CacheService>()) {
-                        GetIt.I<CacheService>().setMaxCacheSize(newSize);
-                      }
-                      setState(() {});
-                    },
-                    onChangeEnd: (_) => _loadCacheUsage(),
+          // YouTube Section
+          _buildSectionHeader(context, loc.youtube),
+          FutureBuilder<bool>(
+            future: authService.isSignedIn(),
+            builder: (context, snapshot) {
+              final isSignedIn = snapshot.data ?? false;
+              return Column(
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      isSignedIn ? Icons.check_circle : Icons.cancel,
+                      color: isSignedIn ? Colors.green : Colors.red,
+                    ),
+                    title: Text(isSignedIn ? loc.signedIn : loc.notSignedIn),
+                    subtitle: Text(loc.personalizedRecommendations),
                   ),
-                ),
-                ListTile(
-                  title: Text(loc.viewCachedTracks),
-                  subtitle: Text(loc.showDownloadedSongs),
-                  trailing: const Icon(Icons.queue_music),
-                  onTap: () {
-                    Navigator.of(context)
-                        .push(MaterialPageRoute(
-                            builder: (_) => const CachedTracksScreen()))
-                        .then((_) => _loadCacheUsage());
-                  },
-                ),
-              ],
-            );
-          }),
-          ListTile(
-              title: Text(loc.clearCache),
-              subtitle: Text(loc.clearCacheDesc),
-              trailing: const Icon(Icons.delete_forever),
-              onTap: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(loc.clearCache),
-                    content: Text(loc.clearCacheConfirm),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(loc.cancel),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(loc.clear),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirmed == true && context.mounted) {
-                  if (GetIt.I.isRegistered<CacheService>()) {
-                    await GetIt.I<CacheService>().clearCache();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(loc.cacheCleared)),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(loc.cacheServiceUnavailable)),
-                    );
-                  }
-                }
-              }),
-
-          const Divider(),
-
-          // Language Section
-          _buildSectionHeader(context, loc.language),
-          BlocBuilder<SettingsBloc, SettingsState>(
-            builder: (context, state) {
-              return ListTile(
-                leading: const Icon(Icons.language),
-                title: Text(_getLanguageName(state.locale.languageCode)),
-                subtitle: Text(loc.language),
-                trailing: DropdownButton<String>(
-                  value: state.locale.languageCode,
-                  items: [
-                    DropdownMenuItem(value: 'en', child: Text('English')),
-                    DropdownMenuItem(value: 'uk', child: Text('Українська')),
-                    DropdownMenuItem(value: 'de', child: Text('Deutsch')),
-                    DropdownMenuItem(value: 'pl', child: Text('Polski')),
-                    DropdownMenuItem(value: 'es', child: Text('Español')),
-                    DropdownMenuItem(value: 'ja', child: Text('日本語')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      context
-                          .read<SettingsBloc>()
-                          .add(ChangeLocale(Locale(value)));
-                    }
-                  },
-                  underline: const SizedBox(),
-                ),
+                  if (isSignedIn)
+                    ListTile(
+                      leading: const Icon(Icons.refresh),
+                      title: Text(loc.reauth),
+                      subtitle: Text(loc.reauthDesc),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        final success = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const WebViewLoginScreen(),
+                          ),
+                        );
+                        if (success == true && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(loc.cookiesUpdated),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          setState(() {}); // Refresh the UI
+                        }
+                      },
+                    ),
+                ],
               );
             },
           ),
@@ -468,6 +519,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
 
+          // Language Section
+          _buildSectionHeader(context, loc.language),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, state) {
+              return ListTile(
+                leading: const Icon(Icons.language),
+                title: Text(_getLanguageName(state.locale.languageCode)),
+                subtitle: Text(loc.language),
+                trailing: DropdownButton<String>(
+                  value: state.locale.languageCode,
+                  items: [
+                    DropdownMenuItem(value: 'en', child: Text('English')),
+                    DropdownMenuItem(value: 'uk', child: Text('Українська')),
+                    DropdownMenuItem(value: 'de', child: Text('Deutsch')),
+                    DropdownMenuItem(value: 'pl', child: Text('Polski')),
+                    DropdownMenuItem(value: 'es', child: Text('Español')),
+                    DropdownMenuItem(value: 'ja', child: Text('日本語')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      context
+                          .read<SettingsBloc>()
+                          .add(ChangeLocale(Locale(value)));
+                    }
+                  },
+                  underline: const SizedBox(),
+                ),
+              );
+            },
+          ),
+
           const Divider(),
 
           // Playback Section
@@ -490,6 +572,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
+          // Cache Section
+          _buildSectionHeader(context, loc.cache),
+          StatefulBuilder(builder: (context, setState) {
+            final currentSize = settingsService.loadMaxCacheSize();
+            return Column(
+              children: [
+                ListTile(
+                  title: Text(loc.maxCacheSize),
+                  subtitle: Text(loc.translate('cache_usage', args: {
+                    'used': _formatBytes(_cacheUsage),
+                    'total': _formatBytes(currentSize)
+                  })),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Slider(
+                    value: currentSize.toDouble(),
+                    min: 512 * 1024 * 1024,
+                    max: 24 * 1024 * 1024 * 1024,
+                    divisions: 47,
+                    label: _formatBytes(currentSize),
+                    onChanged: (val) {
+                      final newSize = val.toInt();
+                      settingsService.saveMaxCacheSize(newSize);
+                      if (GetIt.I.isRegistered<CacheService>()) {
+                        GetIt.I<CacheService>().setMaxCacheSize(newSize);
+                      }
+                      setState(() {});
+                    },
+                    onChangeEnd: (_) => _loadCacheUsage(),
+                  ),
+                ),
+                ListTile(
+                  title: Text(loc.viewCachedTracks),
+                  subtitle: Text(loc.showDownloadedSongs),
+                  trailing: const Icon(Icons.queue_music),
+                  onTap: () {
+                    Navigator.of(context)
+                        .push(MaterialPageRoute(
+                            builder: (_) => const CachedTracksScreen()))
+                        .then((_) => _loadCacheUsage());
+                  },
+                ),
+              ],
+            );
+          }),
+          ListTile(
+              title: Text(loc.clearCache),
+              subtitle: Text(loc.clearCacheDesc),
+              trailing: const Icon(Icons.delete_forever),
+              onTap: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text(loc.clearCache),
+                    content: Text(loc.clearCacheConfirm),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(loc.cancel),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(loc.clear),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed == true && context.mounted) {
+                  if (GetIt.I.isRegistered<CacheService>()) {
+                    await GetIt.I<CacheService>().clearCache();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(loc.cacheCleared)),
+                      );
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(loc.cacheServiceUnavailable)),
+                    );
+                  }
+                }
+              }),
+
+          const Divider(),
+
           // Network Section
           _buildSectionHeader(context, loc.translate('network')),
           BlocBuilder<SettingsBloc, SettingsState>(
@@ -508,158 +677,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
-          // YouTube Section
-          _buildSectionHeader(context, loc.youtube),
-          FutureBuilder<bool>(
-            future: authService.isSignedIn(),
-            builder: (context, snapshot) {
-              final isSignedIn = snapshot.data ?? false;
-              return Column(
-                children: [
-                  ListTile(
-                    leading: Icon(
-                      isSignedIn ? Icons.check_circle : Icons.cancel,
-                      color: isSignedIn ? Colors.green : Colors.red,
-                    ),
-                    title: Text(isSignedIn ? loc.signedIn : loc.notSignedIn),
-                    subtitle: Text(loc.personalizedRecommendations),
-                  ),
-                  if (isSignedIn)
-                    ListTile(
-                      leading: const Icon(Icons.refresh),
-                      title: Text(loc.reauth),
-                      subtitle: Text(loc.reauthDesc),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        final success = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const WebViewLoginScreen(),
-                          ),
-                        );
-                        if (success == true && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(loc.cookiesUpdated),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                          setState(() {}); // Refresh the UI
-                        }
-                      },
-                    ),
-                ],
-              );
-            },
-          ),
-
-          const Divider(),
-
-          // Logs Section
-          _buildSectionHeader(context, loc.logs),
-          BlocBuilder<SettingsBloc, SettingsState>(
-            builder: (context, state) {
-              return Column(
-                children: [
-                  ListTile(
-                    title: Text(loc.translate('log_history_size')),
-                    subtitle: Text(state.maxLogSize == 0
-                        ? loc.translate('disabled_not_recommended')
-                        : _formatBytes(state.maxLogSize)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Slider(
-                      value: state.maxLogSize.toDouble(),
-                      min: 0,
-                      max: 50 * 1024 * 1024, // 50 MB
-                      divisions: 50,
-                      label: state.maxLogSize == 0
-                          ? loc.off
-                          : _formatBytes(state.maxLogSize),
-                      onChanged: (val) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(ChangeMaxLogSize(val.toInt()));
-                      },
-                      onChangeEnd: (val) {
-                        final sizeMB = val / (1024 * 1024);
-                        if (val == 0) {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title:
-                                  Text(loc.translate('logging_disabled_title')),
-                              content:
-                                  Text(loc.translate('logging_disabled_desc')),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: Text(loc.ok),
-                                ),
-                              ],
-                            ),
-                          );
-                        } else if (sizeMB > 0 && sizeMB <= 5) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(loc.translate('more_logs_needed')),
-                              duration: const Duration(seconds: 4),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+          // System Section
+          _buildSectionHeader(context, loc.system),
           ListTile(
-            leading: const Icon(Icons.send),
-            title: Text(loc.sendLogs),
-            subtitle: Text(loc.sendLogsDesc),
+            leading: const Icon(Icons.security),
+            title: Text(loc.checkPermissions),
+            subtitle: Text(loc.checkPermissionsDesc),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              if (!GetIt.I.isRegistered<TelegramService>()) return;
-
-              final success = await GetIt.I<TelegramService>().sendLogs();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content:
-                          Text(success ? loc.logsSent : loc.logsSendFailed)),
-                );
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.share),
-            title: Text(loc.shareLogs),
-            subtitle: Text(loc.shareLogsDesc),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              if (!GetIt.I.isRegistered<LogService>()) return;
-              final file = await GetIt.I<LogService>().getLogFile();
-              if (file != null && context.mounted) {
-                await Share.shareXFiles([XFile(file.path)],
-                    text: 'Oxide Player Logs');
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_outline),
-            title: Text(loc.clearLogs),
-            subtitle: Text(loc.clearLogsDesc),
-            onTap: () async {
-              if (!GetIt.I.isRegistered<LogService>()) return;
-              await GetIt.I<LogService>().clearLogs();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(loc.logsCleared)),
-                );
-              }
-            },
+            onTap: () => _checkPermissions(context),
           ),
 
           const Divider(),
@@ -752,12 +777,113 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
+          // Logs Section
+          _buildSectionHeader(context, loc.logs),
+          BlocBuilder<SettingsBloc, SettingsState>(
+            builder: (context, state) {
+              return Column(
+                children: [
+                  ListTile(
+                    title: Text(loc.translate('log_history_size')),
+                    subtitle: Text(state.maxLogSize == 0
+                        ? loc.translate('disabled_not_recommended')
+                        : _formatBytes(state.maxLogSize)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Slider(
+                      value: state.maxLogSize.toDouble(),
+                      min: 0,
+                      max: 50 * 1024 * 1024, // 50 MB
+                      divisions: 50,
+                      label: state.maxLogSize == 0
+                          ? loc.off
+                          : _formatBytes(state.maxLogSize),
+                      onChanged: (val) {
+                        context
+                            .read<SettingsBloc>()
+                            .add(ChangeMaxLogSize(val.toInt()));
+                      },
+                      onChangeEnd: (val) {
+                        final sizeMB = val / (1024 * 1024);
+                        if (val == 0) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title:
+                                  Text(loc.translate('logging_disabled_title')),
+                              content:
+                                  Text(loc.translate('logging_disabled_desc')),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: Text(loc.ok),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else if (sizeMB > 0 && sizeMB <= 5) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(loc.translate('more_logs_needed')),
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.send),
+            title: Text(loc.sendLogs),
+            subtitle: Text(loc.sendLogsDesc),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              if (!GetIt.I.isRegistered<TelegramService>()) return;
+              _showBugReportDialog(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.share),
+            title: Text(loc.shareLogs),
+            subtitle: Text(loc.shareLogsDesc),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              if (!GetIt.I.isRegistered<LogService>()) return;
+              final file = await GetIt.I<LogService>().getLogFile();
+              if (file != null && context.mounted) {
+                await Share.shareXFiles([XFile(file.path)],
+                    text: 'Oxide Player Logs');
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: Text(loc.clearLogs),
+            subtitle: Text(loc.clearLogsDesc),
+            onTap: () async {
+              if (!GetIt.I.isRegistered<LogService>()) return;
+              await GetIt.I<LogService>().clearLogs();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(loc.logsCleared)),
+                );
+              }
+            },
+          ),
+
+          const Divider(),
+
           // About Section
           _buildSectionHeader(context, loc.about),
           ListTile(
             leading: const Icon(Icons.menu_book),
             title: Text(loc.manualTitle),
-            subtitle: const Text('Detailed guide & help'),
+            subtitle: Text(loc.detailedGuide),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.of(context).push(
@@ -814,6 +940,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
           color: Theme.of(context).colorScheme.primary,
           letterSpacing: 1.2,
         ),
+      ),
+    );
+  }
+
+  void _showBugReportDialog(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final emailController = TextEditingController();
+    final problemController = TextEditingController();
+    final descriptionController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.sendLogs),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  labelText: loc.emailOptional,
+                  hintText: 'name@example.com',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: problemController,
+                decoration: InputDecoration(
+                  labelText: loc.problem,
+                  hintText: 'Short title',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: descriptionController,
+                decoration: InputDecoration(
+                  labelText: loc.description,
+                  hintText: 'What happened?',
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(loc.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final email = emailController.text.trim();
+              final problem = problemController.text.trim();
+              final description = descriptionController.text.trim();
+
+              if (problem.isEmpty || description.isEmpty) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text('Please fill in Problem and Description')),
+                  );
+                }
+                return;
+              }
+
+              if (GetIt.I.isRegistered<TelegramService>() &&
+                  GetIt.I.isRegistered<LogService>()) {
+                final logService = GetIt.I<LogService>();
+                final deviceInfo = await logService.getDeviceInfoSummary();
+
+                final caption =
+                    '<b>Email:</b> ${email.isEmpty ? "N/A" : email}\n'
+                    '<b>Problem:</b> $problem\n'
+                    '<b>Description:</b> $description\n'
+                    '<b>Device:</b> $deviceInfo';
+
+                final success =
+                    await GetIt.I<TelegramService>().sendLogs(caption: caption);
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content:
+                            Text(success ? loc.logsSent : loc.logsSendFailed)),
+                  );
+                }
+              }
+            },
+            child: Text(loc.sendLogs),
+          ),
+        ],
       ),
     );
   }

@@ -36,8 +36,9 @@ class LibraryDeleteRadioStation extends LibraryEvent {
 class LibraryAddRadioStation extends LibraryEvent {
   final String name;
   final String url;
-  const LibraryAddRadioStation(this.name, this.url);
+  final String? imageUrl;
+  const LibraryAddRadioStation(this.name, this.url, [this.imageUrl]);
 
   @override
-  List<Object> get props => [name, url];
+  List<Object?> get props => [name, url, imageUrl];
 }

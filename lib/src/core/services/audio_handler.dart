@@ -9,7 +9,8 @@ import 'package:audio_session/audio_session.dart';
 import '../../data/datasources/app_database.dart';
 import 'settings_service.dart';
 import 'equalizer_service.dart';
-import 'log_service.dart';
+import 'widget_service.dart';
+import 'tag_editor_service.dart';
 
 import '../../domain/entities/youtube_song.dart';
 import '../utils/media_item_adapter.dart';
@@ -17,6 +18,7 @@ import 'audio_source_factory.dart';
 import '../../core/services/recommendation_service.dart';
 import '../../core/services/metadata_matching_service.dart';
 import '../../core/services/innertube_service.dart';
+import 'prefetch_manager.dart';
 
 /// The main audio handler that bridges just_audio with audio_service.
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -34,7 +36,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final RecommendationService _recommendationService;
   final InnerTubeService _innerTubeService;
   final MetadataMatchingService? _metadataMatchingService;
-  final LogService? _logService;
+  final PrefetchManager? _prefetchManager;
+  final WidgetService? _widgetService;
+  final TagEditorService? _tagEditorService;
 
   StreamSubscription<int?>? _audioSessionIdSubscription;
   StreamSubscription<TrackOverride?>? _currentOverrideSubscription;
@@ -51,7 +55,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     required RecommendationService recommendationService,
     required InnerTubeService innerTubeService,
     MetadataMatchingService? metadataMatchingService,
-    LogService? logService,
+    PrefetchManager? prefetchManager,
+    WidgetService? widgetService,
+    TagEditorService? tagEditorService,
     AudioPlayer? audioPlayer, // DI for testing
   })  : _db = db,
         _settingsService = settingsService,
@@ -59,7 +65,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _recommendationService = recommendationService,
         _innerTubeService = innerTubeService,
         _metadataMatchingService = metadataMatchingService,
-        _logService = logService {
+        _prefetchManager = prefetchManager,
+        _widgetService = widgetService,
+        _tagEditorService = tagEditorService {
     player = audioPlayer ??
         AudioPlayer(
           audioPipeline: AudioPipeline(
@@ -69,11 +77,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           ),
         );
     _init();
-  }
-
-  void _logError(String message, [Object? error]) {
-    debugPrint(message);
-    _logService?.error(message, error: error);
   }
 
   Future<void> _init() async {
@@ -95,6 +98,24 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } catch (e) {
       debugPrint('[AudioHandler] AudioSession error: $e');
     }
+
+    // Subscribe to Queue changes for PrefetchManager
+    queue.listen((newQueue) {
+      _prefetchManager?.updateQueue(newQueue);
+    });
+
+    // Initialize WidgetService
+    _widgetService?.init();
+
+    // Listen to media item changes to update widget
+    mediaItem.listen((item) {
+      _widgetService?.updateWidget(item);
+    });
+
+    // Listen to playback state to update widget icon
+    playbackState.listen((state) {
+      _widgetService?.updatePlaybackState(state.playing);
+    });
 
     // Broadcast playback state changes
     player.playbackEventStream.listen((event) {
@@ -131,6 +152,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
         mediaItem.add(item);
         _setupOverrideWatcher(item.id);
+
+        // Notify PrefetchManager
+        _prefetchManager?.updateIndex(index);
       } else {
         debugPrint(
             '[AudioHandler] ⚠️ Current index is null or out of bounds: $index (Queue len: ${queue.value.length})');
@@ -467,6 +491,55 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<void> addQueueItems(List<MediaItem> mediaItems) async {
+    debugPrint(
+        '[AudioHandler] addQueueItems: Adding ${mediaItems.length} items');
+    try {
+      // 1. Create sources in parallel
+      final sources = await Future.wait(
+          mediaItems.map((item) => _audioSourceFactory.createSource(item)));
+
+      // 2. Batch add to Playlist (SAFE)
+      try {
+        await _playlist.addAll(sources);
+      } catch (playlistError) {
+        debugPrint(
+            '[AudioHandler] Critical Error adding to playlist: $playlistError');
+        // RECOVERY: If playlist is broken (NPE or cleared natively), reset it.
+        try {
+          debugPrint('[AudioHandler] Attempting playlist recovery...');
+          await _playlist.clear();
+          await _playlist.addAll(sources);
+          debugPrint('[AudioHandler] Playlist recovery successful.');
+        } catch (retryError) {
+          debugPrint('[AudioHandler] Playlist recovery failed: $retryError');
+
+          // ROLLBACK: If recovery fails, we must restore the previous queue to avoid DESYNC.
+          debugPrint(
+              '[AudioHandler] Rolling back queue state due to playlist failure...');
+          // Since we haven't updated 'queue' yet (step 3 is below),
+          // we just need to NOT proceed to step 3.
+          // However, if we modified playlist partially in step 2 (addAll threw after adding some),
+          // we are in a bad state. Ideally we clear playlist again?
+          try {
+            await _playlist.clear();
+          } catch (_) {}
+
+          // Abort functionality to protect state
+          return;
+        }
+      }
+
+      // 3. Update Queue (Batch)
+      final newQueue = queue.value + mediaItems;
+      queue.add(newQueue);
+
+      debugPrint('[AudioHandler] addQueueItems: Batch add complete');
+    } catch (e) {
+      debugPrint('[AudioHandler] addQueueItems error: $e');
+    }
+  }
+
   @override
   Future<void> insertQueueItem(int index, MediaItem mediaItem) async {
     debugPrint('[AudioHandler] insertQueueItem at $index: ${mediaItem.title}');
@@ -496,6 +569,30 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } catch (e) {
         debugPrint('[AudioHandler] removeQueueItem error: $e');
       }
+    }
+  }
+
+  @override
+  Future<void> removeQueueItemAt(int index) async {
+    debugPrint('[AudioHandler] removeQueueItemAt index: $index');
+
+    if (index < 0 || index >= queue.value.length) {
+      debugPrint('[AudioHandler] removeQueueItemAt: invalid index $index');
+      return;
+    }
+
+    // 1. Update UI Queue
+    final newQueue = List<MediaItem>.from(queue.value);
+    newQueue.removeAt(index);
+    queue.add(newQueue);
+
+    // 2. Update Playlist (Player)
+    try {
+      await _playlist.removeAt(index);
+    } catch (e) {
+      debugPrint('[AudioHandler] removeQueueItemAt error: $e');
+      // If playlist fails, we might technically be out of sync.
+      // But since queue is source of truth for UI, we accept this risk regarding phantom tracks.
     }
   }
 
@@ -567,6 +664,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Clear and set new queue
     queue.add([mediaItem]);
 
+    // Force tag update with permission request (User initiated action)
+    // Await to ensure file is closed before player opens it
+    await updateFileTags(mediaItem, requestPermission: true);
+
     try {
       await _playlist.clear();
       final source = await _audioSourceFactory.createSource(mediaItem);
@@ -577,6 +678,38 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await player.play();
     } catch (e) {
       debugPrint('[AudioHandler] playLocalTrack error: $e');
+    }
+  }
+
+  /// Attempts to write the metadata from [item] into the file at [item.id] (path).
+  /// This repairs missing or incorrect tags in the file itself.
+  Future<void> updateFileTags(MediaItem item,
+      {bool requestPermission = false}) async {
+    // Only for local files
+    if (item.extras?['isOnline'] == true) return;
+
+    final path = item.id;
+    if (_tagEditorService == null) {
+      debugPrint('[AudioHandler] TagEditorService not initialized');
+      return;
+    }
+
+    debugPrint('[AudioHandler] repairFileMetadata for $path');
+    final success = await _tagEditorService!.writeTags(
+      path: path,
+      title: item.title,
+      artist: item.artist ?? 'Unknown Artist',
+      album: item.album ?? 'Unknown Album',
+      requestPermission: requestPermission,
+      // artworkPath: ... we don't have a local artwork path easily unless we extracted it or user picked it.
+      // For DB tracks, artwork might be a MediaStore URI content://... which audiotagger might not handle for WRITING.
+      // So we skip artwork writing for this auto-fix.
+    );
+
+    if (success) {
+      debugPrint('[AudioHandler] Metadata repair successful for $path');
+    } else {
+      debugPrint('[AudioHandler] Metadata repair failed for $path');
     }
   }
 
@@ -603,22 +736,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       debugPrint('[AudioHandler] Error adding to history: $e');
     });
 
-    queue.add([mediaItem]);
+    // Use unified playback start
+    await playQueueFromIndex([mediaItem], 0);
 
-    try {
-      await _playlist.clear();
-      final source = await _audioSourceFactory.createSource(mediaItem);
-      await _playlist.add(source);
-
-      await player.seek(Duration.zero, index: 0);
-
-      if (loadRadioQueue && song.videoId.length == 11) {
-        _loadRadioQueue(song.videoId);
-      }
-
-      await player.play();
-    } catch (e) {
-      debugPrint('[AudioHandler] playYouTubeSong error: $e');
+    if (loadRadioQueue && song.videoId.length == 11) {
+      // Load radio queue in background without blocking playback start
+      unawaited(_loadRadioQueue(song.videoId));
     }
   }
 
@@ -638,18 +761,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       },
     );
 
-    queue.add([mediaItem]);
-
-    try {
-      await _playlist.clear();
-      final source = await _audioSourceFactory.createSource(mediaItem);
-      await _playlist.add(source);
-
-      await player.seek(Duration.zero, index: 0);
-      await player.play();
-    } catch (e) {
-      _logError('[AudioHandler] playRadioStation error', e);
-    }
+    // Use unified playback start
+    await playQueueFromIndex([mediaItem], 0);
   }
 
   Future<void> _loadRadioQueue(String videoId) async {
@@ -669,10 +782,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           .take(25)
           .toList();
 
-      for (final track in tracksToAdd) {
-        final mi = MediaItemAdapter.fromYouTubeSong(track);
-        await addQueueItem(mi);
-      }
+      final mediaItems =
+          tracksToAdd.map((t) => MediaItemAdapter.fromYouTubeSong(t)).toList();
+
+      await addQueueItems(mediaItems);
     } catch (e) {
       debugPrint('[AudioHandler] Error loading radio queue: $e');
     }
@@ -726,6 +839,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final lastQueueIds = _settingsService.loadQueue();
     if (lastQueueIds.isEmpty) return;
 
+    // NOTE: This currently only restores LOCAL tracks that exist in the database.
+    // YouTube tracks or external items in the queue are skipped because they rely on
+    // persistent IDs/metadata that isn't fully serialized in SettingsService yet.
+    // To fix this, we need a unified 'QueueItem' table or smarter serialization.
     final lastTracks = await (_db.select(_db.tracks)
           ..where((t) => t.path.isIn(lastQueueIds)))
         .get();

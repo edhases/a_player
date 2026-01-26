@@ -74,12 +74,27 @@ class CacheService {
     final finalPath = p.join(cacheDir.path, '$videoId.mp3');
 
     // Check space
-    await checkCacheSpace(10 * 1024 * 1024);
+    // await checkCacheSpace(10 * 1024 * 1024); // Removed fixed size check
 
     try {
-      await _dio.download(url, tempPath);
+      bool spaceChecked = false;
+      await _dio.download(
+        url,
+        tempPath,
+        onReceiveProgress: (received, total) async {
+          if (!spaceChecked && total > 0) {
+            spaceChecked = true;
+            await checkCacheSpace(total);
+          }
+        },
+      );
       final file = File(tempPath);
       final fileSize = await file.length();
+
+      // Fallback check if total was 0 during download
+      if (!spaceChecked) {
+        await checkCacheSpace(fileSize);
+      }
 
       await file.rename(finalPath);
 
