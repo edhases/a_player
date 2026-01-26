@@ -52,9 +52,11 @@ class UpdateService {
         return (UpdateCheckResult.upToDate, null);
       }
 
-      // Fetch update.json from GitHub
+      // Fetch update.json from GitHub (add timestamp to bust cache)
+      final url = '$_updateJsonUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+
       final response = await _dio.get(
-        _updateJsonUrl,
+        url,
         options: Options(
           responseType: ResponseType.json,
           receiveTimeout: const Duration(seconds: 10),
