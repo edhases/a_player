@@ -194,6 +194,12 @@ class CacheService {
     return allTracks.fold<int>(0, (sum, t) => sum + (t.fileSize ?? 0));
   }
 
+  /// Returns the cache directory for backup purposes
+  Future<Directory> getCacheDirectory() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return Directory(p.join(dir.path, 'songs_cache'));
+  }
+
   Future<List<YouTubeTrack>> getCachedTracks() async {
     return await (_db.select(_db.youTubeTracks)
           ..where((t) => t.downloadPath.isNotNull())

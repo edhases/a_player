@@ -23,6 +23,8 @@ import 'cached_tracks_screen.dart';
 import 'equalizer_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/services/data_management_service.dart';
+import '../../core/services/update_service.dart';
+import '../widgets/update_dialog.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -689,6 +691,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const Divider(),
 
+          // Updates Section
+          _buildSectionHeader(context, loc.translate('updates')),
+          StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                children: [
+                  SwitchListTile(
+                    title: Text(loc.translate('auto_update')),
+                    subtitle: Text(loc.translate('auto_update_desc')),
+                    value: settingsService.loadAutoUpdateEnabled(),
+                    onChanged: (val) {
+                      settingsService.saveAutoUpdateEnabled(val);
+                      setState(() {});
+                    },
+                    secondary: const Icon(Icons.system_update_alt),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.update),
+                    title: Text(loc.translate('check_updates')),
+                    subtitle: Text(loc.translate('check_updates_desc')),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _checkForUpdates(context),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const Divider(),
+
           // Data Management
           _buildSectionHeader(context, loc.translate('data_management')),
           ListTile(
@@ -696,20 +728,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(loc.translate('backup_data')),
             subtitle: Text(loc.translate('backup_desc')),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              if (GetIt.I.isRegistered<DataManagementService>()) {
-                final file =
-                    await GetIt.I<DataManagementService>().createBackup();
-                if (file != null && context.mounted) {
-                  await Share.shareXFiles([XFile(file.path)],
-                      text: 'Oxide Player Backup');
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(loc.translate('backup_success'))));
-                  }
-                }
-              }
-            },
+            onTap: () => _showBackupOptionsDialog(context),
           ),
           ListTile(
             leading: const Icon(Icons.restore),
@@ -718,12 +737,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               try {
-                final result = await FilePicker.platform.pickFiles();
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['json', 'zip'],
+                );
                 if (result != null && result.files.single.path != null) {
                   final file = File(result.files.single.path!);
                   if (GetIt.I.isRegistered<DataManagementService>()) {
-                    final success = await GetIt.I<DataManagementService>()
-                        .restoreBackup(file);
+                    final service = GetIt.I<DataManagementService>();
+                    bool success;
+
+                    // Check file extension to determine restore method
+                    if (file.path.endsWith('.zip')) {
+                      success = await service.restoreBackupArchive(file);
+                    } else {
+                      success = await service.restoreBackup(file);
+                    }
+
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(success
@@ -926,6 +956,343 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _checkForUpdates(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+
+    if (!GetIt.I.isRegistered<UpdateService>()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.translate('service_not_available'))),
+      );
+      return;
+    }
+
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 16),
+            Text(loc.translate('checking_updates')),
+          ],
+        ),
+        duration: const Duration(seconds: 10),
+      ),
+    );
+
+    final updateService = GetIt.I<UpdateService>();
+    final (result, updateInfo) =
+        await updateService.checkForUpdate(force: true);
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    switch (result) {
+      case UpdateCheckResult.updateAvailable:
+        if (updateInfo != null) {
+          UpdateDialog.show(
+            context,
+            updateInfo: updateInfo,
+            isAutoCheck: false,
+          );
+        }
+        break;
+      case UpdateCheckResult.forcedUpdate:
+        if (updateInfo != null) {
+          UpdateDialog.show(
+            context,
+            updateInfo: updateInfo,
+            isAutoCheck: false,
+            isForcedUpdate: true,
+          );
+        }
+        break;
+      case UpdateCheckResult.upToDate:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(loc.translate('no_update')),
+            backgroundColor: Colors.green,
+          ),
+        );
+        break;
+      case UpdateCheckResult.error:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text(loc.translate('error', args: {'error': 'Network error'})),
+            backgroundColor: Colors.red,
+          ),
+        );
+        break;
+    }
+  }
+
+  void _showBackupOptionsDialog(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
+    if (!GetIt.I.isRegistered<DataManagementService>()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.translate('service_not_available'))),
+      );
+      return;
+    }
+
+    final service = GetIt.I<DataManagementService>();
+    final sizes = await service.getBackupSizes();
+
+    // Options state
+    bool includeCache = false;
+    bool includeCookies = false;
+    bool includeHistory = true;
+    bool isCreating = false;
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.backup, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Text(loc.translate('backup_options')),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Settings & Database - always included
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListTile(
+                        leading: Icon(Icons.settings,
+                            color: theme.colorScheme.primary),
+                        title: Text(loc.translate('backup_settings_db')),
+                        subtitle: Text(
+                          loc.translate('backup_settings_db_desc'),
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                        trailing:
+                            Icon(Icons.check_circle, color: Colors.green[700]),
+                        dense: true,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Playback History
+                    CheckboxListTile(
+                      title: Text(loc.translate('backup_history')),
+                      subtitle: Text(
+                        loc.translate('backup_history_desc'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: includeHistory,
+                      onChanged: (val) =>
+                          setState(() => includeHistory = val ?? true),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      secondary: const Icon(Icons.history),
+                      dense: true,
+                    ),
+
+                    const Divider(),
+
+                    // Cached Songs
+                    CheckboxListTile(
+                      title: Text(loc.translate('include_cache_size',
+                          args: {'size': _formatBytes(sizes['cache'] ?? 0)})),
+                      subtitle: sizes['cache'] != null && sizes['cache']! > 0
+                          ? Text(
+                              loc.translate('backup_cache_desc'),
+                              style: const TextStyle(fontSize: 12),
+                            )
+                          : Text(
+                              loc.translate('no_cached_tracks'),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                      value: includeCache,
+                      onChanged: sizes['cache'] != null && sizes['cache']! > 0
+                          ? (val) => setState(() => includeCache = val ?? false)
+                          : null,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      secondary: const Icon(Icons.music_note),
+                      dense: true,
+                    ),
+
+                    // Cache size warning
+                    if (includeCache &&
+                        (sizes['cache'] ?? 0) > 100 * 1024 * 1024)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: 16, right: 16, bottom: 8),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber,
+                                  color: Colors.orange, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  loc.translate('backup_large_cache_warning'),
+                                  style: TextStyle(
+                                      fontSize: 11, color: Colors.orange[800]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    const Divider(),
+
+                    // YouTube Cookies (sensitive data)
+                    CheckboxListTile(
+                      title: Text(loc.translate('include_webview')),
+                      subtitle: Text(
+                        loc.translate('backup_cookies_desc'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: includeCookies,
+                      onChanged: (val) =>
+                          setState(() => includeCookies = val ?? false),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      secondary: const Icon(Icons.cookie),
+                      dense: true,
+                    ),
+
+                    // Security warning for cookies
+                    if (includeCookies)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: 16, right: 16, bottom: 8),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Colors.red.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.security,
+                                      color: Colors.red, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    loc.translate('security_warning'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                loc.translate('backup_cookies_warning'),
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.red[700]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    if (isCreating)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 16),
+                            Text(loc.translate('backup_creating')),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      isCreating ? null : () => Navigator.pop(dialogContext),
+                  child: Text(loc.cancel),
+                ),
+                ElevatedButton.icon(
+                  onPressed: isCreating
+                      ? null
+                      : () async {
+                          setState(() => isCreating = true);
+
+                          final file = await service.createBackupArchive(
+                            includeCache: includeCache,
+                            includeCookies: includeCookies,
+                            includeHistory: includeHistory,
+                          );
+
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+
+                          if (file != null && context.mounted) {
+                            await Share.shareXFiles(
+                              [XFile(file.path)],
+                              text: 'Oxide Player Backup',
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text(loc.translate('backup_success')),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  icon: const Icon(Icons.save),
+                  label: Text(loc.translate('create_backup')),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

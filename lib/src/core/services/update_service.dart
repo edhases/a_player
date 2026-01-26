@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
@@ -23,9 +22,8 @@ class UpdateService {
   final SettingsService _settingsService;
   final Dio _dio = Dio();
 
-  // TODO: Replace with actual GitHub repo URL
   static const String _updateJsonUrl =
-      'https://github.com/user/oxide-player/releases/latest/download/update.json';
+      'https://raw.githubusercontent.com/edhases/a_player/YTM-integation/update.json';
 
   UpdateService(this._settingsService);
 

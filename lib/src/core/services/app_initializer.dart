@@ -27,6 +27,7 @@ import 'tag_editor_service.dart';
 import 'lyrics_service.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'prefetch_manager.dart';
+import 'update_service.dart';
 
 import '../../data/datasources/app_database.dart';
 import '../../data/repositories/music_repository_impl.dart';
@@ -134,6 +135,10 @@ class AppInitializer {
     final cacheService = CacheService();
     await cacheService.init();
     GetIt.I.registerSingleton<CacheService>(cacheService);
+
+    // UpdateService
+    final updateService = UpdateService(GetIt.I<SettingsService>());
+    GetIt.I.registerSingleton<UpdateService>(updateService);
 
     // AudioSourceFactory
     GetIt.I.registerSingleton<AudioSourceFactory>(

@@ -207,6 +207,16 @@ class SettingsService {
         false; // Default false for now to avoid confusion
   }
 
+  // --- Updates ---
+  Future<void> saveAutoUpdateEnabled(bool enabled) async {
+    await _prefs.setBool('auto_update_enabled', enabled);
+    _notify();
+  }
+
+  bool loadAutoUpdateEnabled() {
+    return _prefs.getBool('auto_update_enabled') ?? true; // Default enabled
+  }
+
   // --- Generic Storage ---
   bool? loadBool(String key) => _prefs.getBool(key);
   Future<void> saveBool(String key, bool value) => _prefs.setBool(key, value);

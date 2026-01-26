@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/utils/localization.dart';
 import '../../core/services/music_finder.dart';
+import '../../core/services/update_service.dart';
 import '../../data/datasources/app_database.dart';
 import '../widgets/search/search_delegate.dart';
+import '../widgets/update_dialog.dart';
 import 'all_tracks_screen.dart';
 
 import 'library_screen.dart';
@@ -37,6 +39,35 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _isScanning = _musicFinder.isScanning.value;
     _musicFinder.isScanning.addListener(_onScanStateChanged);
+
+    // Check for updates after UI is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdatesOnStartup();
+    });
+  }
+
+  Future<void> _checkForUpdatesOnStartup() async {
+    if (!GetIt.I.isRegistered<UpdateService>()) return;
+
+    final updateService = GetIt.I<UpdateService>();
+    final (result, updateInfo) = await updateService.checkForUpdate();
+
+    if (!mounted) return;
+
+    if (result == UpdateCheckResult.updateAvailable && updateInfo != null) {
+      UpdateDialog.show(
+        context,
+        updateInfo: updateInfo,
+        isAutoCheck: true,
+      );
+    } else if (result == UpdateCheckResult.forcedUpdate && updateInfo != null) {
+      UpdateDialog.show(
+        context,
+        updateInfo: updateInfo,
+        isAutoCheck: true,
+        isForcedUpdate: true,
+      );
+    }
   }
 
   @override
