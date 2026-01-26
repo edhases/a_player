@@ -185,7 +185,7 @@ class DetailScreen extends StatelessWidget {
       );
     }).toList();
 
-    await audioHandler.updateQueue(mediaItems);
-    await audioHandler.skipToQueueItem(startIndex);
+    await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
+    await audioHandler.playQueueFromIndex(mediaItems, startIndex);
   }
 }

@@ -503,7 +503,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           fontWeight: FontWeight.bold)),
                 ),
                 Expanded(
-                  child: ListView.builder(
+                  child: ReorderableListView.builder(
+                    buildDefaultDragHandles: false,
+                    proxyDecorator: (child, index, animation) {
+                      return Material(
+                        color: Colors.transparent,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey[850],
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.5),
+                                blurRadius: 8,
+                                spreadRadius: 2,
+                              )
+                            ],
+                          ),
+                          child: child,
+                        ),
+                      );
+                    },
+                    onReorder: (oldIndex, newIndex) {
+                      context
+                          .read<QueueBloc>()
+                          .add(QueueReorder(oldIndex, newIndex));
+                    },
                     itemCount: currentQueue.length,
                     itemBuilder: (context, index) {
                       final item = currentQueue[index];
@@ -513,6 +537,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       final isCurrent = currentItem?.id == item.id;
 
                       return ListTile(
+                        key: ValueKey(item.id),
                         leading: _buildQueueArtwork(item),
                         title: Text(item.title,
                             style: TextStyle(
@@ -521,12 +546,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     : Colors.white)),
                         subtitle: Text(item.artist ?? '',
                             style: const TextStyle(color: Colors.white70)),
+                        trailing: ReorderableDragStartListener(
+                          index: index,
+                          child: const Icon(Icons.drag_handle,
+                              color: Colors.white54),
+                        ),
                         onTap: () {
-                          // TODO: Implement skipToQueueItem in PlayerBloc or via handler?
-                          // PlayerBloc doesn't have skipToQueueItem event in my design yet??
-                          // Checking player_bloc.dart events... nope, only next/prev.
-                          // I should add it or use handler directly.
-                          // Ideally add to Bloc.
+                          // Skip to selected item
                           GetIt.I<MyAudioHandler>().skipToQueueItem(index);
                           Navigator.pop(context);
                         },

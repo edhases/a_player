@@ -10,7 +10,6 @@ import '../../data/datasources/app_database.dart';
 import 'settings_service.dart';
 import 'equalizer_service.dart';
 import 'log_service.dart';
-import '../../core/services/youtube_helper.dart';
 
 import '../../domain/entities/youtube_song.dart';
 import '../utils/media_item_adapter.dart';
@@ -469,27 +468,27 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   @override
-  Future<void> insertQueueItem(int index, MediaItem item) async {
-    debugPrint('[AudioHandler] insertQueueItem at $index: ${item.title}');
+  Future<void> insertQueueItem(int index, MediaItem mediaItem) async {
+    debugPrint('[AudioHandler] insertQueueItem at $index: ${mediaItem.title}');
     try {
       // 1. Create source
-      final source = await _audioSourceFactory.createSource(item);
+      final source = await _audioSourceFactory.createSource(mediaItem);
 
       // 2. Insert into Playlist
       await _playlist.insert(index, source);
 
       // 3. Update Queue
-      await super.insertQueueItem(index, item);
+      await super.insertQueueItem(index, mediaItem);
     } catch (e) {
       debugPrint('[AudioHandler] insertQueueItem error: $e');
     }
   }
 
   @override
-  Future<void> removeQueueItem(MediaItem item) async {
-    final index = queue.value.indexWhere((i) => i.id == item.id);
-    debugPrint('[AudioHandler] removeQueueItem at $index: ${item.title}');
-    await super.removeQueueItem(item);
+  Future<void> removeQueueItem(MediaItem mediaItem) async {
+    final index = queue.value.indexWhere((i) => i.id == mediaItem.id);
+    debugPrint('[AudioHandler] removeQueueItem at $index: ${mediaItem.title}');
+    await super.removeQueueItem(mediaItem);
 
     if (index != -1) {
       try {
@@ -497,6 +496,49 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } catch (e) {
         debugPrint('[AudioHandler] removeQueueItem error: $e');
       }
+    }
+  }
+
+  /// Efficiently move a queue item from oldIndex to newIndex.
+  /// Uses ConcatenatingAudioSource.move() for O(1) playlist reordering
+  /// instead of rebuilding the entire queue.
+  Future<void> moveQueueItem(int oldIndex, int newIndex) async {
+    final currentQueue = queue.value;
+
+    // Validate indices
+    if (oldIndex < 0 || oldIndex >= currentQueue.length) {
+      debugPrint('[AudioHandler] moveQueueItem: invalid oldIndex $oldIndex');
+      return;
+    }
+    if (newIndex < 0 || newIndex > currentQueue.length) {
+      debugPrint('[AudioHandler] moveQueueItem: invalid newIndex $newIndex');
+      return;
+    }
+    if (oldIndex == newIndex) return;
+
+    debugPrint('[AudioHandler] moveQueueItem: $oldIndex -> $newIndex');
+
+    try {
+      // 1. Calculate actual insert position (Flutter ReorderableListView convention)
+      int insertIndex = newIndex;
+      if (newIndex > oldIndex) {
+        insertIndex -= 1;
+      }
+
+      // 2. Update UI queue first (in-place modification)
+      final newQueue = List<MediaItem>.from(currentQueue);
+      final item = newQueue.removeAt(oldIndex);
+      newQueue.insert(insertIndex, item);
+      queue.add(newQueue);
+
+      // 3. Move in playlist (O(1) operation!)
+      await _playlist.move(oldIndex, insertIndex);
+
+      debugPrint('[AudioHandler] moveQueueItem: completed successfully');
+    } catch (e) {
+      debugPrint('[AudioHandler] moveQueueItem error: $e');
+      // Revert UI if playlist move fails
+      queue.add(currentQueue);
     }
   }
 

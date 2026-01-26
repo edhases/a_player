@@ -42,20 +42,26 @@ class LyricsModel {
   List<LyricsLine> _parseSyncedLyrics() {
     if (!isSynced) return [];
     final lines = <LyricsLine>[];
-    final regex = RegExp(r'^\[(\d{2}):(\d{2})\.(\d{2})\](.*)$');
+    final regex = RegExp(r'^\[(\d+):(\d+)\.(\d+)\](.*)$');
 
     for (final line in syncedLyrics.split('\n')) {
       final match = regex.firstMatch(line);
       if (match != null) {
         final minutes = int.parse(match.group(1)!);
         final seconds = int.parse(match.group(2)!);
-        final hundredths = int.parse(match.group(3)!);
+        final fractionStr = match.group(3)!;
+        final fraction = int.parse(fractionStr);
+
+        // Normalize to milliseconds
+        // 2 digits = hundredths (x10)
+        // 3 digits = milliseconds (x1)
+        final milliseconds = fractionStr.length == 2 ? fraction * 10 : fraction;
 
         lines.add(LyricsLine(
           time: Duration(
             minutes: minutes,
             seconds: seconds,
-            milliseconds: hundredths * 10,
+            milliseconds: milliseconds,
           ),
           text: match.group(4)?.trim() ?? '',
         ));

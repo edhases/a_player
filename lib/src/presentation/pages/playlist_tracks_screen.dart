@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
-import 'package:audio_service/audio_service.dart';
+
 import '../../core/services/innertube_service.dart';
 
 import '../../core/services/audio_handler.dart';
+import '../../core/utils/media_item_adapter.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../widgets/common_artwork.dart';
 import '../widgets/youtube_song_menu.dart';
@@ -83,16 +84,7 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
 
     // Convert all tracks to MediaItems for lazy loading
     final queue = _tracks.map((track) {
-      return MediaItem(
-        id: track.videoId, // Use videoId as ID for uniqueness/matching
-        title: track.title,
-        artist: track.artist,
-        artUri: Uri.parse(track.thumbnailUrl),
-        extras: {
-          'isOnline': true,
-          'videoId': track.videoId,
-        },
-      );
+      return MediaItemAdapter.fromYouTubeSong(track);
     }).toList();
 
     // Use atomic method to set queue and start from correct index

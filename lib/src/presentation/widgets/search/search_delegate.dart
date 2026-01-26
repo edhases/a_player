@@ -187,8 +187,8 @@ class MusicSearchDelegate extends SearchDelegate<Track?> {
             ))
         .toList();
 
-    await _audioHandler.updateQueue(mediaItems);
-    await _audioHandler.skipToQueueItem(startIndex);
+    await _audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
+    await _audioHandler.playQueueFromIndex(mediaItems, startIndex);
   }
 }
 

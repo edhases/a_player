@@ -7,6 +7,7 @@ import '../../core/services/music_finder.dart';
 import '../../core/services/audio_handler.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/utils/localization.dart';
+import '../../core/utils/media_item_adapter.dart';
 
 import '../widgets/track_list_tile.dart';
 
@@ -112,22 +113,10 @@ class AllTracksScreen extends StatelessWidget {
     final relativeIndex = startIndex - start;
 
     final mediaItems = subset.map((track) {
-      final extras = <String, dynamic>{};
-      if (track.mediaStoreId != null) {
-        extras['mediaStoreId'] = track.mediaStoreId;
-      }
-      return MediaItem(
-        id: track.path,
-        album: track.album ?? '',
-        title: track.title,
-        artist: track.artist,
-        duration: Duration(milliseconds: track.duration),
-        extras: extras.isEmpty ? null : extras,
-      );
+      return MediaItemAdapter.fromTrack(track);
     }).toList();
 
     await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
-    await audioHandler.updateQueue(mediaItems);
-    await audioHandler.skipToQueueItem(relativeIndex);
+    await audioHandler.playQueueFromIndex(mediaItems, relativeIndex);
   }
 }

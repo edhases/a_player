@@ -136,10 +136,22 @@ class _LyricsViewState extends State<LyricsView> {
         } else if (state is LyricsLoaded) {
           final lyrics = state.lyrics;
           if (lyrics.isSynced) {
-            return _buildSyncedLyrics(lyrics.parsedSyncedLyrics);
-          } else {
+            final lines = lyrics.parsedSyncedLyrics;
+            if (lines.isNotEmpty) {
+              return _buildSyncedLyrics(lines);
+            }
+          }
+
+          if (lyrics.plainLyrics.isNotEmpty) {
             return _buildPlainLyrics(lyrics.plainLyrics);
           }
+
+          return Center(
+            child: Text(
+              AppLocalizations.of(context).noLyricsFound,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+          );
         }
         return const SizedBox.shrink();
       },

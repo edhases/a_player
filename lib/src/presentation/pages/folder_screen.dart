@@ -8,6 +8,7 @@ import '../../data/datasources/app_database.dart';
 import '../../domain/services/hierarchy_service.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/common_artwork.dart';
+import '../../core/utils/media_item_adapter.dart';
 
 /// Folder browser screen with track artwork thumbnails.
 class FolderScreen extends StatelessWidget {
@@ -100,24 +101,13 @@ class FolderScreen extends StatelessWidget {
 
   Future<void> _playQueue(
       MyAudioHandler audioHandler, List<Track> tracks, Track startTrack) async {
-    final mediaItems = tracks
-        .map((track) => MediaItem(
-              id: track.path,
-              album: track.album ?? '',
-              title: track.title,
-              artist: track.artist,
-              duration: Duration(milliseconds: track.duration),
-              extras: track.mediaStoreId != null
-                  ? {'mediaStoreId': track.mediaStoreId}
-                  : null,
-            ))
-        .toList();
+    final mediaItems =
+        tracks.map((track) => MediaItemAdapter.fromTrack(track)).toList();
 
     final startIndex = tracks.indexOf(startTrack);
 
     await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
-    await audioHandler.updateQueue(mediaItems);
-    await audioHandler.skipToQueueItem(startIndex);
+    await audioHandler.playQueueFromIndex(mediaItems, startIndex);
   }
 }
 
