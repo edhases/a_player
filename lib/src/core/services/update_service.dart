@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
@@ -67,8 +68,12 @@ class UpdateService {
         return (UpdateCheckResult.error, null);
       }
 
-      final updateInfo =
-          UpdateInfo.fromJson(response.data as Map<String, dynamic>);
+      Object data = response.data;
+      if (data is String) {
+        data = jsonDecode(data);
+      }
+
+      final updateInfo = UpdateInfo.fromJson(data as Map<String, dynamic>);
       final currentVersionCode = await getCurrentVersionCode();
 
       // Check if forced update is required
