@@ -1,7 +1,7 @@
 name: oxide_player
 description: "A new Flutter project."
 publish_to: 'none'
-version: 20260127
+version: 20260127.1.0
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
