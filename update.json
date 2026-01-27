@@ -1,8 +1,8 @@
 {
-    "versionName": "20260127",
+    "versionName": "20260127.1.0",
     "versionCode": 202601271,
-    "apkUrl": "https://github.com/edhases/a_player/releases/download/20260127/oxide_player_v20260127.apk",
-    "apkSha256": "73EBD2AC5A84F1629DDA56C814206A68D2E725B8A8567519B0929DE26A2E7406",
+    "apkUrl": "https://github.com/edhases/a_player/releases/download/20260127.1/oxide_player_v20260127.1.apk",
+    "apkSha256": "208867E7F652D04C60C241D816643967C8D70CD9F23BDB767F8CE6E86921815D",
     "changelog": "- General improvements and bug fixes",
     "minSupportedVersionCode": 1
 }
