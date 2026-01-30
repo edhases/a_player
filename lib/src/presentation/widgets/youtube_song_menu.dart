@@ -9,6 +9,7 @@ import '../../core/services/cache_service.dart';
 import '../../core/services/youtube_helper.dart';
 import '../../core/utils/localization.dart';
 import '../pages/playlist_tracks_screen.dart';
+import '../utils/track_actions.dart';
 
 /// Reusable bottom sheet menu for YouTubeSong actions.
 ///
@@ -156,7 +157,8 @@ class YouTubeSongMenu extends StatelessWidget {
                   title: Text(
                       isLiked ? loc.removeFromFavorites : loc.addToFavorites),
                   onTap: () {
-                    GetIt.I<FavoritesService>().toggleFavorite(
+                    TrackActions.handleLikeButton(
+                      context,
                       videoId: videoId,
                       title: song.title,
                       artist: song.artist,

@@ -10,6 +10,8 @@ import 'package:permission_handler/permission_handler.dart';
 void main() => runApp(MyApp());
 
 class MyApp extends StatefulWidget {
+  const MyApp({Key? key}) : super(key: key);
+
   @override
   _MyAppState createState() => _MyAppState();
 }
@@ -18,7 +20,7 @@ class _MyAppState extends State<MyApp> {
   final filePath = "/sdcard/test.mp3";
   final artwork = "/sdcard/cover.jpg";
   Widget result;
-  Audiotagger tagger = new Audiotagger();
+  Audiotagger tagger = Audiotagger();
 
   @override
   void initState() {
@@ -74,7 +76,7 @@ class _MyAppState extends State<MyApp> {
       path: filePath,
     );
     final json = jsonEncode(output);
-    Clipboard.setData(new ClipboardData(text: json));
+    Clipboard.setData(ClipboardData(text: json));
     setState(() {
       result = Text(json);
     });
@@ -90,7 +92,7 @@ class _MyAppState extends State<MyApp> {
         body: Center(
           child: Column(
             children: <Widget>[
-              result != null ? result : Text("Ready.."),
+              (result ?? Text("Ready..")),
               ElevatedButton(
                 child: Text("Read tags"),
                 onPressed: () async {

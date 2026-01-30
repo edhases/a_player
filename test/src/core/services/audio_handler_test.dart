@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
@@ -58,6 +59,11 @@ void main() {
   });
 
   setUp(() {
+    // Clear GetIt before each test
+    if (GetIt.I.isRegistered<SettingsService>()) {
+      GetIt.I.unregister<SettingsService>();
+    }
+
     mockDb = MockAppDatabase();
     mockSettings = MockSettingsService();
     mockAudioSourceFactory = MockAudioSourceFactory();
@@ -69,12 +75,20 @@ void main() {
     mockWidgetService = MockWidgetService();
     mockTagEditorService = MockTagEditorService();
 
+    // Register mock SettingsService in GetIt for equalizer init
+    GetIt.I.registerSingleton<SettingsService>(mockSettings);
+
     // Setup default behaviors for Settings
     when(() => mockSettings.loadQueue()).thenReturn([]);
     when(() => mockSettings.loadLastTrackId()).thenReturn(null);
     when(() => mockSettings.saveLastTrackId(any())).thenAnswer((_) async {});
     when(() => mockSettings.saveLastPosition(any())).thenAnswer((_) async {});
     when(() => mockSettings.saveQueue(any())).thenAnswer((_) async {});
+
+    // Setup WidgetService mock
+    when(() => mockWidgetService.init()).thenAnswer((_) async {});
+    when(() => mockWidgetService.updateWidget(any())).thenAnswer((_) async {});
+    when(() => mockWidgetService.updatePlaybackState(any())).thenAnswer((_) async {});
 
     // Setup AudioPlayer mocks to prevent crashes during _init
     when(() => mockAudioPlayer.playbackEventStream)

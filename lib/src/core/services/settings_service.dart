@@ -13,8 +13,10 @@ const String kMinTrackDurationKey = 'min_track_duration'; // in seconds
 const String kMaxTrackDurationKey =
     'max_track_duration'; // in seconds (0 = no limit)
 const String kMaxCacheSizeKey = 'max_cache_size';
+const String kAutoCacheLikedKey = 'auto_cache_liked';
 const String kExcludedFoldersKey = 'excluded_folders';
 const String kMaxLogSizeKey = 'max_log_size'; // in bytes
+const String kSaveMetadataToFileKey = 'save_metadata_to_file';
 
 class SettingsService {
   late final SharedPreferences _prefs;
@@ -79,6 +81,15 @@ class SettingsService {
 
   // --- Library Filters ---
 
+  Future<void> saveSaveMetadataToFile(bool enabled) async {
+    await _prefs.setBool(kSaveMetadataToFileKey, enabled);
+    _notify();
+  }
+
+  bool loadSaveMetadataToFile() {
+    return _prefs.getBool(kSaveMetadataToFileKey) ?? true;
+  }
+
   // Min Duration in Seconds (default 30s to skip notifications)
   Future<void> saveMinTrackDuration(int seconds) async {
     await _prefs.setInt(kMinTrackDurationKey, seconds);
@@ -136,6 +147,16 @@ class SettingsService {
   int loadMaxCacheSize() {
     return _prefs.getInt(kMaxCacheSizeKey) ??
         500 * 1024 * 1024; // Default 500MB
+  }
+
+  // --- Auto Cache Liked Songs ---
+  Future<void> saveAutoCacheLiked(bool enabled) async {
+    await _prefs.setBool(kAutoCacheLikedKey, enabled);
+    _notify();
+  }
+
+  bool loadAutoCacheLiked() {
+    return _prefs.getBool(kAutoCacheLikedKey) ?? true; // Default enabled
   }
 
   // --- Log Size ---

@@ -9,7 +9,10 @@ import 'google_auth_service.dart';
 import 'rate_limiter.dart';
 import 'package:logger/logger.dart';
 import '../utils/result.dart';
+import '../utils/json_path.dart';
+import '../exceptions/youtube_exceptions.dart';
 import 'settings_service.dart';
+import 'youtube_helper.dart';
 
 import '../../data/datasources/app_database.dart';
 
@@ -114,6 +117,27 @@ class InnerTubeService {
     try {
       final response = await _dio.post(endpoint, data: body);
       return response.data;
+    } on DioException catch (e) {
+      // Convert Dio exceptions to typed exceptions
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        throw NetworkException(
+          'Connection timeout to YouTube',
+          isTimeout: true,
+        );
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        throw const NetworkException('No internet connection');
+      }
+      if (e.response?.statusCode == 429) {
+        throw const RateLimitException('YouTube rate limit exceeded');
+      }
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+        throw const AuthenticationException('YouTube authentication failed');
+      }
+      debugPrint('InnerTube API $endpoint Error: $e');
+      rethrow;
     } catch (e) {
       debugPrint('InnerTube API $endpoint Error: $e');
       rethrow;
@@ -229,11 +253,32 @@ class InnerTubeService {
   }
 
   /// Returns {'url': string, 'agent': string} on success, null on failure.
+  ///
+  /// Delegates to [YouTubeHelper.getAudioUrlWithAgent] which uses
+  /// `youtube_explode_dart` with ANDROID_VR client for reliable streaming.
+  /// This handles signature cipher decryption, PO Token, and other
+  /// YouTube anti-bot measures automatically.
   Future<Map<String, String>?> getSongUrl(String videoId) async {
     await _rateLimiter.throttle();
-    await _addAuthHeaders();
 
-    // Multi-client strategy for maximum reliability
+    // Delegate to YouTubeHelper which uses youtube_explode_dart
+    // This handles signature cipher, ANDROID_VR client, and PO Token
+    try {
+      final youtubeHelper = GetIt.I<YouTubeHelper>();
+      final result = await youtubeHelper.getAudioUrlWithAgent(videoId);
+      if (result != null) {
+        debugPrint(
+            '[InnerTube] Stream URL obtained via YouTubeHelper for: $videoId');
+        return result;
+      }
+    } catch (e) {
+      debugPrint('[InnerTube] YouTubeHelper delegation failed: $e');
+    }
+
+    // Fallback to legacy InnerTube method (for edge cases)
+    debugPrint(
+        '[InnerTube] Falling back to legacy stream resolution for: $videoId');
+    await _addAuthHeaders();
     final results = await _waitForFirstSuccess<Map<String, String>>([
       _tryAndroidMusic(videoId),
       _tryTVHTML5(videoId),
@@ -789,7 +834,6 @@ class InnerTubeService {
       }
 
       // Navigate to contents - artist page has tabs, we want "Songs" or first shelf
-      // Navigate to contents - artist page has tabs, we want "Songs" or first shelf
       try {
         final tabs = data['contents']?['singleColumnBrowseResultsRenderer']
             ?['tabs'] as List?;
@@ -798,6 +842,31 @@ class InnerTubeService {
           for (var i = 0; i < tabs.length; i++) {
             final title = tabs[i]['tabRenderer']?['title'];
             debugPrint('[InnerTube] Tab $i: $title');
+          }
+          
+          // First, try to find and load the "Songs" tab directly for full list
+          // Localized "Songs" tab names: English, Ukrainian, German, Spanish, Japanese, Polish
+          const songsTabNames = ['songs', 'пісні', 'titel', 'canciones', '曲', 'utwory', 'músicas', 'chansons', 'brani', '노래'];
+          for (final tab in tabs) {
+            final tabTitle = tab['tabRenderer']?['title'];
+            if (tabTitle != null) {
+              final titleLower = tabTitle.toLowerCase();
+              if (songsTabNames.contains(titleLower)) {
+                final tabEndpoint = tab['tabRenderer']?['endpoint']?['browseEndpoint'];
+                if (tabEndpoint != null) {
+                  final browseId = tabEndpoint['browseId'];
+                  final params = tabEndpoint['params'];
+                  if (browseId != null) {
+                    debugPrint('[InnerTube] Found "Songs" tab. Fetching full list from $browseId...');
+                    final fullList = await _fetchFullTracks(browseId, params: params);
+                    if (fullList.isNotEmpty) {
+                      debugPrint('[InnerTube] Loaded ${fullList.length} tracks from Songs tab');
+                      return fullList;
+                    }
+                  }
+                }
+              }
+            }
           }
         }
 
@@ -958,20 +1027,20 @@ class InnerTubeService {
         debugPrint('[InnerTube] Error parsing artist tracks: $e');
       }
 
-      // Load more tracks using continuation if we have fewer than 50
-      if (continuationToken != null && tracks.length < 50) {
+      // Load more tracks using continuation if we have fewer than 200
+      if (continuationToken != null && tracks.length < 200) {
         final moreTracks = await _loadMoreArtistTracks(
-            continuationToken, artistName, 50 - tracks.length);
+            continuationToken, artistName, 200 - tracks.length);
         tracks.addAll(moreTracks);
       }
 
       debugPrint(
           '[InnerTube] Found ${tracks.length} tracks for artist $artistId');
 
-      // Aggressive Fallback: If we have very few tracks (<= 25) and no continuation,
+      // Aggressive Fallback: If we have very few tracks (<= 50) and no continuation,
       // and we haven't already fetched a "See All" list (implied by execution flow),
       // let's try to find a "Songs" or "Videos" tab and fetch that.
-      if (tracks.length < 25 && continuationToken == null) {
+      if (tracks.length < 50 && continuationToken == null) {
         try {
           final tabs = data['contents']?['singleColumnBrowseResultsRenderer']
               ?['tabs'] as List?;
@@ -1074,6 +1143,7 @@ class InnerTubeService {
 
       String title = '';
       String artist = fallbackArtist;
+      String? artistId;
       String videoId = '';
       String thumbnail = '';
 
@@ -1085,9 +1155,18 @@ class InnerTubeService {
 
       // Artist from second column if available
       if (flexColumns.length > 1) {
-        final col1 = flexColumns[1]['musicResponsiveListItemFlexColumnRenderer']
-            ?['text']?['runs']?[0];
-        artist = col1?['text'] ?? artist;
+        final col1Runs = flexColumns[1]
+            ['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;
+        if (col1Runs != null && col1Runs.isNotEmpty) {
+          final artistInfo = _extractArtistInfo(col1Runs);
+          artist = artistInfo['name'] ?? fallbackArtist;
+          artistId = artistInfo['id'];
+        }
+      }
+
+      // Fallback: Recursive search for artistId
+      if (artistId == null) {
+        artistId = _findArtistBrowseIdRecursive(renderer);
       }
 
       // Thumbnail
@@ -1104,6 +1183,7 @@ class InnerTubeService {
         title: title,
         artist: artist,
         thumbnailUrl: thumbnail,
+        artistId: artistId,
       );
     } catch (e) {
       return null;
@@ -1116,6 +1196,7 @@ class InnerTubeService {
     try {
       String title = '';
       String artist = fallbackArtist;
+      String? artistId;
       String videoId = '';
       String thumbnail = '';
 
@@ -1124,13 +1205,25 @@ class InnerTubeService {
         title = renderer['title']?['runs']?[0]?['text'] ?? '';
         videoId =
             renderer['navigationEndpoint']?['watchEndpoint']?['videoId'] ?? '';
-        artist = renderer['subtitle']?['runs']?[0]?['text'] ?? artist;
+        
+        // Extract artist with artistId
+        final subtitleRuns = renderer['subtitle']?['runs'] as List?;
+        if (subtitleRuns != null && subtitleRuns.isNotEmpty) {
+          final artistInfo = _extractArtistInfo(subtitleRuns);
+          artist = artistInfo['name'] ?? fallbackArtist;
+          artistId = artistInfo['id'];
+        }
 
         final thumbs = renderer['thumbnailRenderer']?['musicThumbnailRenderer']
             ?['thumbnail']?['thumbnails'] as List?;
         if (thumbs != null && thumbs.isNotEmpty) {
           thumbnail = thumbs.last['url'] ?? '';
         }
+      }
+
+      // Fallback: Recursive search for artistId
+      if (artistId == null) {
+        artistId = _findArtistBrowseIdRecursive(renderer);
       }
 
       if (title.isEmpty || videoId.isEmpty) return null;
@@ -1140,9 +1233,35 @@ class InnerTubeService {
         title: title,
         artist: artist,
         thumbnailUrl: thumbnail,
+        artistId: artistId,
       );
     } catch (e) {
       return null;
+    }
+  }
+
+  /// Fetches the user's liked songs from YouTube Music account
+  /// Uses the special playlist ID "LM" (Liked Music)
+  Future<List<YouTubeSong>> getYouTubeLikedSongs({int limit = 200}) async {
+    await _rateLimiter.throttle();
+    await _addAuthHeaders();
+
+    debugPrint('[InnerTube] Fetching YouTube Liked Songs (playlist LM)...');
+
+    try {
+      // "LM" is the special playlist ID for liked songs in YouTube Music
+      // We need to prepend "VL" to make it a valid browse ID
+      final tracks = await _fetchFullTracks('VLLM');
+      debugPrint('[InnerTube] Fetched ${tracks.length} liked songs from YouTube');
+      
+      // Limit the results if specified
+      if (limit > 0 && tracks.length > limit) {
+        return tracks.sublist(0, limit);
+      }
+      return tracks;
+    } catch (e) {
+      debugPrint('[InnerTube] Error fetching YouTube liked songs: $e');
+      return [];
     }
   }
 
@@ -1460,20 +1579,16 @@ class InnerTubeService {
 
       // Subtitle contains artist and type info
       String artist = 'Unknown';
-      final subtitleRuns = card['subtitle']?['runs'] as List?;
+      final subtitleRuns =
+          card['subtitle']?['runs'] as List?; // Re-added definition
+      String? artistId;
       if (subtitleRuns != null) {
-        // Check for non-music content (filter out)
-        for (var run in subtitleRuns) {
-          final text = run['text']?.toString().trim() ?? '';
-          if (['Video', 'Відео', 'Series', 'Серія', 'Podcast', 'Подкаст']
-              .contains(text)) {
-            return null; // Skip non-music
-          }
-        }
-        artist = _extractArtistFromRuns(subtitleRuns);
+        final artistInfo = _extractArtistInfo(subtitleRuns);
+        artist = artistInfo['name'] ?? 'Unknown';
+        artistId = artistInfo['id'];
       }
 
-      // Try to get videoId from various endpoints
+      // Extract duration from runs or lengthTexts
       String? videoId;
       String? playlistId;
 
@@ -1533,6 +1648,7 @@ class InnerTubeService {
           thumbnailUrl: thumbnailUrl,
           playlistId: playlistId,
           isPlaylist: true,
+          artistId: artistId,
         );
       }
 
@@ -1544,6 +1660,7 @@ class InnerTubeService {
           artist: artist,
           thumbnailUrl: thumbnailUrl,
           playlistId: playlistId,
+          artistId: artistId,
         );
       }
 
@@ -1580,6 +1697,8 @@ class InnerTubeService {
 
       // Extract artist and category from subtitle runs
       String artist = "Unknown";
+      String?
+          artistId; // Declare here so it is visible in entire function scope
       String category = "";
 
       final flexCol1 = mrlir['flexColumns']?[1]
@@ -1653,15 +1772,30 @@ class InnerTubeService {
               pageType == 'MUSIC_PAGE_TYPE_USER_CHANNEL') {
             if (run['text'] != null) {
               artistNames.add(run['text']);
+              // Capture the first valid browseId as artistId
+              if (artistId == null) {
+                artistId = nav?['browseEndpoint']?['browseId'];
+              }
             }
           }
         }
 
         if (artistNames.isNotEmpty) {
           artist = artistNames.join(' & ');
+          // artistId is already captured from the loop above
         } else {
           // Fallback to text extraction
-          artist = _extractArtistFromRuns(subtitleRuns);
+          final artistInfo = _extractArtistInfo(subtitleRuns);
+          artist = artistInfo['name'] ?? 'Unknown';
+          artistId = artistInfo['id'];
+
+          if (artistId == null) {
+            debugPrint(
+                '[InnerTube] WARNING: No artistId found for "$title". Runs: $subtitleRuns');
+          } else {
+            debugPrint(
+                '[InnerTube] Found artistId: $artistId for artist: $artist');
+          }
         }
       }
 
@@ -1806,6 +1940,30 @@ class InnerTubeService {
       // Use browseId as playlistId if playlistId is missing
       final effectivePlaylistId = playlistId ?? browseId;
 
+      // Fallback: If artistId is missing, check if this is an Artist/Channel page
+      if (artistId == null && browseId != null) {
+        if (category == 'Artist' ||
+            category == 'Channel' ||
+            category == 'Канал' ||
+            category == 'Виконавець' ||
+            browseId.startsWith('UC')) {
+          artistId = browseId;
+        }
+      }
+
+      // Fallback 3: Recursive search for ANY artist ID in the raw object
+      if (artistId == null) {
+        artistId = _findArtistBrowseIdRecursive(mrlir);
+        if (artistId != null) {
+          debugPrint(
+              '[InnerTube] Recovered artistId via recursive search: $artistId');
+        } else {
+          debugPrint(
+              '[InnerTube] !!! WARNING: No artistId found for "$title" even after recursive search.');
+          debugPrint('[InnerTube] Raw payload: $mrlir');
+        }
+      }
+
       return YouTubeSong(
         videoId: videoId ??
             effectivePlaylistId ??
@@ -1813,6 +1971,7 @@ class InnerTubeService {
         title: title,
         artist: artist,
         thumbnailUrl: thumbUrl,
+        artistId: artistId,
         playlistId: effectivePlaylistId,
         isPlaylist: isPlaylist,
         category: category,
@@ -1824,13 +1983,37 @@ class InnerTubeService {
     }
   }
 
-  /// Extract artist from runs.
-  /// Logic: Concatenate all runs until the first MAJOR separator (" • ").
-  /// This correctly handles "Artist 1, Artist 2 • Album/Single • Year".
-  String _extractArtistFromRuns(List runs) {
-    if (runs.isEmpty) return 'Unknown';
+  /// Recursively searches for a browseId that looks like an artist/channel ID.
+  String? _findArtistBrowseIdRecursive(dynamic data) {
+    if (data is Map) {
+      // Check if this map has a browseId
+      if (data.containsKey('browseId')) {
+        final id = data['browseId'];
+        if (id is String && (id.startsWith('UC') || id.startsWith('UA'))) {
+          return id;
+        }
+      }
+      // Recursive search values
+      for (var value in data.values) {
+        final found = _findArtistBrowseIdRecursive(value);
+        if (found != null) return found;
+      }
+    } else if (data is List) {
+      for (var item in data) {
+        final found = _findArtistBrowseIdRecursive(item);
+        if (found != null) return found;
+      }
+    }
+    return null;
+  }
+
+  /// Extract artist info from runs.
+  /// Returns {'name': String, 'id': String?}
+  Map<String, String?> _extractArtistInfo(List runs) {
+    if (runs.isEmpty) return {'name': 'Unknown', 'id': null};
 
     final artistParts = <String>[];
+    String? artistId;
 
     for (var run in runs) {
       final text = run['text']?.toString() ?? '';
@@ -1850,17 +2033,28 @@ class InnerTubeService {
       }
 
       artistParts.add(text);
+
+      // Capture the FIRST valid browseId we find (usually the main artist)
+      if (artistId == null) {
+        final browseId =
+            run['navigationEndpoint']?['browseEndpoint']?['browseId'];
+        if (browseId != null &&
+            (browseId.startsWith('UC') ||
+                browseId.startsWith('UA') ||
+                // Sometimes channel IDs don't start with UC but rely on page type
+                run['navigationEndpoint']?['browseEndpoint']
+                            ?['browseEndpointContextSupportedConfigs']
+                        ?['browseEndpointContextMusicConfig']?['pageType'] ==
+                    'MUSIC_PAGE_TYPE_ARTIST')) {
+          artistId = browseId;
+        }
+      }
     }
 
-    if (artistParts.isEmpty) return 'Unknown';
+    if (artistParts.isEmpty) return {'name': 'Unknown', 'id': null};
 
-    final fullString = artistParts.join('');
-
-    // Defensive: If valid artist string is detected, return it.
-    // However, if the result is literally "Single" or "Video", it's suspicious but likely correct if that's what's before the dot.
-    // (In YTM artist name is always first).
-
-    return fullString.trim();
+    final fullString = artistParts.join('').trim();
+    return {'name': fullString, 'id': artistId};
   }
 
   /// Fetches radio/related tracks for a given video using the /next endpoint
@@ -1942,12 +2136,21 @@ class InnerTubeService {
 
       // Parse artist from shortBylineText or longBylineText
       String artist = 'Unknown';
+      String? artistId;
       final shortByline = renderer['shortBylineText']?['runs'] as List?;
       final longByline = renderer['longBylineText']?['runs'] as List?;
       final bylineRuns = shortByline ?? longByline;
 
       if (bylineRuns != null && bylineRuns.isNotEmpty) {
-        artist = bylineRuns[0]['text'] as String? ?? 'Unknown';
+        // Extract artist name and ID using the same logic as _extractArtistInfo
+        final artistInfo = _extractArtistInfo(bylineRuns);
+        artist = artistInfo['name'] ?? 'Unknown';
+        artistId = artistInfo['id'];
+      }
+
+      // Fallback: Recursive search for artistId if not found
+      if (artistId == null) {
+        artistId = _findArtistBrowseIdRecursive(renderer);
       }
 
       // Get thumbnail
@@ -1971,13 +2174,130 @@ class InnerTubeService {
         artist: artist,
         thumbnailUrl: thumbnail,
         duration: duration,
+        artistId: artistId,
       );
     } catch (e) {
       return null;
     }
   }
 
-  /// Internal method to fetch tracks from any Browse ID (Playlist, Album, See All page)
+  /// Fetches lyrics for a given video using the /next and /browse endpoints
+  /// Returns a Map with 'lyrics' (String) and 'isSynced' (bool) or null.
+  Future<Map<String, dynamic>?> getLyrics(String videoId) async {
+    try {
+      await _rateLimiter.throttle();
+      await _addAuthHeaders();
+
+      // 1. Get browseId for lyrics using /next
+      final nextBody = _webContextBody();
+      nextBody['videoId'] = videoId;
+
+      final nextResponse = await _dio.post('/next', data: nextBody);
+      final nextData = nextResponse.data;
+
+      // Extract lyrics browseId
+      String? lyricsBrowseId;
+      try {
+        final tabs = nextData['contents']
+                ?['singleColumnMusicWatchNextResultsRenderer']
+            ?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs'];
+
+        if (tabs != null) {
+          debugPrint(
+              '[InnerTube] Found ${tabs.length} tabs in Watch Next response');
+          for (var tab in tabs) {
+            final tabRenderer = tab['tabRenderer'];
+            final title = tabRenderer?['title'];
+            debugPrint('[InnerTube] Tab title: $title');
+
+            if (title == 'Lyrics' ||
+                title == 'Тексти пісень' ||
+                title == 'Тексты песен' ||
+                title == 'Текст' ||
+                title == 'Letra' ||
+                title == 'Paroles' ||
+                title == 'Songtexte') {
+              lyricsBrowseId =
+                  tabRenderer['endpoint']?['browseEndpoint']?['browseId'];
+              debugPrint('[InnerTube] Found lyrics browseId: $lyricsBrowseId');
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[InnerTube] Error extracting lyrics browseId: $e');
+      }
+
+      if (lyricsBrowseId == null) {
+        debugPrint('[InnerTube] No lyrics browseId found for $videoId');
+        return null;
+      }
+
+      // 2. Fetch lyrics content using /browse
+      final browseBody = _webContextBody();
+      browseBody['browseId'] = lyricsBrowseId;
+
+      final browseResponse = await _dio.post('/browse', data: browseBody);
+      final browseData = browseResponse.data;
+
+      // 3. Parse lyrics
+      // Synchronized lyrics are usually in timedLyricsData,
+      // plain lyrics in description or runs.
+
+      final lyricsRenderer = browseData['contents']?['sectionListRenderer']
+          ?['contents']?[0]?['musicDescriptionShelfRenderer'];
+      if (lyricsRenderer == null) return null;
+
+      final String plainLyrics =
+          (lyricsRenderer['description']?['runs'] as List?)
+                  ?.map((r) => r['text'])
+                  .join('') ??
+              '';
+
+      String syncedLyrics = '';
+
+      // Try to parse synchronized lyrics if available
+      final List? timedLyrics = lyricsRenderer['timedLyricsData'];
+      if (timedLyrics != null && timedLyrics.isNotEmpty) {
+        final buffer = StringBuffer();
+        for (var line in timedLyrics) {
+          final text = line['lyricLine'] ?? '';
+          final startMsStr = line['startTimeMs']?.toString() ?? '0';
+          final startMs = int.tryParse(startMsStr) ?? 0;
+
+          final duration = Duration(milliseconds: startMs);
+          final minutes = duration.inMinutes;
+          final seconds = duration.inSeconds % 60;
+          final hundredths = (duration.inMilliseconds % 1000) ~/ 10;
+
+          final timestamp =
+              '[${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${hundredths.toString().padLeft(2, '0')}]';
+          buffer.writeln('$timestamp $text');
+        }
+        syncedLyrics = buffer.toString().trim();
+        debugPrint(
+            '[InnerTube] Found and parsed ${timedLyrics.length} lines of synced lyrics');
+      }
+
+      return {
+        'lyrics': plainLyrics,
+        'syncedLyrics': syncedLyrics,
+        'source': 'YouTube Music',
+      };
+    } catch (e) {
+      debugPrint('[InnerTube] getLyrics failed: $e');
+      return null;
+    }
+  }
+
+  /// Fetches top tracks for an artist
+  Future<List<YouTubeSong>> getArtistTopTracks(String browseId) async {
+    // Use the comprehensive _getArtistTopTracks which handles tab navigation
+    // and looks for "See All" links to fetch more tracks
+    return _getArtistTopTracks(browseId);
+  }
+
+  /// Fetches tracks from any Browse ID (Playlist, Album, See All page)
   /// Supports optional params for specific views (e.g. "Songs")
   Future<List<YouTubeSong>> _fetchFullTracks(String browseId,
       {String? params}) async {
@@ -2019,7 +2339,10 @@ class InnerTubeService {
           straplineRuns ??= header['straplineText']?['runs'] as List?;
 
           if (straplineRuns != null) {
-            fallbackArtist = _extractArtistFromRuns(straplineRuns);
+            final artistInfo = _extractArtistInfo(straplineRuns);
+            fallbackArtist = artistInfo['name'] ?? 'Unknown';
+            // Note: artistId is not used as a fallback for the track artist,
+            // but rather for navigation. Keeping fallbackArtist for consistency.
             debugPrint(
                 '[InnerTube] Found artist in strapline: $fallbackArtist');
           }
@@ -2033,7 +2356,11 @@ class InnerTubeService {
                     ?['runs'] ??
                 header['byline']?['runs'] as List?;
             if (bylineRuns != null) {
-              fallbackArtist = _extractArtistFromRuns(bylineRuns);
+              final artistInfo = _extractArtistInfo(bylineRuns);
+              final artist = artistInfo['name'] ?? 'Unknown';
+              final artistId = artistInfo['id'];
+              fallbackArtist =
+                  artist; // Update fallbackArtist with the extracted artist
               debugPrint('[InnerTube] Found artist in byline: $fallbackArtist');
             }
           }
@@ -2044,7 +2371,8 @@ class InnerTubeService {
               fallbackArtist == 'Single') {
             final subtitleRuns = header['subtitle']?['runs'] as List?;
             if (subtitleRuns != null) {
-              final text = _extractArtistFromRuns(subtitleRuns);
+              final artistInfo = _extractArtistInfo(subtitleRuns);
+              final text = artistInfo['name'];
               // Defensive: If it looks like a category, ignore it
               if (!['Single', 'Album', 'EP', 'Playlist', 'Сингл', 'Альбом']
                   .contains(text)) {
@@ -2065,11 +2393,12 @@ class InnerTubeService {
       // Pagination Logic
       String? continuationToken = _recursiveFindContinuationToken(initialData);
       int pageCount = 0;
-      // Limit pages to avoid infinite loops, e.g. 20 pages * 100 items = 2000 tracks
-      while (continuationToken != null && pageCount < 20) {
+      // Limit pages to avoid infinite loops, e.g. 50 pages * 100 items = 5000 tracks
+      const int maxPages = 50;
+      while (continuationToken != null && pageCount < maxPages) {
         pageCount++;
         debugPrint(
-            '[InnerTube] Fetching playlist continuation page $pageCount...');
+            '[InnerTube] Fetching playlist continuation page $pageCount/$maxPages...');
 
         await Future.delayed(
             const Duration(milliseconds: 300)); // Gentle throttling
@@ -2083,7 +2412,14 @@ class InnerTubeService {
         continuationToken = _recursiveFindContinuationToken(contResponse);
       }
 
+      if (pageCount >= maxPages && continuationToken != null) {
+        _logger.w(
+            '[InnerTube] Hit pagination limit ($maxPages pages). Some tracks may not be loaded.');
+      }
+
       return tracks;
+    } on YouTubeException {
+      rethrow;
     } catch (e) {
       debugPrint('InnerTube _fetchFullTracks Error: $e');
       return [];

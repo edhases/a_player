@@ -28,9 +28,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   Future<void> _pickImage(TextEditingController controller) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-      );
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
 
       if (result != null && result.files.single.path != null) {
         controller.text = result.files.single.path!;
@@ -159,14 +157,21 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline,
-                              size: 48, color: Colors.red),
+                          const Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red,
+                          ),
                           const SizedBox(height: 16),
-                          Text('Oops!',
-                              style: Theme.of(context).textTheme.titleLarge),
+                          Text(
+                            'Oops!',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
                           const SizedBox(height: 8),
-                          Text('Could not load your feed.',
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          Text(
+                            'Could not load your feed.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () {
@@ -182,13 +187,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     state.status == HomeStatus.success)
                   SliverFillRemaining(
                     child: Center(
-                        child: Text(AppLocalizations.of(context).noMatchFound)),
+                      child: Text(AppLocalizations.of(context).noMatchFound),
+                    ),
                   )
                 else
                   ...state.sections.expand(_buildSectionSlivers),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 80),
-                )
+                const SliverToBoxAdapter(child: SizedBox(height: 80)),
               ],
             );
           },
@@ -221,8 +225,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text('Playing ${station.name}...'),
-                  duration: const Duration(seconds: 1)),
+                content: Text('Playing ${station.name}...'),
+                duration: const Duration(seconds: 1),
+              ),
             );
           }
         }
@@ -235,9 +240,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       final path = song.videoId.substring(6); // Remove 'local:' prefix
       try {
         final db = GetIt.I<AppDatabase>();
-        final track = await (db.select(db.tracks)
-              ..where((t) => t.path.equals(path)))
-            .getSingleOrNull();
+        final track = await (db.select(
+          db.tracks,
+        )..where((t) => t.path.equals(path))).getSingleOrNull();
 
         if (track != null) {
           final audioHandler = GetIt.I<MyAudioHandler>();
@@ -246,8 +251,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text('Playing ${track.title}...'),
-                  duration: const Duration(seconds: 1)),
+                content: Text('Playing ${track.title}...'),
+                duration: const Duration(seconds: 1),
+              ),
             );
           }
         }
@@ -262,7 +268,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   Future<void> _showSongContextMenu(
-      BuildContext context, YouTubeSong song) async {
+    BuildContext context,
+    YouTubeSong song,
+  ) async {
     if (song.videoId.startsWith('radio:')) {
       final idStr = song.videoId.substring(6);
       final id = int.tryParse(idStr);
@@ -275,7 +283,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   void _showRadioContextMenu(
-      BuildContext context, int stationId, YouTubeSong song) {
+    BuildContext context,
+    int stationId,
+    YouTubeSong song,
+  ) {
     final loc = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
@@ -303,8 +314,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
-                title:
-                    Text(loc.delete, style: const TextStyle(color: Colors.red)),
+                title: Text(
+                  loc.delete,
+                  style: const TextStyle(color: Colors.red),
+                ),
                 onTap: () async {
                   Navigator.pop(context);
                   final confirmed = await showDialog<bool>(
@@ -314,12 +327,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       content: Text('${loc.delete} ${song.title}?'),
                       actions: [
                         TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: Text(loc.cancel)),
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(loc.cancel),
+                        ),
                         TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: Text(loc.delete,
-                                style: const TextStyle(color: Colors.red))),
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(
+                            loc.delete,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -371,8 +388,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   Expanded(
                     child: TextField(
                       controller: imageController,
-                      decoration:
-                          InputDecoration(labelText: loc.imageUrlOptional),
+                      decoration: InputDecoration(
+                        labelText: loc.imageUrlOptional,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -413,9 +431,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
               if (context.mounted) {
                 context.read<HomeBloc>().add(HomeRefreshFeed());
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Updated $name')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Updated $name')));
               }
             },
             child: Text(loc.save),
@@ -429,6 +447,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     if (section.songs.isEmpty) return [];
 
     final slivers = <Widget>[];
+
+    final rawTitle = section.title;
+    final sectionKey = 'home_section_${rawTitle.toLowerCase().replaceAll(RegExp(r'\s+'), '_')}'
+        .replaceAll(RegExp(r'[^a-z0-9_]+'), '');
 
     // Localize Title
     String title = section.title;
@@ -449,12 +471,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 22,
-                    ),
+              Expanded(
+                child: Text(
+                  title,
+                  key: ValueKey(sectionKey),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               if (section.title == 'radio_stations')
                 IconButton(
@@ -473,20 +499,22 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         section.type == SectionType.grid ||
         section.type == SectionType.horizontal) {
       if (section.songs.isNotEmpty) {
-        slivers.add(SliverToBoxAdapter(
-          child: PagedSongList(
-            songs: section.songs,
-            itemsPerPage: 5,
-            onSongTap: _onSongTap,
-            onPlayTap: _onSongTap,
-            onMenuTap: (song) => _showSongContextMenu(context, song),
+        slivers.add(
+          SliverToBoxAdapter(
+            child: PagedSongList(
+              songs: section.songs,
+              itemsPerPage: 5,
+              onSongTap: _onSongTap,
+              onPlayTap: _onSongTap,
+              onMenuTap: (song) => _showSongContextMenu(context, song),
+            ),
           ),
-        ));
+        );
       }
     } else {
-      slivers.add(SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
+      slivers.add(
+        SliverList(
+          delegate: SliverChildBuilderDelegate((context, index) {
             return CompactQuickPickTile(
               song: section.songs[index],
               onTap: () => _onSongTap(section.songs[index]),
@@ -494,10 +522,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               onMenuTap: () =>
                   _showSongContextMenu(context, section.songs[index]),
             );
-          },
-          childCount: section.songs.length,
+          }, childCount: section.songs.length),
         ),
-      ));
+      );
     }
 
     return slivers;

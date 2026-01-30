@@ -103,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
+            key: const Key('home_login_button'),
             icon: const Icon(Icons.account_circle),
             tooltip: loc.loginTooltip,
             onPressed: () {
@@ -111,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           IconButton(
+            key: const Key('home_search_button'),
             icon: const Icon(Icons.search),
             onPressed: () {
               showSearch(

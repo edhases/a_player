@@ -34,7 +34,7 @@ void main() async {
   }
 
   if (updated) {
-    await pubspecFile.writeAsString(newLines.join('\n') + '\n');
+    await pubspecFile.writeAsString('${newLines.join('\n')}\n');
   } else {
     print('Warning: version line not found in pubspec.yaml');
   }

@@ -12,6 +12,7 @@ class MediaItemAdapter {
       'videoId': song.videoId,
       'thumbnailUrl': song.thumbnailUrl,
       'playlistId': song.playlistId,
+      'artistId': song.artistId,
     };
 
     if (cachedUrl != null) {

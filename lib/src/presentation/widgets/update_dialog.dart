@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/models/update_info.dart';
 import '../../core/services/update_service.dart';
@@ -44,146 +46,234 @@ class _UpdateDialogState extends State<UpdateDialog> {
   bool _isDownloading = false;
   double _progress = 0;
   String? _error;
+  bool _showPermissionButton = false;
 
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
-    return AlertDialog(
-      title: Row(
-        children: [
-          Icon(
-            widget.isForcedUpdate ? Icons.warning : Icons.system_update,
-            color: widget.isForcedUpdate
-                ? Colors.orange
-                : theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              loc.translate('update_available',
-                  args: {'version': widget.updateInfo.versionName}),
-              style: const TextStyle(fontSize: 18),
-            ),
-          ),
-        ],
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
       ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.isForcedUpdate) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                  ),
-                  child: Row(
+      elevation: 0,
+      backgroundColor: theme.colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 16),
+            // Icon
+            Icon(
+              Icons.system_update,
+              size: 48,
+              color: widget.isForcedUpdate
+                  ? Colors.orange
+                  : theme.colorScheme.primary,
+            ),
+            const SizedBox(height: 24),
+
+            // Title
+            Text(
+              loc.translate('update_available', args: {
+                'version': widget.updateInfo.versionName
+              }).split(':')[0], // Simplify title if possible
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Description / Changelog
+            Text(
+              widget.isForcedUpdate
+                  ? loc.translate('forced_update')
+                  : loc.translate('update_desc'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Changelog Box
+            if (widget.updateInfo.changelog.isNotEmpty)
+              Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.orange),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          loc.translate('forced_update'),
-                          style: TextStyle(color: Colors.orange[800]),
+                      Text(
+                        loc.translate('whats_new'),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.updateInfo.changelog,
+                        style: theme.textTheme.bodyMedium,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
-              Text(
-                loc.translate('whats_new'),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
               ),
-              const SizedBox(height: 8),
+
+            // Error Message
+            if (_error != null) ...[
+              const SizedBox(height: 24),
               Container(
-                constraints: const BoxConstraints(maxHeight: 200),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
+                  color: theme.colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    widget.updateInfo.changelog.isNotEmpty
-                        ? widget.updateInfo.changelog
-                        : loc.translate('no_changelog'),
-                    style: theme.textTheme.bodyMedium,
-                  ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline,
+                        color: theme.colorScheme.onErrorContainer),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                            color: theme.colorScheme.onErrorContainer),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              if (_isDownloading) ...[
-                const SizedBox(height: 16),
-                LinearProgressIndicator(
-                    value: _progress > 0 ? _progress : null),
-                const SizedBox(height: 8),
-                Text(
-                  _progress > 0
-                      ? '${(_progress * 100).toStringAsFixed(0)}%'
-                      : loc.translate('downloading_update'),
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: Colors.red),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: Text(_error!,
-                              style: const TextStyle(color: Colors.red))),
-                    ],
-                  ),
-                ),
-              ],
             ],
-          ),
+
+            // Permission Button
+            if (_showPermissionButton) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonal(
+                  onPressed: _openInstallSettings,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.orange.shade100,
+                    foregroundColor: Colors.orange.shade900,
+                  ),
+                  child: Text(
+                      "Enable 'Install Unknown Apps'"), // Hardcoded for fallback, clear user instruction
+                ),
+              ),
+            ],
+
+            // Progress Bar
+            if (_isDownloading) ...[
+              const SizedBox(height: 24),
+              LinearProgressIndicator(
+                value: _progress > 0 ? _progress : null,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${(_progress * 100).toStringAsFixed(0)}%',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+
+            const SizedBox(height: 32),
+
+            // Buttons
+            if (!_isDownloading)
+              Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                      ),
+                      onPressed: _startUpdate,
+                      child: Text(loc.translate('update_now')),
+                    ),
+                  ),
+                  if (!widget.isForcedUpdate) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.onSurfaceVariant,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(loc.translate(
+                            'not_now')), // Typically "Cancel" or "Later"
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+          ],
         ),
       ),
-      actions: [
-        if (!widget.isForcedUpdate && !_isDownloading)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              widget.isAutoCheck
-                  ? loc.translate('update_later')
-                  : loc.translate('not_now'),
-            ),
-          ),
-        if (!_isDownloading)
-          ElevatedButton.icon(
-            onPressed: _startUpdate,
-            icon: const Icon(Icons.download),
-            label: Text(loc.translate('update_now')),
-          ),
-      ],
     );
+  }
+
+  Future<void> _openInstallSettings() async {
+    if (Platform.isAndroid) {
+      await Permission.requestInstallPackages.request();
+      // Check status again
+      final status = await Permission.requestInstallPackages.status;
+      if (status.isGranted && mounted) {
+        setState(() {
+          _showPermissionButton = false;
+          _error = null;
+        });
+      }
+    }
   }
 
   Future<void> _startUpdate() async {
     if (!GetIt.I.isRegistered<UpdateService>()) return;
 
+    // Pre-check permission on Android
+    if (Platform.isAndroid) {
+      final status = await Permission.requestInstallPackages.status;
+      if (!status.isGranted) {
+        // Try to request it once before starting
+        final result = await Permission.requestInstallPackages.request();
+        if (!result.isGranted) {
+          setState(() {
+            _error = "Permission to install unknown apps is required.";
+            _showPermissionButton = true;
+          });
+          return;
+        }
+      }
+    }
+
     setState(() {
       _isDownloading = true;
       _progress = 0;
       _error = null;
+      _showPermissionButton = false;
     });
 
     final updateService = GetIt.I<UpdateService>();
@@ -215,11 +305,30 @@ class _UpdateDialogState extends State<UpdateDialog> {
       final success = await updateService.installApk(apkFile);
 
       if (!success && mounted) {
+        // If install failed, likely permission or URI issue
+        // Check permission again
+        bool needsPerm = false;
+        if (Platform.isAndroid) {
+          final status = await Permission.requestInstallPackages.status;
+          if (!status.isGranted) needsPerm = true;
+        }
+
         setState(() {
-          _error = AppLocalizations.of(context).translate('install_failed');
+          // Keep it specific
+          if (needsPerm) {
+            _error = "Installation blocked. Please grant permission.";
+            _showPermissionButton = true;
+          } else {
+            _error = AppLocalizations.of(context).translate('install_failed');
+            // Even if we think we have permission, if it failed on Android 8+,
+            // it might be effectively blocked. Show button as fallback option?
+            // Maybe safer to check.
+          }
           _isDownloading = false;
         });
       } else if (mounted) {
+        // Build success (intent launched), usually app closes for update
+        // We can close dialog
         Navigator.of(context).pop();
       }
     } catch (e) {

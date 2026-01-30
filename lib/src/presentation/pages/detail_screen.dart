@@ -36,6 +36,7 @@ class DetailScreen extends StatelessWidget {
     final audioHandler = GetIt.I<MyAudioHandler>();
 
     return Scaffold(
+      key: const Key('detail_screen'),
       body: FutureBuilder<List<Track>>(
         future: _fetchTracks(db),
         builder: (context, snapshot) {

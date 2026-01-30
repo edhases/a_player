@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:just_audio/just_audio.dart' hide PlayerState;
+import 'package:just_audio_background/just_audio_background.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/services/audio_handler.dart';
 import '../../data/datasources/app_database.dart';
@@ -11,11 +15,15 @@ import '../../core/utils/localization.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/youtube_helper.dart';
 import '../../core/services/favorites_service.dart';
+import '../../domain/entities/youtube_song.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:get_it/get_it.dart';
 import '../blocs/player/player_bloc.dart';
 import '../blocs/queue/queue_bloc.dart';
 import '../widgets/lyrics_view.dart';
+import '../utils/track_actions.dart';
+import 'playlist_tracks_screen.dart';
+import 'detail_screen.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -33,6 +41,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      key: const Key('player_screen'),
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -45,6 +54,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
         actions: [
           IconButton(
+            key: const Key('player_options_button'),
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onPressed: () {
               _showOptionsSheet(context);
@@ -249,25 +259,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
               // Like Button
               IconButton(
+                key: const Key('player_like_button'),
                 icon: Icon(
                   isLiked ? Icons.favorite : Icons.favorite_border,
                   color: isLiked ? Colors.red : Colors.white70,
                   size: 28,
                 ),
                 onPressed: () {
-                  favService.toggleFavorite(
+                  TrackActions.handleLikeButton(
+                    context,
                     videoId: videoId,
                     title: mediaItem.title,
                     artist: mediaItem.artist ?? 'Unknown',
                     thumbnailUrl: mediaItem.artUri?.toString() ?? '',
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isLiked
-                          ? AppLocalizations.of(context).removedFromFavorites
-                          : AppLocalizations.of(context).addedToFavorites),
-                      duration: const Duration(seconds: 1),
-                    ),
                   );
                 },
               ),
@@ -308,12 +312,66 @@ class _PlayerScreenState extends State<PlayerScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 4),
-        Text(
-          mediaItem.artist ?? AppLocalizations.of(context).unknownArtist,
-          style: TextStyle(
-              fontSize: 18, color: Colors.white.withValues(alpha: 0.7)),
-          textAlign: TextAlign.start,
-          maxLines: 1,
+        GestureDetector(
+          key: const Key('player_artist_link'),
+          onTap: () {
+            // Handle Artist Tap
+            debugPrint(
+                '[PlayerScreen] Artist tapped. Extras: ${mediaItem.extras}');
+            final isOnline = mediaItem.extras?['isOnline'] == true;
+            debugPrint('[PlayerScreen] isOnline: $isOnline');
+            if (isOnline) {
+              final artistId = mediaItem.extras?['artistId'] as String?;
+              debugPrint('[PlayerScreen] artistId from extras: $artistId');
+              if (artistId != null) {
+                // Navigate to Online Artist (using PlaylistTracksScreen for now as a catch-all for lists)
+                // Or create a dedicated OnlineArtistScreen.
+                // For MVP, if it's a browseId, PlaylistTracksScreen handles it via InnerTubeService._fetchFullTracks
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PlaylistTracksScreen(
+                      playlistId: artistId,
+                      title: mediaItem.artist ?? 'Artist',
+                      knownArtist: mediaItem.artist,
+                      isArtistPage:
+                          true, // New flag we might need? Or just treat as playlist.
+                    ),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(
+                          AppLocalizations.of(context).artistPageUnavailable)),
+                );
+              }
+            } else {
+              // Local Artist
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DetailScreen(
+                    type: DetailScreenType.artist,
+                    title: mediaItem.artist ?? 'Unknown',
+                  ),
+                ),
+              );
+            }
+          },
+          child: Text(
+            mediaItem.artist ?? AppLocalizations.of(context).unknownArtist,
+            key: const Key('player_artist_text'),
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.white.withValues(alpha: 0.7),
+              decoration: TextDecoration.underline,
+              decorationStyle: TextDecorationStyle.solid,
+              decorationColor: Colors.white.withValues(alpha: 0.5),
+            ),
+            textAlign: TextAlign.start,
+            maxLines: 1,
+          ),
         ),
       ],
     );
@@ -397,6 +455,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             IconButton(
+              key: const Key('player_shuffle_button'),
               icon: Icon(Icons.shuffle,
                   color: shuffleMode != AudioServiceShuffleMode.none
                       ? colorScheme.primary
@@ -407,11 +466,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       : AudioServiceShuffleMode.none)),
             ),
             IconButton(
+              key: const Key('player_prev_button'),
               icon: const Icon(Icons.skip_previous,
                   color: Colors.white, size: 45),
               onPressed: () => playerBloc.add(PlayerSkipPrevious()),
             ),
             GestureDetector(
+              key: const Key('player_play_pause_button'),
               onTap: () =>
                   playerBloc.add(isPlaying ? PlayerPause() : PlayerPlay()),
               child: Container(
@@ -424,10 +485,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
               ),
             ),
             IconButton(
+              key: const Key('player_next_button'),
               icon: const Icon(Icons.skip_next, color: Colors.white, size: 45),
               onPressed: () => playerBloc.add(PlayerSkipNext()),
             ),
             IconButton(
+              key: const Key('player_repeat_button'),
               icon: Icon(
                   repeatMode == AudioServiceRepeatMode.one
                       ? Icons.repeat_one
@@ -593,6 +656,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
+            key: const Key('player_download_action'),
             leading: const Icon(Icons.download, color: Colors.white),
             title:
                 Text(loc.download, style: const TextStyle(color: Colors.white)),

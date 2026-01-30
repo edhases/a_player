@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart';
 import 'package:get_it/get_it.dart';
 import '../../data/datasources/app_database.dart';
+import '../../domain/entities/youtube_song.dart';
 import '../services/recommendation_service.dart';
 import '../services/innertube_service.dart';
 
@@ -123,5 +124,79 @@ class FavoritesService {
             (t) => OrderingTerm(expression: t.likedAt, mode: OrderingMode.desc)
           ]))
         .get();
+  }
+
+  /// Fetches new liked songs from YouTube Music that are not yet in local database
+  /// Returns list of new songs (not yet imported)
+  Future<List<YouTubeSong>> fetchNewLikedFromYouTube() async {
+    if (_innerTubeService == null) {
+      debugPrint('[FavoritesService] Cannot sync - InnerTube not initialized');
+      return [];
+    }
+
+    debugPrint('[FavoritesService] Fetching new liked songs from YouTube Music...');
+    
+    try {
+      // Fetch liked songs from YouTube Music
+      final youTubeLiked = await _innerTubeService!.getYouTubeLikedSongs(limit: 500);
+      debugPrint('[FavoritesService] Fetched ${youTubeLiked.length} liked songs from YouTube');
+
+      if (youTubeLiked.isEmpty) {
+        debugPrint('[FavoritesService] No liked songs found on YouTube');
+        return [];
+      }
+
+      // Get current local liked songs
+      final localLiked = await getLikedSongs();
+      final localLikedIds = localLiked.map((t) => t.videoId).toSet();
+
+      // Filter only new songs
+      final newSongs = youTubeLiked.where((song) => !localLikedIds.contains(song.videoId)).toList();
+      debugPrint('[FavoritesService] Found ${newSongs.length} new songs to import');
+      
+      return newSongs;
+    } catch (e) {
+      debugPrint('[FavoritesService] Fetch error: $e');
+      return [];
+    }
+  }
+
+  /// Imports specific songs to local database as liked
+  /// [songs] - list of songs to import
+  /// Returns the number of imported songs
+  Future<int> importLikedSongs(List<YouTubeSong> songs) async {
+    int imported = 0;
+    
+    for (final song in songs) {
+      try {
+        await _db.into(_db.youTubeTracks).insertOnConflictUpdate(
+          YouTubeTracksCompanion(
+            videoId: Value(song.videoId),
+            title: Value(song.title),
+            artist: Value(song.artist),
+            thumbnailUrl: Value(song.thumbnailUrl),
+            isFavorite: const Value(true),
+            likedAt: Value(DateTime.now()),
+            duration: const Value(0),
+            cachedAt: Value(DateTime.now()),
+          ),
+        );
+        imported++;
+        debugPrint('[FavoritesService] Imported: ${song.title} - ${song.artist}');
+      } catch (e) {
+        debugPrint('[FavoritesService] Failed to import ${song.title}: $e');
+      }
+    }
+    
+    debugPrint('[FavoritesService] Import complete. Imported $imported songs.');
+    return imported;
+  }
+
+  /// Syncs liked songs FROM YouTube Music TO local database
+  /// Returns the number of new songs imported
+  Future<int> syncFromYouTube() async {
+    final newSongs = await fetchNewLikedFromYouTube();
+    if (newSongs.isEmpty) return 0;
+    return await importLikedSongs(newSongs);
   }
 }

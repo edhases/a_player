@@ -6,6 +6,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import 'audio_handler.dart';
 import 'audio_source_factory.dart';
+import 'background_cache_service.dart';
 import 'cache_service.dart';
 import 'download_service.dart';
 import 'favorites_service.dart';
@@ -28,6 +29,8 @@ import 'lyrics_service.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'prefetch_manager.dart';
 import 'update_service.dart';
+import '../../testing/fakes/fake_services.dart';
+import '../../testing/test_audio_source_factory.dart';
 
 import '../../data/datasources/app_database.dart';
 import '../../data/repositories/music_repository_impl.dart';
@@ -62,6 +65,90 @@ class AppInitializer {
     await _initAudioHandler(db);
 
     logService.info('[AppInitializer] Initialization complete.');
+  }
+
+  /// Test initializer: registers fake services and avoids network/platform heavy setup.
+  static Future<void> initForTest() async {
+    final logService = LogService();
+    await logService.init();
+    GetIt.I.registerSingleton<LogService>(logService);
+    logService.info('[AppInitializer] Starting TEST initialization...');
+
+    // Settings
+    final settingsService = SettingsService();
+    await settingsService.init();
+    GetIt.I.registerSingleton<SettingsService>(settingsService);
+
+    // GoogleAuthService (used in SettingsScreen)
+    final googleAuthService = GoogleAuthService();
+    GetIt.I.registerSingleton<GoogleAuthService>(googleAuthService);
+
+    // Database
+    final db = AppDatabase();
+    GetIt.I.registerSingleton<AppDatabase>(db);
+
+    // Seed local track for tests
+    await db.into(db.tracks).insertOnConflictUpdate(
+          TracksCompanion.insert(
+            path: 'local:test_song.mp3',
+            title: 'Local Test Song',
+            artist: const Value('Local Artist'),
+            album: const Value('Local Album'),
+            duration: 160000,
+            folderPath: 'local',
+            mediaStoreId: const Value(1),
+          ),
+        );
+
+    // Fake services
+    final innerTube = FakeInnerTubeService(settingsService: settingsService);
+    GetIt.I.registerSingleton<InnerTubeService>(innerTube);
+
+    final youtubeHelper = FakeYouTubeHelper(db);
+    GetIt.I.registerSingleton<YouTubeHelper>(youtubeHelper);
+
+    final cacheService = FakeCacheService();
+    await cacheService.init();
+    GetIt.I.registerSingleton<CacheService>(cacheService);
+
+    final recommendationService = FakeRecommendationService(
+      YoutubeExplode(),
+      innerTube,
+      db,
+      settingsService: settingsService,
+    );
+    await recommendationService.init();
+    GetIt.I.registerSingleton<RecommendationService>(recommendationService);
+
+    // MusicFinder (fake scan)
+    GetIt.I.registerSingleton<MusicFinder>(FakeMusicFinder(db));
+
+    // Optional services used by UI
+    GetIt.I.registerSingleton<LyricsService>(LyricsService(innerTube));
+    GetIt.I.registerSingleton<TagEditorService>(TagEditorService());
+    GetIt.I.registerSingleton<WidgetService>(WidgetService());
+
+    // AudioSourceFactory (test)
+    GetIt.I.registerSingleton<AudioSourceFactory>(
+      TestAudioSourceFactory(youtubeHelper, cacheService),
+      dispose: (factory) => factory.dispose(),
+    );
+
+    // PrefetchManager
+    GetIt.I.registerSingleton<PrefetchManager>(
+      PrefetchManager(youtubeHelper, cacheService),
+      dispose: (manager) => manager.dispose(),
+    );
+
+    // FavoritesService (depends on RecommendationService + InnerTubeService)
+    final favoritesService = FavoritesService(recommendationService);
+    await favoritesService.init();
+    GetIt.I.registerSingleton<FavoritesService>(favoritesService);
+
+    // Initialize Audio Handler
+    await _initAudioHandler(db);
+
+    logService.info('[AppInitializer] TEST initialization complete.');
   }
 
   static Future<void> _initCoreServices() async {
@@ -114,10 +201,15 @@ class AppInitializer {
     await recommendationService.init();
     GetIt.I.registerSingleton<RecommendationService>(recommendationService);
 
+    // TagEditorService
+    GetIt.I.registerSingleton<TagEditorService>(TagEditorService());
+
     // MetadataMatchingService
     final metadataMatchingService = MetadataMatchingService(
       db,
       GetIt.I<InnerTubeService>(),
+      GetIt.I<TagEditorService>(),
+      GetIt.I<SettingsService>(),
     );
     GetIt.I.registerSingleton<MetadataMatchingService>(metadataMatchingService);
 
@@ -136,6 +228,12 @@ class AppInitializer {
     await cacheService.init();
     GetIt.I.registerSingleton<CacheService>(cacheService);
 
+    // BackgroundCacheService
+    GetIt.I.registerSingleton<BackgroundCacheService>(
+      BackgroundCacheService(),
+      dispose: (service) => service.dispose(),
+    );
+
     // UpdateService
     final updateService = UpdateService(GetIt.I<SettingsService>());
     GetIt.I.registerSingleton<UpdateService>(updateService);
@@ -153,13 +251,11 @@ class AppInitializer {
     );
 
     // LyricsService
-    GetIt.I.registerSingleton<LyricsService>(LyricsService());
+    GetIt.I.registerSingleton<LyricsService>(
+        LyricsService(GetIt.I<InnerTubeService>()));
 
     // WidgetService
     GetIt.I.registerSingleton<WidgetService>(WidgetService());
-
-    // TagEditorService
-    GetIt.I.registerSingleton<TagEditorService>(TagEditorService());
   }
 
   static Future<void> _initAudioHandler(AppDatabase db) async {

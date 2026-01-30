@@ -24,6 +24,7 @@ class AllTracksScreen extends StatelessWidget {
     final settingsService = GetIt.I<SettingsService>();
 
     return Scaffold(
+      key: const Key('all_tracks_screen'),
       body: StreamBuilder<void>(
         stream: settingsService.onSettingsChanged,
         builder: (context, _) {
@@ -98,25 +99,25 @@ class AllTracksScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Future<void> _playQueue(
-      MyAudioHandler audioHandler, List<Track> tracks, int startIndex) async {
-    // Optimization: Don't load 2000+ songs into the player queue at once.
-    // This causes huge delays (15s+) and Android Binder Transaction errors.
-    // Instead, load a "window" of tracks around the current one.
+Future<void> _playQueue(
+    MyAudioHandler audioHandler, List<Track> tracks, int startIndex) async {
+  // Optimization: Don't load 2000+ songs into the player queue at once.
+  // This causes huge delays (15s+) and Android Binder Transaction errors.
+  // Instead, load a "window" of tracks around the current one.
 
-    const windowSize = 20; // Load 20 tracks before and after (total 40)
-    final start = (startIndex - windowSize).clamp(0, tracks.length);
-    final end = (startIndex + windowSize + 1).clamp(0, tracks.length);
+  const windowSize = 20; // Load 20 tracks before and after (total 40)
+  final start = (startIndex - windowSize).clamp(0, tracks.length);
+  final end = (startIndex + windowSize + 1).clamp(0, tracks.length);
 
-    final subset = tracks.sublist(start, end);
-    final relativeIndex = startIndex - start;
+  final subset = tracks.sublist(start, end);
+  final relativeIndex = startIndex - start;
 
-    final mediaItems = subset.map((track) {
-      return MediaItemAdapter.fromTrack(track);
-    }).toList();
+  final mediaItems = subset.map((track) {
+    return MediaItemAdapter.fromTrack(track);
+  }).toList();
 
-    await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
-    await audioHandler.playQueueFromIndex(mediaItems, relativeIndex);
-  }
+  await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);
+  await audioHandler.playQueueFromIndex(mediaItems, relativeIndex);
 }

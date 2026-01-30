@@ -5,6 +5,7 @@ import 'youtube_song_menu.dart';
 import 'package:get_it/get_it.dart';
 import '../../core/services/favorites_service.dart';
 import '../../core/utils/localization.dart';
+import '../utils/track_actions.dart';
 
 class SquareSongCard extends StatelessWidget {
   final YouTubeSong song;
@@ -69,21 +70,12 @@ class SquareSongCard extends StatelessWidget {
                               color: isLiked ? Colors.red : Colors.white,
                             ),
                             onPressed: () {
-                              GetIt.I<FavoritesService>().toggleFavorite(
+                              TrackActions.handleLikeButton(
+                                context,
                                 videoId: song.videoId,
                                 title: song.title,
                                 artist: song.artist,
                                 thumbnailUrl: song.thumbnailUrl,
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(isLiked
-                                      ? AppLocalizations.of(context)
-                                          .removedFromFavorites
-                                      : AppLocalizations.of(context)
-                                          .addedToFavorites),
-                                  duration: const Duration(seconds: 1),
-                                ),
                               );
                             },
                           ),

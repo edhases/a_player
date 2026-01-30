@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/update_info.dart';
@@ -150,12 +151,55 @@ class UpdateService {
         return false;
       }
 
-      // Use file:// URI for local file
-      final uri = Uri.file(apkFile.path);
+      // Check for install permission on Android 8.0+ (Oreo)
+      if (Platform.isAndroid) {
+        final status = await Permission.requestInstallPackages.status;
+        if (!status.isGranted) {
+          debugPrint(
+              '[UpdateService] Requesting install packages permission...');
+          final result = await Permission.requestInstallPackages.request();
+          if (!result.isGranted) {
+            debugPrint('[UpdateService] Install permission denied');
+            // Consider returning here or letting the system prompt fail
+            // But usually we need to guide the user to settings if request() fails
+            // to show a dialog (system behavior varies).
+          }
+        }
+      }
 
-      // Try to launch the APK installation
-      // Note: This requires the app to have REQUEST_INSTALL_PACKAGES permission
-      // and the user must enable "Install from unknown sources"
+      // Prepare URI
+      Uri uri;
+
+      if (Platform.isAndroid) {
+        // Use FileProvider for Android 7.0+
+        final packageInfo = await PackageInfo.fromPlatform();
+        final packageName = packageInfo.packageName;
+
+        // Construct content URI manually to avoid open_file dependency if possible,
+        // but url_launcher handling of content:// is best effort.
+        // Format: content://<authority>/<path_name>/<filename>
+        // authority defined in AndroidManifest: ${applicationId}.fileprovider
+        // path_name defined in file_paths.xml: matches directory of apkFile
+
+        // We assume apkFile is in getTemporaryDirectory which maps to <cache-path name="cache" />
+        final tempDir = await getTemporaryDirectory();
+
+        // Verify file is actually in temp dir
+        if (apkFile.path.startsWith(tempDir.path)) {
+          final fileName = apkFile.path.split('/').last;
+          // "cache" is the name in file_paths.xml for cache-path
+          uri =
+              Uri.parse('content://$packageName.fileprovider/cache/$fileName');
+        } else {
+          // Fallback to file URI (will fail on recent Android)
+          uri = Uri.file(apkFile.path);
+        }
+      } else {
+        uri = Uri.file(apkFile.path);
+      }
+
+      debugPrint('[UpdateService] Launching install intent for: $uri');
+
       if (await canLaunchUrl(uri)) {
         await launchUrl(
           uri,
@@ -163,17 +207,13 @@ class UpdateService {
         );
         return true;
       } else {
-        // Fallback: try content:// URI approach via intent
-        // For Android 7.0+ we need to use FileProvider
-        debugPrint(
-            '[UpdateService] Cannot launch APK directly, trying alternative...');
-
-        // Use android action view intent
-        final contentUri = Uri.parse('content://${apkFile.path}');
-        return await launchUrl(
-          contentUri,
-          mode: LaunchMode.externalApplication,
-        );
+        debugPrint('[UpdateService] Cannot launch APK URI directly');
+        // Final fallback: try just file path which sometimes works with url_launcher on older devices
+        if (uri.scheme == 'content') {
+          final fileUri = Uri.file(apkFile.path);
+          return await launchUrl(fileUri, mode: LaunchMode.externalApplication);
+        }
+        return false;
       }
     } catch (e) {
       debugPrint('[UpdateService] Error installing APK: $e');

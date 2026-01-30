@@ -17,6 +17,7 @@ class LyricsModel {
   final bool instrumental;
   final String plainLyrics;
   final String syncedLyrics;
+  final String source;
 
   // Cached parsed lyrics to avoid re-parsing
   List<LyricsLine>? _cachedParsedLyrics;
@@ -30,6 +31,7 @@ class LyricsModel {
     required this.instrumental,
     required this.plainLyrics,
     required this.syncedLyrics,
+    this.source = 'Unknown',
   });
 
   bool get isSynced => syncedLyrics.isNotEmpty;
@@ -80,6 +82,7 @@ class LyricsModel {
       instrumental: json['instrumental'] as bool? ?? false,
       plainLyrics: json['plainLyrics'] as String? ?? '',
       syncedLyrics: json['syncedLyrics'] as String? ?? '',
+      source: json['source'] as String? ?? 'Unknown',
     );
   }
 }

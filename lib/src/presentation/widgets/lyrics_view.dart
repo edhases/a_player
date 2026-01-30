@@ -138,12 +138,12 @@ class _LyricsViewState extends State<LyricsView> {
           if (lyrics.isSynced) {
             final lines = lyrics.parsedSyncedLyrics;
             if (lines.isNotEmpty) {
-              return _buildSyncedLyrics(lines);
+              return _buildSyncedLyrics(lines, lyrics.source);
             }
           }
 
           if (lyrics.plainLyrics.isNotEmpty) {
-            return _buildPlainLyrics(lyrics.plainLyrics);
+            return _buildPlainLyrics(lyrics.plainLyrics, lyrics.source);
           }
 
           return Center(
@@ -158,22 +158,36 @@ class _LyricsViewState extends State<LyricsView> {
     );
   }
 
-  Widget _buildPlainLyrics(String text) {
+  Widget _buildPlainLyrics(String text, String source) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          height: 1.6,
-        ),
+      child: Column(
+        children: [
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Source: $source',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.3),
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
 
-  Widget _buildSyncedLyrics(List<LyricsLine> lines) {
+  Widget _buildSyncedLyrics(List<LyricsLine> lines, String source) {
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification is ScrollStartNotification &&
@@ -190,28 +204,47 @@ class _LyricsViewState extends State<LyricsView> {
       child: ListView.builder(
         controller: _scrollController,
         // Add padding to allows top items to be in center
-        padding: EdgeInsets.symmetric(
-            vertical: MediaQuery.of(context).size.height / 2.5, horizontal: 24),
-        itemCount: lines.length,
-        itemExtent:
-            60.0, // Fixed height - must match _scrollToCenter calculation
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).size.height / 2.5,
+          bottom: MediaQuery.of(context).size.height / 2.5,
+          left: 24,
+          right: 24,
+        ),
+        itemCount: lines.length + 1, // +1 for source
         itemBuilder: (context, index) {
+          if (index == lines.length) {
+            return Container(
+              height: 60.0,
+              alignment: Alignment.center,
+              child: Text(
+                'Source: $source',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            );
+          }
           final isCurrent = index == _currentIndex;
           return Center(
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                color: isCurrent
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.5),
-                fontSize: isCurrent ? 24 : 18,
-                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-              ),
-              child: Text(
-                lines[index].text,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+            child: SizedBox(
+              height: 60.0,
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  color: isCurrent
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.5),
+                  fontSize: isCurrent ? 24 : 18,
+                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                ),
+                child: Text(
+                  lines[index].text,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           );

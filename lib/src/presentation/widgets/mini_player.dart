@@ -23,6 +23,7 @@ class MiniPlayer extends StatelessWidget {
         final heroTag = 'player_art_${mediaItem.id}';
 
         return GestureDetector(
+          key: const Key('mini_player'),
           onTap: () {
             Navigator.push(
               context,

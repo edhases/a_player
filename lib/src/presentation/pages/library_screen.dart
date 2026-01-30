@@ -32,9 +32,11 @@ class LibraryScreen extends StatelessWidget {
       },
       builder: (context, state) {
         return Scaffold(
+          key: const Key('library_screen'),
           appBar: AppBar(
             title: DropdownButtonHideUnderline(
               child: DropdownButton<LibraryViewMode>(
+                key: const Key('library_view_mode_dropdown'),
                 value: state.viewMode,
                 icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
                 dropdownColor: Theme.of(context).cardColor,

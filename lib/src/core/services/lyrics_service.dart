@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import '../models/lyrics_model.dart';
+import 'innertube_service.dart';
 
 class LyricsService {
   static const String _lrclibUrl = 'https://lrclib.net/api';
@@ -9,20 +10,28 @@ class LyricsService {
   static const String _geniusToken =
       'wyAjHxnpbmPpTaF_aq2hbxKKDmlqyTJ2g6sCNCTghry23OHn0xfsgu1p5T5CoIRp';
 
+  final InnerTubeService _innerTube;
+
   // In-memory cache: key = "artist|title" or trackId
   final Map<String, LyricsModel> _cache = {};
+
+  LyricsService(this._innerTube);
 
   /// Generate cache key from track info
   String _cacheKey(String trackName, String artistName) {
     return '${artistName.toLowerCase()}|${trackName.toLowerCase()}';
   }
 
-  /// Main entry point - with caching and fallback
+  /// Main entry point - with caching and priority-based fallback
+  /// Priority:
+  /// 1. Synced: YouTube Music -> LRCLIB
+  /// 2. Plain: YouTube Music -> Genius
   Future<LyricsModel?> getLyrics({
     required String trackName,
     required String artistName,
     required String albumName,
     required double duration,
+    String? videoId,
   }) async {
     final key = _cacheKey(trackName, artistName);
 
@@ -32,30 +41,93 @@ class LyricsService {
       return _cache[key];
     }
 
-    // 2. Try lrclib (exact match)
-    var lyrics = await _fetchFromLrclib(
+    LyricsModel? lrclibCandidate;
+    LyricsModel? ytmCandidate;
+
+    // --- PHASE 1: Try Synced Lyrics ---
+
+    // 1.1 Try LRCLIB (Priority 1 for Synced)
+    debugPrint('[LyricsService] Trying LRCLIB (Synced Priority)...');
+    lrclibCandidate = await _fetchFromLrclib(
       trackName: trackName,
       artistName: artistName,
       albumName: albumName,
       duration: duration,
     );
+    // Try fuzzy search if exact failed
+    lrclibCandidate ??= await _searchLrclib(trackName, artistName, duration);
 
-    // 3. Try lrclib fuzzy search
-    if (lyrics == null) {
-      lyrics = await _searchLrclib(trackName, artistName, duration);
+    if (lrclibCandidate != null && lrclibCandidate.isSynced) {
+      debugPrint('[LyricsService] 🟢 Found synced lyrics from LRCLIB');
+      _cache[key] = lrclibCandidate;
+      return lrclibCandidate;
     }
 
-    // 4. Fallback to Genius
-    if (lyrics == null) {
-      lyrics = await _fetchFromGenius(trackName, artistName);
+    // 1.2 Try YouTube Music (Priority 2 for Synced)
+    debugPrint('[LyricsService] Trying YouTube Music (Synced Priority)...');
+    String? effectiveVideoId = videoId;
+    if (effectiveVideoId == null) {
+      try {
+        final searchResult = await _innerTube.search('$artistName $trackName');
+        if (searchResult.isSuccess &&
+            searchResult.data != null &&
+            searchResult.data!.isNotEmpty) {
+          effectiveVideoId = searchResult.data!.first.videoId;
+        }
+      } catch (e) {
+        debugPrint('[LyricsService] YTM search failed: $e');
+      }
     }
 
-    // 5. Cache result
-    if (lyrics != null) {
-      _cache[key] = lyrics;
+    if (effectiveVideoId != null) {
+      final ytmData = await _innerTube.getLyrics(effectiveVideoId);
+      if (ytmData != null) {
+        ytmCandidate = LyricsModel(
+          id: 0,
+          trackName: trackName,
+          artistName: artistName,
+          albumName: albumName,
+          duration: duration,
+          instrumental: false,
+          plainLyrics: ytmData['lyrics'] ?? '',
+          syncedLyrics: ytmData['syncedLyrics'] ?? '',
+          source: 'YouTube Music',
+        );
+
+        if (ytmCandidate.isSynced) {
+          debugPrint(
+              '[LyricsService] 🟢 Found synced lyrics from YouTube Music');
+          _cache[key] = ytmCandidate;
+          return ytmCandidate;
+        }
+      }
     }
 
-    return lyrics;
+    // --- PHASE 2: Try Plain Lyrics ---
+
+    // 2.1 Return YouTube Music if we found plain lyrics (Priority 1 for Plain)
+    if (ytmCandidate != null && ytmCandidate.plainLyrics.isNotEmpty) {
+      debugPrint('[LyricsService] � Returning plain lyrics from YouTube Music');
+      _cache[key] = ytmCandidate;
+      return ytmCandidate;
+    }
+
+    // 2.2 Return LRCLIB if we found plain lyrics (Priority 2 for Plain)
+    if (lrclibCandidate != null && lrclibCandidate.plainLyrics.isNotEmpty) {
+      debugPrint('[LyricsService] 🟡 Returning plain lyrics from LRCLIB');
+      _cache[key] = lrclibCandidate;
+      return lrclibCandidate;
+    }
+
+    // 2.3 Fallback to Genius (Priority 3 for Plain)
+    debugPrint('[LyricsService] Fallback to Genius (Priority 3 for Plain)...');
+    final genius = await _fetchFromGenius(trackName, artistName);
+    if (genius != null) {
+      _cache[key] = genius;
+      return genius;
+    }
+
+    return null;
   }
 
   /// Prefetch lyrics for a track (fire-and-forget)
@@ -64,6 +136,7 @@ class LyricsService {
     required String artistName,
     required String albumName,
     required double duration,
+    String? videoId,
   }) async {
     final key = _cacheKey(trackName, artistName);
     if (_cache.containsKey(key)) {
@@ -77,6 +150,7 @@ class LyricsService {
       artistName: artistName,
       albumName: albumName,
       duration: duration,
+      videoId: videoId,
     );
   }
 
@@ -112,7 +186,18 @@ class LyricsService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         debugPrint('[LyricsService] lrclib exact match found');
-        return LyricsModel.fromJson(data);
+        final model = LyricsModel.fromJson(data);
+        return LyricsModel(
+          id: model.id,
+          trackName: model.trackName,
+          artistName: model.artistName,
+          albumName: model.albumName,
+          duration: model.duration,
+          instrumental: model.instrumental,
+          plainLyrics: model.plainLyrics,
+          syncedLyrics: model.syncedLyrics,
+          source: 'LRCLIB',
+        );
       } else if (response.statusCode == 404) {
         debugPrint('[LyricsService] lrclib exact match not found');
         return null;
@@ -150,7 +235,18 @@ class LyricsService {
 
           if (diff < 5.0 && diff < minDiff) {
             minDiff = diff;
-            bestMatch = LyricsModel.fromJson(item);
+            final model = LyricsModel.fromJson(item);
+            bestMatch = LyricsModel(
+              id: model.id,
+              trackName: model.trackName,
+              artistName: model.artistName,
+              albumName: model.albumName,
+              duration: model.duration,
+              instrumental: model.instrumental,
+              plainLyrics: model.plainLyrics,
+              syncedLyrics: model.syncedLyrics,
+              source: 'LRCLIB (Fuzzy)',
+            );
           }
         }
 
@@ -205,6 +301,7 @@ class LyricsService {
         instrumental: false,
         plainLyrics: plainLyrics,
         syncedLyrics: '', // Genius doesn't provide synced lyrics
+        source: 'Genius',
       );
     } catch (e) {
       debugPrint('[Genius] Exception: $e');

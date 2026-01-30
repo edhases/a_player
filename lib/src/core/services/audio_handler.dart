@@ -160,6 +160,22 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             '[AudioHandler] ⚠️ Current index is null or out of bounds: $index (Queue len: ${queue.value.length})');
         _currentOverrideSubscription?.cancel();
       }
+
+      // Auto-load more radio tracks if approaching end of queue
+      if (index != null && player.loopMode == LoopMode.off) {
+        final effectiveIndices = player.effectiveIndices;
+        if (effectiveIndices != null && effectiveIndices.isNotEmpty) {
+          final currentPos = effectiveIndices.indexOf(index);
+          if (currentPos != -1 && currentPos >= effectiveIndices.length - 3) {
+            _checkAndLoadMoreRadio();
+          }
+        } else {
+          // Fallback if effectiveIndices is unavailable
+          if (index >= queue.value.length - 3) {
+            _checkAndLoadMoreRadio();
+          }
+        }
+      }
     });
 
     // Separately update duration when it becomes available
@@ -450,7 +466,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       await player.setAudioSource(_playlist, initialIndex: safeIndex);
 
       // 5. Start playback
-      await player.play();
+      player.play();
 
       debugPrint(
           '[AudioHandler] playQueueFromIndex: started at index $safeIndex');
@@ -675,7 +691,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       // Seek to beginning and play
       await player.seek(Duration.zero, index: 0);
-      await player.play();
+      player.play();
     } catch (e) {
       debugPrint('[AudioHandler] playLocalTrack error: $e');
     }
@@ -765,6 +781,33 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await playQueueFromIndex([mediaItem], 0);
   }
 
+  bool _isLoadingMore = false;
+
+  Future<void> _checkAndLoadMoreRadio() async {
+    if (_isLoadingMore) return;
+    final currentQueue = queue.value;
+    if (currentQueue.isEmpty) return;
+
+    final lastItem = currentQueue.last;
+    // Only auto-load if the last item is a YouTube song (online)
+    // We check this by 'isOnline' extra or just ID length
+    if (lastItem.extras?['isOnline'] != true && lastItem.id.length != 11) {
+      return;
+    }
+
+    _isLoadingMore = true;
+    try {
+      debugPrint(
+          '[AudioHandler] Approaching end of queue. Loading more radio tracks...');
+      // Chain the radio: get recommendations based on the LAST track
+      await _loadRadioQueue(lastItem.id);
+    } catch (e) {
+      debugPrint('[AudioHandler] Auto-load radio failed: $e');
+    } finally {
+      _isLoadingMore = false;
+    }
+  }
+
   Future<void> _loadRadioQueue(String videoId) async {
     try {
       debugPrint('[AudioHandler] Loading radio queue for $videoId...');
@@ -782,10 +825,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           .take(25)
           .toList();
 
-      final mediaItems =
-          tracksToAdd.map((t) => MediaItemAdapter.fromYouTubeSong(t)).toList();
-
-      await addQueueItems(mediaItems);
+      if (tracksToAdd.isNotEmpty) {
+        final mediaItems = tracksToAdd
+            .map((t) => MediaItemAdapter.fromYouTubeSong(t))
+            .toList();
+        await addQueueItems(mediaItems);
+      }
     } catch (e) {
       debugPrint('[AudioHandler] Error loading radio queue: $e');
     }

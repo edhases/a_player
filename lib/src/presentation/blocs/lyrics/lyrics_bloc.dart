@@ -100,6 +100,7 @@ class LyricsBloc extends Bloc<LyricsEvent, LyricsState> {
       artistName: item.artist ?? '',
       albumName: item.album ?? '',
       duration: item.duration?.inSeconds.toDouble() ?? 0,
+      videoId: item.extras?['isOnline'] == true ? item.id : null,
     );
   }
 
@@ -131,6 +132,7 @@ class LyricsBloc extends Bloc<LyricsEvent, LyricsState> {
         artistName: item.artist ?? '',
         albumName: item.album ?? '',
         duration: item.duration?.inSeconds.toDouble() ?? 0,
+        videoId: item.extras?['isOnline'] == true ? item.id : null,
       );
 
       if (lyrics != null) {

@@ -7,6 +7,7 @@ import 'package:get_it/get_it.dart';
 import 'src/app.dart';
 import 'src/core/services/app_initializer.dart';
 import 'src/core/services/log_service.dart';
+import 'src/core/utils/test_overrides.dart';
 
 void main() async {
   runZonedGuarded(() async {
@@ -21,7 +22,11 @@ void main() async {
     );
 
     // Initialize all services
-    await AppInitializer.init();
+    if (TestOverrides.enabled) {
+      await AppInitializer.initForTest();
+    } else {
+      await AppInitializer.init();
+    }
 
     // Setup global error handling
     FlutterError.onError = (FlutterErrorDetails details) {

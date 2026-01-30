@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-// import 'package:audiotagger/audiotagger.dart'; // Removed: incompatible with Flutter 3.29+
-// import 'package:audiotagger/models/tag.dart';
+import 'package:metadata_god/metadata_god.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:get_it/get_it.dart';
@@ -10,11 +10,10 @@ import 'package:on_audio_query/on_audio_query.dart';
 import '../../domain/entities/youtube_song.dart';
 import 'youtube_helper.dart';
 
-/// Service for downloading YouTube tracks as MP3 with ID3 metadata
+/// Service for downloading YouTube tracks with metadata
 class DownloadService {
   final YouTubeHelper _ytHelper;
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  // final Audiotagger _tagger = Audiotagger(); // Removed
 
   DownloadService({YouTubeHelper? ytHelper})
       : _ytHelper = ytHelper ?? GetIt.I<YouTubeHelper>();
@@ -29,8 +28,8 @@ class DownloadService {
     return musicDir;
   }
 
-  /// Download artwork from URL as bytes (kept for future use)
-  Future<List<int>?> _downloadArtwork(String url) async {
+  /// Download artwork from URL as bytes
+  Future<Uint8List?> _downloadArtwork(String url) async {
     if (url.isEmpty) return null;
     try {
       final response = await http.get(Uri.parse(url));
@@ -43,8 +42,9 @@ class DownloadService {
     return null;
   }
 
-  /// Save YouTube track to device as MP3 with metadata
+  /// Save YouTube track to device as audio with metadata
   /// Returns the file path if successful, null otherwise
+  /// Note: Uses container format from YouTube (webm for Opus, m4a for AAC)
   Future<String?> saveToDevice(
     YouTubeSong song, {
     void Function(double progress)? onProgress,
@@ -52,21 +52,28 @@ class DownloadService {
     try {
       debugPrint('[DownloadService] Starting download: ${song.title}');
 
-      // Get audio URL
-      final audioUrl = await _ytHelper.getAudioUrl(song.videoId);
-      if (audioUrl == null) {
+      // Get audio URL with container info
+      final audioData = await _ytHelper.getAudioUrlWithAgent(song.videoId);
+      if (audioData == null) {
         debugPrint('[DownloadService] Could not get audio URL');
         return null;
       }
 
+      final audioUrl = audioData['url']!;
+      final container = audioData['container'] ?? 'mp4'; // Default to mp4/m4a
+
       onProgress?.call(0.1);
+
+      // Determine file extension based on container
+      // webm = Opus audio, mp4 = AAC audio
+      final extension = (container.toLowerCase() == 'webm') ? 'webm' : 'm4a';
 
       // Create temp file for download
       final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/${song.videoId}.m4a');
+      final tempFile = File('${tempDir.path}/${song.videoId}.$extension');
 
       // Download audio stream
-      debugPrint('[DownloadService] Downloading audio stream...');
+      debugPrint('[DownloadService] Downloading audio stream ($container)...');
       final response = await http.get(Uri.parse(audioUrl));
       if (response.statusCode != 200) {
         debugPrint('[DownloadService] Download failed: ${response.statusCode}');
@@ -79,7 +86,7 @@ class DownloadService {
       // Prepare final file path
       final musicDir = await _getMusicDirectory();
       final safeName = song.title.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-      final finalPath = '${musicDir.path}/$safeName.m4a';
+      final finalPath = '${musicDir.path}/$safeName.$extension';
 
       // Copy to music folder
       await tempFile.copy(finalPath);
@@ -87,10 +94,35 @@ class DownloadService {
 
       onProgress?.call(0.8);
 
-      // TODO: ID3 tagging disabled - audiotagger is incompatible with Flutter 3.29+
-      // Consider using ffmpeg_kit_flutter or a native platform channel for tagging.
-      debugPrint(
-          '[DownloadService] ID3 tagging skipped (library incompatible)');
+      // Embed metadata tags into m4a files using metadata_god
+      // Note: webm files don't support tags (would need Vorbis comments which aren't supported)
+      if (extension == 'm4a') {
+        try {
+          // Download artwork for embedding
+          Picture? picture;
+          if (song.thumbnailUrl.isNotEmpty) {
+            final artworkBytes = await _downloadArtwork(song.thumbnailUrl);
+            if (artworkBytes != null) {
+              picture = Picture(
+                data: artworkBytes,
+                mimeType: 'image/jpeg',
+              );
+            }
+          }
+
+          final metadata = Metadata(
+            title: song.title,
+            artist: song.artist,
+            picture: picture,
+          );
+          await MetadataGod.writeMetadata(file: finalPath, metadata: metadata);
+          debugPrint('[DownloadService] Embedded tags into m4a: ${song.title}');
+        } catch (e) {
+          debugPrint('[DownloadService] Tag embedding failed (non-fatal): $e');
+        }
+      } else {
+        debugPrint('[DownloadService] Saved as $extension (tags not supported for webm)');
+      }
 
       // Notify MediaStore so the file appears in library after scan
       try {

@@ -125,6 +125,7 @@ class AppLocalizations {
   String get matched => translate('matched');
   String get wrongMatch => translate('wrong_match');
   String get ok => translate('ok');
+  String get artistPageUnavailable => translate('artist_page_unavailable');
   String get noMatchFound => translate('no_match_found');
   String get manualSearchConfirm => translate('manual_search_confirm');
   String get manualSearch => translate('manual_search');
@@ -177,6 +178,16 @@ class AppLocalizations {
   String get preset => translate('preset');
   String get permissionNeeded => translate('permission_needed');
   String get permissionDesc => translate('permission_desc');
+  String get permissionAudioTitle => translate('permission_audio_title');
+  String get permissionAudioDesc => translate('permission_audio_desc');
+  String get permissionNotificationsTitle =>
+      translate('permission_notifications_title');
+  String get permissionNotificationsDesc =>
+      translate('permission_notifications_desc');
+  String get permissionInstallTitle => translate('permission_install_title');
+  String get permissionInstallDesc => translate('permission_install_desc');
+  String get statusGranted => translate('status_granted');
+  String get statusDenied => translate('status_denied');
   String get grantPermissions => translate('grant_permissions');
   String get openSettings => translate('open_settings');
   String get signInTitle => translate('sign_in_title');

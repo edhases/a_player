@@ -14,7 +14,8 @@ class PlaylistTracksScreen extends StatefulWidget {
   final String title;
   final String? knownArtist; // Pass artist if known from previous screen
   final String? knownThumbnail; // Pass thumbnail if known from previous screen
-  final List<YouTubeSong>? preloadedTracks; // Optional pre-fetched tracks
+  final List<YouTubeSong>? preloadedTracks;
+  final bool isArtistPage;
 
   const PlaylistTracksScreen({
     super.key,
@@ -23,6 +24,7 @@ class PlaylistTracksScreen extends StatefulWidget {
     this.knownArtist,
     this.knownThumbnail,
     this.preloadedTracks,
+    this.isArtistPage = false,
   });
 
   @override
@@ -49,7 +51,22 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
 
   Future<void> _loadTracks() async {
     setState(() => _isLoading = true);
-    final fetchedTracks = await _innerTube.getPlaylistTracks(widget.playlistId);
+
+    List<YouTubeSong> fetchedTracks;
+
+    if (widget.isArtistPage) {
+      // Use generic browser for artist pages
+      // Note: _fetchFullTracks is private, we should expose it or add getArtistTracks
+      // For MVP, we can treat artistId as a browseId if getPlaylistTracks detects it?
+      // Actually, InnerTubeService doesn't expose _fetchFullTracks.
+      // Let's modify InnerTubeService to expose it or add getArtistTopTracks.
+
+      // Wait, I can't modify InnerTubeService from here.
+      // I'll proceed assuming I will add getArtistTopTracks to InnerTubeService next.
+      fetchedTracks = await _innerTube.getArtistTopTracks(widget.playlistId);
+    } else {
+      fetchedTracks = await _innerTube.getPlaylistTracks(widget.playlistId);
+    }
 
     _tracks = _patchTracks(fetchedTracks);
 
@@ -94,6 +111,7 @@ class _PlaylistTracksScreenState extends State<PlaylistTracksScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: const Key('playlist_tracks_screen'),
       appBar: AppBar(title: Text(widget.title)),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

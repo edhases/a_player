@@ -5,12 +5,17 @@ import 'package:path/path.dart' as p;
 import '../../data/datasources/app_database.dart';
 import '../../core/services/innertube_service.dart';
 import '../../domain/entities/youtube_song.dart';
+import 'tag_editor_service.dart';
+import 'settings_service.dart';
 
 class MetadataMatchingService {
   final AppDatabase _db;
   final InnerTubeService _innerTube;
+  final TagEditorService _tagEditor;
+  final SettingsService _settings;
 
-  MetadataMatchingService(this._db, this._innerTube);
+  MetadataMatchingService(
+      this._db, this._innerTube, this._tagEditor, this._settings);
 
   /// Отримує інформацію про трек (спочатку перевіряє DB, потім повертає null).
   /// Gets track info (checks DB first, then returns null).
@@ -102,24 +107,98 @@ class MetadataMatchingService {
     debugPrint(
         '[MetadataMatcher] Saved override for: $title (Path: $filePath)');
 
+    // Physical tagging if enabled
+    if (_settings.loadSaveMetadataToFile()) {
+      debugPrint('[MetadataMatcher] Physical tagging enabled, writing tags...');
+      // We don't have album here easily, maybe we can try to guess or just use "Unknown Album"
+      // Or we can try to find the track in DB to get its current album
+      String album = 'Unknown Album';
+      try {
+        final track = await (_db.select(_db.tracks)
+              ..where((t) => t.path.equals(filePath)))
+            .getSingleOrNull();
+        if (track != null && track.album != null) {
+          album = track.album!;
+        }
+      } catch (e) {
+        debugPrint('[MetadataMatcher] Error getting track for album: $e');
+      }
+
+      await _tagEditor.writeTags(
+        path: filePath,
+        title: title,
+        artist: artist,
+        album: album,
+        requestPermission: true,
+      );
+    }
+
     // Return inserted object (fetch back)
     return (await getTrackOverride(filePath))!;
   }
 
   String _cleanFilename(String filePath, String rawTitle) {
-    if (rawTitle != "Unknown" && !rawTitle.contains(".mp3")) {
+    String filename = p.basenameWithoutExtension(filePath);
+
+    // 1. Common technical prefixes/suffixes
+    final patternsToRemove = [
+      RegExp(r'^downloaded_', caseSensitive: false),
+      RegExp(r'^yt-dlp_', caseSensitive: false),
+      RegExp(r'_\d{8,12}$'), // Date or ID at the end
+      RegExp(r'\.mp3$', caseSensitive: false),
+    ];
+
+    for (var pattern in patternsToRemove) {
+      filename = filename.replaceFirst(pattern, '');
+    }
+
+    // 2. Clear common dividers
+    filename = filename.replaceAll('_', ' ');
+    filename = filename.replaceAll('-', ' ');
+
+    // 3. Remove track numbers at start
+    filename = filename.replaceAll(RegExp(r'^\d+\s*[\.-]?\s*'), '');
+
+    // 4. Remove extra spaces
+    filename = filename.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    // If filename is too short after cleaning, fallback to rawTitle if it's not "Unknown"
+    if (filename.length < 3 &&
+        rawTitle != "Unknown" &&
+        !rawTitle.contains(".mp3")) {
       return rawTitle;
     }
-    String filename = p.basenameWithoutExtension(filePath);
-    filename = filename.replaceAll(RegExp(r'^\d+\s*[\.-]?\s*'), '');
-    filename = filename.replaceAll('_', ' ');
-    return filename.trim();
+
+    return filename;
   }
 
   bool _isSimilar(String query, YouTubeSong song) {
     final lowerQuery = query.toLowerCase();
     final lowerTitle = song.title.toLowerCase();
-    return lowerTitle.contains(lowerQuery) || lowerQuery.contains(lowerTitle);
+    final lowerArtist = song.artist.toLowerCase();
+
+    // Direct match
+    if (lowerTitle.contains(lowerQuery) || lowerQuery.contains(lowerTitle)) {
+      return true;
+    }
+
+    // Match if query contains artist AND title (common for many filenames)
+    if (lowerQuery.contains(lowerArtist) && lowerQuery.contains(lowerTitle)) {
+      return true;
+    }
+
+    // Basic Levenshtein would be better, but simple keyword check for now
+    final keywords = lowerQuery.split(' ').where((w) => w.length > 2).toList();
+    if (keywords.isEmpty) return false;
+
+    int matches = 0;
+    for (var word in keywords) {
+      if (lowerTitle.contains(word) || lowerArtist.contains(word)) {
+        matches++;
+      }
+    }
+
+    return matches >= 2 || (keywords.length == 1 && matches == 1);
   }
 
   Stream<String> scanEntireLibrary() async* {
@@ -131,22 +210,10 @@ class MetadataMatchingService {
         final existing = await getTrackOverride(track.path);
         if (existing != null) continue;
 
-        // Since user manually invoked this, we scan everything that doesn't have an override yet.
-        // We can optionally check if it looks complete, but users often want to match everything.
-        // Let's rely on _cleanFilename to do smart work, or if not dirty enough, maybe skip?
-        // User reported "only 2/4 tracks changed", implying others were skipped.
-        // Let's remove the strict dirty check and try to match everything missing an override.
-        bool needsScan = true;
+        yield "Processing: ${p.basename(track.path)}";
+        await autoMatchTags(track.path, track.title);
+        await Future.delayed(const Duration(milliseconds: 500));
 
-        // Optional: Filter out tracks that already look perfect?
-        // For now, let's scan all. If _cleanFilename returns same title, search results might be poor
-        // but it gives a chance to match "Track 1" or similar.
-
-        if (needsScan) {
-          yield "Processing: ${p.basename(track.path)}";
-          await autoMatchTags(track.path, track.title);
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
         processed++;
       }
       yield "Scan complete. Processed $processed tracks.";

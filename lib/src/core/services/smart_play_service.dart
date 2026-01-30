@@ -98,6 +98,7 @@ class SmartPlayService {
         '[SmartPlay] videoId: ${song.videoId}, length: ${song.videoId.length}');
     debugPrint(
         '[SmartPlay] isPlaylist: ${song.isPlaylist}, playlistId: ${song.playlistId}');
+    debugPrint('[SmartPlay] artistId: ${song.artistId}, artist: ${song.artist}');
 
     // Check if it needs playlist resolution
     if (!needsPlaylistResolution(song)) {
@@ -166,6 +167,8 @@ class SmartPlayService {
               : singleTrack.thumbnailUrl,
           playlistId:
               playlistId, // Keep original album/playlist ID for like sync
+          // Preserve artistId from original song if not present in resolved track
+          artistId: singleTrack.artistId ?? song.artistId,
         );
 
         if (showSnackbars) {

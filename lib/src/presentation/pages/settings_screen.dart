@@ -287,6 +287,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
 
+          StatefulBuilder(
+            builder: (context, setState) {
+              return SwitchListTile(
+                secondary: const Icon(Icons.save_alt),
+                title: Text(loc.translate('save_metadata_to_file')),
+                subtitle: Text(loc.translate('save_metadata_to_file_desc')),
+                value: settingsService.loadSaveMetadataToFile(),
+                onChanged: (val) {
+                  settingsService.saveSaveMetadataToFile(val);
+                  setState(() {});
+                },
+              );
+            },
+          ),
+
           const Divider(),
 
           // Library Filters Section
@@ -441,6 +456,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: Text(loc.translate('theme')),
                     subtitle: Text(_getThemeName(state.themeMode, loc)),
                     trailing: DropdownButton<ThemeMode>(
+                      key: const Key('settings_theme_dropdown'),
                       value: state.themeMode,
                       items: [
                         DropdownMenuItem(
@@ -534,6 +550,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: Text(_getLanguageName(state.locale.languageCode)),
                 subtitle: Text(loc.language),
                 trailing: DropdownButton<String>(
+                  key: const Key('settings_language_dropdown'),
                   value: state.locale.languageCode,
                   items: [
                     DropdownMenuItem(value: 'en', child: Text('English')),
@@ -594,8 +611,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Slider(
-                    value: currentSize.toDouble(),
-                    min: 512 * 1024 * 1024,
+                    value: currentSize
+                        .toDouble()
+                        .clamp(128 * 1024 * 1024, 24 * 1024 * 1024 * 1024),
+                    min: 128 * 1024 * 1024,
                     max: 24 * 1024 * 1024 * 1024,
                     divisions: 47,
                     label: _formatBytes(currentSize),
@@ -611,6 +630,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 ListTile(
+                  key: const Key('settings_view_cached_tracks'),
                   title: Text(loc.viewCachedTracks),
                   subtitle: Text(loc.showDownloadedSongs),
                   trailing: const Icon(Icons.queue_music),
@@ -624,7 +644,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             );
           }),
-          ListTile(
+            ListTile(
+              key: const Key('settings_clear_cache'),
               title: Text(loc.clearCache),
               subtitle: Text(loc.clearCacheDesc),
               trailing: const Icon(Icons.delete_forever),

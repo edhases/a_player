@@ -10,6 +10,7 @@ class YouTubeSong {
   final String? playlistId;
   final bool isPlaylist;
   final String category; // e.g. "Single", "Album", "Playlist", "Song"
+  final String? artistId; // BrowseID for the artist channel
 
   YouTubeSong({
     required this.videoId,
@@ -21,6 +22,7 @@ class YouTubeSong {
     this.playlistId,
     this.isPlaylist = false,
     this.category = '',
+    this.artistId,
   });
 
   YouTubeSong copyWith({
@@ -33,6 +35,7 @@ class YouTubeSong {
     String? playlistId,
     bool? isPlaylist,
     String? category,
+    String? artistId,
   }) {
     return YouTubeSong(
       videoId: videoId ?? this.videoId,
@@ -44,6 +47,7 @@ class YouTubeSong {
       playlistId: playlistId ?? this.playlistId,
       isPlaylist: isPlaylist ?? this.isPlaylist,
       category: category ?? this.category,
+      artistId: artistId ?? this.artistId,
     );
   }
 
@@ -63,5 +67,6 @@ class YouTubeSong {
         'isLive': isLive,
         'playlistId': playlistId,
         'isPlaylist': isPlaylist,
+        'artistId': artistId,
       };
 }

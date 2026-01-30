@@ -35,24 +35,29 @@ class YouTubeHelper {
       await _rateLimiter.throttle();
       debugPrint('[YouTubeHelper] Getting audio URL for: $videoId');
 
-      // 2. Fetch from YouTube
+      // Use youtube_explode_dart with ANDROID_VR and Safari clients
+      // These handle signature cipher decryption and PO Token automatically
       final manifest = await _yt.videos.streams.getManifest(
         videoId,
         ytClients: [
           YoutubeApiClient.androidVr,
           YoutubeApiClient.safari,
-          YoutubeApiClient.tvSimplyEmbedded,
         ],
       );
 
-      final audioStream = manifest.audioOnly.withHighestBitrate();
+      // Smart format selection (prefers Opus/WebM, validates contentLength)
+      final audioStream = _selectBestAudioStream(manifest.audioOnly.toList());
+      if (audioStream == null) {
+        debugPrint('[YouTubeHelper] No valid audio streams found');
+        return null;
+      }
+
       final url = audioStream.url.toString();
 
       debugPrint(
-          '[YouTubeHelper] Found audio stream: ${audioStream.bitrate} bps');
+          '[YouTubeHelper] Selected: ${audioStream.codec.subtype} @ ${audioStream.bitrate.kiloBitsPerSecond.toStringAsFixed(0)} kbps');
 
-      // 3. Save to cache (default TTL 1 hour or stream expiry if parseable)
-      // YouTube URLs usually have 'expire' param, but a safe default is good.
+      // Save to cache (default TTL 1 hour or stream expiry if parseable)
       _urlCache[videoId] = _CachedUrl(
         url: url,
         expiry: now
@@ -65,6 +70,127 @@ class YouTubeHelper {
       return null;
     }
   }
+
+  /// Get audio URL with User-Agent for just_audio header compatibility
+  /// Returns a map with 'url' and 'agent' keys, or null on failure
+  ///
+  /// Uses smart format selection:
+  /// - Prefers Opus/WebM over AAC/M4A at similar bitrate (better quality)
+  /// - Validates contentLength to avoid corrupted streams
+  Future<Map<String, String>?> getAudioUrlWithAgent(String videoId) async {
+    try {
+      // Check cache first
+      final now = DateTime.now();
+      if (_urlCache.containsKey(videoId)) {
+        final cached = _urlCache[videoId]!;
+        if (cached.expiry.isAfter(now)) {
+          debugPrint(
+              '[YouTubeHelper] using cached URL with agent for: $videoId');
+          return {
+            'url': cached.url,
+            'agent': _androidVrUserAgent,
+          };
+        } else {
+          _urlCache.remove(videoId);
+        }
+      }
+
+      await _rateLimiter.throttle();
+      debugPrint('[YouTubeHelper] Getting audio URL with agent for: $videoId');
+
+      // Use youtube_explode_dart with ANDROID_VR client
+      // This handles signature cipher decryption and PO Token automatically
+      final manifest = await _yt.videos.streams.getManifest(
+        videoId,
+        ytClients: [
+          YoutubeApiClient.androidVr,
+          YoutubeApiClient.safari,
+        ],
+      );
+
+      // Smart format selection
+      final audioStream = _selectBestAudioStream(manifest.audioOnly.toList());
+      if (audioStream == null) {
+        debugPrint('[YouTubeHelper] No valid audio streams found');
+        return null;
+      }
+
+      final url = audioStream.url.toString();
+      final container = audioStream.container.name.toLowerCase(); // webm or mp4
+      final codec = audioStream.codec.subtype.toLowerCase();
+
+      debugPrint(
+          '[YouTubeHelper] Selected: $codec @ ${audioStream.bitrate.kiloBitsPerSecond.toStringAsFixed(0)} kbps, '
+          'container: $container, size: ${audioStream.size.totalMegaBytes.toStringAsFixed(1)} MB');
+
+      // Cache the URL
+      _urlCache[videoId] = _CachedUrl(
+        url: url,
+        expiry: now.add(const Duration(minutes: 45)),
+      );
+
+      return {
+        'url': url,
+        'agent': _androidVrUserAgent,
+        'container': container, // webm or mp4 - use for file extension
+        'codec': codec, // opus or mp4a
+      };
+    } catch (e) {
+      debugPrint('[YouTubeHelper] Error getting audio URL with agent: $e');
+      return null;
+    }
+  }
+
+  /// Select the best audio stream based on:
+  /// 1. Valid contentLength (> 0)
+  /// 2. Prefer Opus/WebM over AAC/M4A at similar bitrate tier
+  /// 3. Highest bitrate within preferred codec
+  AudioOnlyStreamInfo? _selectBestAudioStream(
+      List<AudioOnlyStreamInfo> streams) {
+    if (streams.isEmpty) return null;
+
+    // Filter out streams with invalid/missing contentLength
+    final validStreams = streams.where((s) => s.size.totalBytes > 0).toList();
+    if (validStreams.isEmpty) {
+      debugPrint(
+          '[YouTubeHelper] Warning: No streams with valid contentLength, using all');
+      // Fallback to all streams if none have contentLength
+      validStreams.addAll(streams);
+    }
+
+    // Sort by bitrate descending
+    validStreams.sort(
+        (a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
+
+    // Group into bitrate tiers (within 20kbps is considered same tier)
+    // Then prefer Opus/WebM within same tier
+    final highestBitrate = validStreams.first.bitrate.kiloBitsPerSecond;
+
+    // Get streams in the top tier (within 20% of highest bitrate)
+    final topTier = validStreams
+        .where((s) => s.bitrate.kiloBitsPerSecond >= highestBitrate * 0.8)
+        .toList();
+
+    // Prefer Opus (audio/webm) over AAC (audio/mp4)
+    final opusStreams = topTier
+        .where((s) =>
+            s.codec.subtype.toLowerCase().contains('opus') ||
+            s.container.name.toLowerCase() == 'webm')
+        .toList();
+
+    if (opusStreams.isNotEmpty) {
+      // Return highest bitrate Opus stream
+      return opusStreams.first;
+    }
+
+    // Fallback to highest bitrate AAC/M4A
+    return topTier.first;
+  }
+
+  // User-Agent for ANDROID_VR client (matches youtube_explode_dart)
+  static const String _androidVrUserAgent =
+      'com.google.android.apps.youtube.vr.oculus/1.61.48 '
+      '(Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip';
 
   /// Отримати деталі видео (тривалість, назва тощо)
   Future<Video?> getVideoDetails(String videoId) async {

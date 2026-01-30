@@ -59,6 +59,7 @@ class _TrackListTileState extends State<TrackListTile> {
     final artUrl = override?.thumbnailUrl;
 
     return ListTile(
+      key: ValueKey('track_tile_${widget.track.path}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: SizedBox(
         width: 50,

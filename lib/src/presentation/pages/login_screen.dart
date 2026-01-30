@@ -36,10 +36,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final loc = AppLocalizations.of(context);
+
+    // If using Google Login, we might want to keep some blue, but user asked for App Style.
+    // We will use Primary color for consistency.
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context).signInTitle),
-        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(loc.signInTitle),
+        centerTitle: true,
+        backgroundColor: Colors.transparent, // Let theme handle it
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -47,27 +54,25 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.music_note,
+              Icon(
+                Icons.music_note_rounded,
                 size: 80,
-                color: Colors.orangeAccent,
+                color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 32),
               Text(
-                AppLocalizations.of(context).signInTitle,
+                loc.signInTitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 28,
+                style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                AppLocalizations.of(context).signInSubtitle,
+                loc.signInSubtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 48),
@@ -75,95 +80,136 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                    color: theme.colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.red),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline,
+                          color: theme.colorScheme.onErrorContainer),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: TextStyle(
+                              color: theme.colorScheme.onErrorContainer),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),
               ],
-              ElevatedButton.icon(
-                onPressed: _isLoading ? null : _handleSignIn,
-                icon: _isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            _isLoading ? Colors.grey : Colors.white,
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: _isLoading ? null : _handleSignIn,
+                  icon: _isLoading
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              theme.colorScheme.onPrimary,
+                            ),
                           ),
-                        ),
-                      )
-                    : const Icon(Icons.login),
-                label: Text(_isLoading
-                    ? AppLocalizations.of(context).signingIn
-                    : AppLocalizations.of(context).signInBtn),
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  backgroundColor: const Color(0xFF4285F4),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                        )
+                      : const Icon(Icons.login),
+                  label: Text(_isLoading ? loc.signingIn : loc.signInBtn),
+                  style: FilledButton.styleFrom(
+                    // Uses theme.primaryColor by default
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed:
-                    _isLoading ? null : () => Navigator.pop(context, false),
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  backgroundColor: Colors.grey[800],
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: TextButton(
+                  onPressed:
+                      _isLoading ? null : () => Navigator.pop(context, false),
+                  style: TextButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
+                  child: Text(loc.cancel),
                 ),
-                child: Text(AppLocalizations.of(context).cancel),
               ),
               const SizedBox(height: 48),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color:
+                        theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      AppLocalizations.of(context).whatWeNeed,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded,
+                            size: 20, color: theme.colorScheme.primary),
+                        const SizedBox(width: 12),
+                        Text(
+                          loc.whatWeNeed,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 16),
+                    _buildInfoItem(context, loc.needAccess),
                     const SizedBox(height: 8),
-                    Text(
-                      AppLocalizations.of(context).needAccess,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    Text(
-                      AppLocalizations.of(context).needPlaylists,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    Text(
-                      AppLocalizations.of(context).needCookies,
-                      style: const TextStyle(fontSize: 13),
-                    ),
+                    _buildInfoItem(context, loc.needPlaylists),
+                    const SizedBox(height: 8),
+                    _buildInfoItem(context, loc.needCookies),
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "•",
+            style: TextStyle(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text.replaceAll('• ', ''), // Remove bullet if present in string
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -188,6 +188,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
             children: [
               Expanded(
                 child: FilledButton.tonalIcon(
+                  key: const Key('youtube_liked_songs_button'),
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -204,6 +205,7 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
               const SizedBox(width: 16),
               Expanded(
                 child: FilledButton.tonalIcon(
+                  key: const Key('youtube_last_played_button'),
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const LastPlayedScreen()),

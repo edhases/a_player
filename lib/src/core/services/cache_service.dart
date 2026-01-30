@@ -3,6 +3,8 @@ import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:metadata_god/metadata_god.dart';
+import 'package:http/http.dart' as http;
 import '../../data/datasources/app_database.dart';
 // import '../services/recommendation_service.dart'; // Removed
 import 'package:flutter/foundation.dart';
@@ -46,6 +48,18 @@ class CacheService {
           .write(const YouTubeTracksCompanion(
               downloadPath: Value(null), fileSize: Value(null)));
     }
+
+    // Also check for cached files that might not be in DB
+    // (handles migration from old .mp3 format)
+    final dir = await getApplicationDocumentsDirectory();
+    final cacheDir = Directory(p.join(dir.path, 'songs_cache'));
+    if (await cacheDir.exists()) {
+      for (final ext in ['webm', 'm4a', 'mp3']) {
+        final file = File(p.join(cacheDir.path, '$videoId.$ext'));
+        if (await file.exists()) return true;
+      }
+    }
+
     return false;
   }
 
@@ -56,12 +70,15 @@ class CacheService {
     return track?.downloadPath;
   }
 
+  /// Cache a track to local storage
+  /// [container] should be 'webm' or 'mp4' from YouTubeHelper for correct extension
   Future<void> cacheTrack({
     required String videoId,
     required String url,
     required String title,
     required String artist,
     required String thumbnailUrl,
+    String? container, // webm or mp4
   }) async {
     final dir = await getApplicationDocumentsDirectory();
     final cacheDir = Directory(p.join(dir.path, 'songs_cache'));
@@ -69,9 +86,13 @@ class CacheService {
       await cacheDir.create(recursive: true);
     }
 
+    // Determine file extension based on container format
+    // webm = Opus audio, mp4 = AAC audio
+    final extension = (container?.toLowerCase() == 'webm') ? 'webm' : 'm4a';
+
     // Temporary path
     final tempPath = p.join(cacheDir.path, '$videoId.tmp');
-    final finalPath = p.join(cacheDir.path, '$videoId.mp3');
+    final finalPath = p.join(cacheDir.path, '$videoId.$extension');
 
     // Check space
     // await checkCacheSpace(10 * 1024 * 1024); // Removed fixed size check
@@ -97,6 +118,39 @@ class CacheService {
       }
 
       await file.rename(finalPath);
+
+      // Embed metadata tags into m4a files for persistence after reinstall
+      if (extension == 'm4a') {
+        try {
+          // Download artwork
+          Picture? picture;
+          if (thumbnailUrl.isNotEmpty) {
+            try {
+              final response = await http.get(Uri.parse(thumbnailUrl));
+              if (response.statusCode == 200) {
+                picture = Picture(
+                  data: response.bodyBytes,
+                  mimeType: 'image/jpeg',
+                );
+              }
+            } catch (e) {
+              debugPrint('Error downloading artwork: $e');
+            }
+          }
+
+          final metadata = Metadata(
+            title: title,
+            artist: artist,
+            picture: picture,
+          );
+          await MetadataGod.writeMetadata(file: finalPath, metadata: metadata);
+          debugPrint('Embedded tags into cached m4a: $title');
+        } catch (e) {
+          debugPrint('Tag embedding failed (non-fatal): $e');
+        }
+      } else {
+        debugPrint('Skipping tag embedding for webm format (not supported)');
+      }
 
       // Upsert in Drift
       await _db.into(_db.youTubeTracks).insertOnConflictUpdate(
@@ -158,6 +212,20 @@ class CacheService {
         debugPrint('Deleted cached track: ${track.title}');
       }
     }
+  }
+
+  /// Checks if there is sufficient space for a new file of [estimatedSize] bytes
+  /// without deleting existing tracks. Returns false if cache is full.
+  Future<bool> hasSufficientSpace(int estimatedSize) async {
+    // Current usage
+    final allTracks = await (_db.select(_db.youTubeTracks)
+          ..where((t) => t.downloadPath.isNotNull()))
+        .get();
+
+    final currentSize =
+        allTracks.fold<int>(0, (sum, t) => sum + (t.fileSize ?? 0));
+
+    return (currentSize + estimatedSize) <= _maxCacheSize;
   }
 
   Future<void> updateLastPlayed(String videoId) async {
