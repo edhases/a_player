@@ -1,3 +1,5 @@
+import '../../config/app_secrets.dart';
+
 /// Constants for InnerTube API
 class InnerTubeConstants {
   InnerTubeConstants._();
@@ -5,11 +7,11 @@ class InnerTubeConstants {
   /// Base URL for YouTube Music API
   static const String baseUrl = 'https://music.youtube.com/youtubei/v1';
 
-  /// Web API key
-  static const String webApiKey = 'AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30';
+  /// Web API key (from secrets)
+  static const String webApiKey = AppSecrets.innerTubeWebApiKey;
 
-  /// Android Music API key
-  static const String androidApiKey = 'AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI';
+  /// Android Music API key (from secrets)
+  static const String androidApiKey = AppSecrets.innerTubeAndroidApiKey;
 
   /// User agent for web requests
   static const String userAgent =
