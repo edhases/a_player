@@ -18,8 +18,14 @@ import 'package:package_info_plus/package_info_plus.dart';
 class DataManagementService {
   final SettingsService _settings;
   final AppDatabase _db;
+  final CacheService? _cacheService;
 
-  DataManagementService(this._settings, this._db);
+  DataManagementService(
+    this._settings,
+    this._db, {
+    CacheService? cacheService,
+  }) : _cacheService = cacheService ??
+            (GetIt.I.isRegistered<CacheService>() ? GetIt.I<CacheService>() : null);
 
   static const int kBackupVersion = 1;
 
@@ -111,8 +117,8 @@ class DataManagementService {
         )));
 
       // 3. Clear Cache
-      if (GetIt.I.isRegistered<CacheService>()) {
-        await GetIt.I<CacheService>().clearCache();
+      if (_cacheService != null) {
+        await _cacheService!.clearCache();
       }
 
       debugPrint('[DataManagementService] Factory reset complete');
@@ -138,8 +144,8 @@ class DataManagementService {
       sizes['settings_db'] = settingsJson.length + dbJson.length;
 
       // Cache size
-      if (GetIt.I.isRegistered<CacheService>()) {
-        sizes['cache'] = await GetIt.I<CacheService>().getCacheUsage();
+      if (_cacheService != null) {
+        sizes['cache'] = await _cacheService!.getCacheUsage();
       }
     } catch (e) {
       debugPrint('[DataManagementService] Error getting backup sizes: $e');
@@ -180,9 +186,8 @@ class DataManagementService {
       ));
 
       // 3. Add cache files if requested
-      if (includeCache && GetIt.I.isRegistered<CacheService>()) {
-        final cacheService = GetIt.I<CacheService>();
-        final cacheDir = await cacheService.getCacheDirectory();
+      if (includeCache && _cacheService != null) {
+        final cacheDir = await _cacheService!.getCacheDirectory();
 
         if (await cacheDir.exists()) {
           await for (final entity in cacheDir.list(recursive: true)) {
@@ -333,9 +338,8 @@ class DataManagementService {
 
       // 4. Restore cache if present
       final includes = manifest['includes'] as Map<String, dynamic>?;
-      if (includes?['cache'] == true && GetIt.I.isRegistered<CacheService>()) {
-        final cacheService = GetIt.I<CacheService>();
-        final cacheDir = await cacheService.getCacheDirectory();
+      if (includes?['cache'] == true && _cacheService != null) {
+        final cacheDir = await _cacheService!.getCacheDirectory();
 
         if (!await cacheDir.exists()) {
           await cacheDir.create(recursive: true);

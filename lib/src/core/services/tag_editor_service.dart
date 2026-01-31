@@ -41,9 +41,17 @@ class TagEditorService {
       debugPrint('[TagEditorService] Detected format: $realFormat');
 
       final extension = p.extension(path).toLowerCase();
-      if (extension == '.mp3' && realFormat == 'MP4/M4A') {
-        debugPrint(
-            '[TagEditorService] WARNING: File $path is mislabeled! It is actually an MP4/M4A file but has .mp3 extension. Writing tags might fail.');
+      
+      // Check for format mismatches
+      final isMislabeled = _isMislabeledFile(extension, realFormat);
+      if (isMislabeled != null) {
+        debugPrint('[TagEditorService] WARNING: $isMislabeled');
+      }
+      
+      // WebM/Matroska doesn't support standard audio tags via MetadataGod
+      if (realFormat == 'WebM/Matroska') {
+        debugPrint('[TagEditorService] Skipping tag write: WebM/Matroska format does not support embedded tags via MetadataGod');
+        return false;
       }
 
       debugPrint(
@@ -122,6 +130,17 @@ class TagEditorService {
         return 'WAV/RIFF';
       }
 
+      // 7. WebM / Matroska (EBML header: 0x1A 0x45 0xDF 0xA3)
+      if (bytes[0] == 0x1A &&
+          bytes[1] == 0x45 &&
+          bytes[2] == 0xDF &&
+          bytes[3] == 0xA3) {
+        return 'WebM/Matroska';
+      }
+
+      // 8. OPUS in OGG container (check for 'OpusHead' after OGG header)
+      // Already covered by OGG check above
+
       return 'Unknown (Signature: ${bytes.sublist(0, 4).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')})';
     } catch (e) {
       return 'Error detecting: $e';
@@ -147,5 +166,31 @@ class TagEditorService {
       return false;
     }
     return true;
+  }
+
+  /// Returns a warning message if the file extension doesn't match the real format.
+  /// Returns null if the file is correctly labeled.
+  String? _isMislabeledFile(String extension, String realFormat) {
+    // Map of expected formats for each extension
+    const expectedFormats = {
+      '.mp3': ['MP3 (ID3v2)', 'MP3 (Raw Frames)'],
+      '.m4a': ['MP4/M4A'],
+      '.mp4': ['MP4/M4A'],
+      '.flac': ['FLAC'],
+      '.ogg': ['OGG'],
+      '.opus': ['OGG'], // Opus is usually in OGG container
+      '.wav': ['WAV/RIFF'],
+      '.webm': ['WebM/Matroska'],
+      '.mkv': ['WebM/Matroska'],
+    };
+
+    final expected = expectedFormats[extension];
+    if (expected == null) return null; // Unknown extension, can't validate
+
+    if (!expected.contains(realFormat)) {
+      return 'File has $extension extension but is actually $realFormat format. Tags may not be written correctly.';
+    }
+
+    return null;
   }
 }

@@ -8,13 +8,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../data/datasources/app_database.dart';
 import '../../../core/services/audio_handler.dart';
-import '../../../core/services/innertube_service.dart';
+import '../../../core/services/innertube/innertube.dart';
 import '../../../core/services/youtube_helper.dart';
+import '../../../core/theme/app_theme.dart';
 
 import '../../../domain/entities/youtube_song.dart';
 import '../common_artwork.dart';
 import 'package:rxdart/rxdart.dart';
-import '../../../core/utils/result.dart';
 import '../../pages/playlist_tracks_screen.dart';
 import '../youtube_song_menu.dart';
 
@@ -109,10 +109,10 @@ class MusicSearchDelegate extends SearchDelegate<Track?> {
                   ));
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16.0),
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
                     child: Text('No local results found.',
-                        style: TextStyle(color: Colors.grey)),
+                        style: TextStyle(color: context.appColors.textSecondary)),
                   );
                 }
 
@@ -218,7 +218,7 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
           child: Text('YouTube Music',
               style: Theme.of(context).textTheme.titleMedium),
         ),
-        FutureBuilder<Result<List<YouTubeSong>>>(
+        FutureBuilder<List<YouTubeSong>>(
           future: _innerTubeService.search(widget.query),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -232,28 +232,19 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
               return Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text('Error: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red)),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
               );
             }
             if (!snapshot.hasData) {
               return const SizedBox.shrink();
             }
 
-            final result = snapshot.data!;
-            if (result.isFailure) {
+            final onlineTracks = snapshot.data!;
+            if (onlineTracks.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Text('Error: ${result.error}',
-                    style: const TextStyle(color: Colors.red)),
-              );
-            }
-
-            final onlineTracks = result.data!;
-            if (onlineTracks.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(16.0),
                 child: Text('No results found online.',
-                    style: TextStyle(color: Colors.grey)),
+                    style: TextStyle(color: context.appColors.textSecondary)),
               );
             }
 
@@ -322,11 +313,9 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
         duration: Duration(seconds: 1)));
 
     try {
-      Duration? duration;
       String? url;
-      String? userAgent;
 
-      // 1. Prioritize YouTubeHelper (YoutubeExplode) as it handles Signature Decryption ('n' parameter)
+      // Use YouTubeHelper (YoutubeExplode) as it handles Signature Decryption ('n' parameter)
       // This is slightly slower but MUCH more reliable against 403 errors.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -338,37 +327,14 @@ class _YouTubeSearchSectionState extends State<_YouTubeSearchSection> {
         debugPrint(
             '[SearchDelegate] Fetching URL via YouTubeHelper for: ${song.videoId}');
         url = await _ytHelper.getAudioUrl(song.videoId);
-        // Use a desktop Chrome User-Agent which matches YoutubeExplode's typical context
-        userAgent =
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
         debugPrint('[SearchDelegate] YouTubeHelper succeeded.');
       } catch (e) {
         debugPrint('[SearchDelegate] YouTubeHelper failed: $e');
       }
 
-      // 2. Fallback to InnerTube if YouTubeHelper failed
-      if (url == null) {
-        debugPrint('[SearchDelegate] Falling back to InnerTube...');
-        final songData = await _innerTubeService.getSongUrl(song.videoId);
-        if (songData != null) {
-          url = songData['url'];
-          userAgent = songData['agent'];
-        }
-      }
-
-      // 3. Always try to get duration/details as it fixes "00:00" UI issue
-      try {
-        final video = await _ytHelper.getVideoDetails(song.videoId);
-        duration = video?.duration;
-      } catch (e) {
-        debugPrint('[SearchDelegate] Failed to fetch video details: $e');
-      }
-
       if (url != null) {
         debugPrint(
             '[SearchDelegate] Ready to play YouTube. URL starts with: ${url.substring(0, 50)}...');
-        debugPrint(
-            '[SearchDelegate] Duration: $duration, User-Agent: $userAgent');
 
         final mediaItem = await _ytHelper.createMediaItem(song.videoId,
             customTitle: song.title, customArtist: song.artist, cachedUrl: url);

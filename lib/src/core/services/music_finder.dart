@@ -124,4 +124,10 @@ class MusicFinder {
 
     return list;
   }
+
+  /// Disposes resources used by this service.
+  void dispose() {
+    isScanning.dispose();
+    scanStatus.dispose();
+  }
 }

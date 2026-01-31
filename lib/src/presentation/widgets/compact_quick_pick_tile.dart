@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../domain/entities/youtube_song.dart';
+import '../../core/theme/app_theme.dart';
 import 'common_artwork.dart';
 
 /// A compact list tile for Quick Picks section (YouTube Music style)
@@ -20,6 +21,7 @@ class CompactQuickPickTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
 
     return InkWell(
       onTap: onTap,
@@ -59,7 +61,7 @@ class CompactQuickPickTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.grey[400],
+                      color: colors.textSecondary,
                       fontSize: 12,
                     ),
                   ),
@@ -83,7 +85,7 @@ class CompactQuickPickTile extends StatelessWidget {
             IconButton(
               icon: Icon(
                 Icons.more_vert,
-                color: Colors.grey[400],
+                color: colors.textSecondary,
                 size: 20,
               ),
               onPressed: onMenuTap,

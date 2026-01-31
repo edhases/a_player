@@ -170,11 +170,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, Track> {
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => const {};
-  @override
-  List<Set<GeneratedColumn>> get uniqueKeys => [
-        {path},
-      ];
+  Set<GeneratedColumn> get $primaryKey => {path};
   @override
   Track map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
@@ -2222,6 +2218,28 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RadioStationsTable radioStations = $RadioStationsTable(this);
   late final $PlaybackLogTable playbackLog = $PlaybackLogTable(this);
   late final $TrackOverridesTable trackOverrides = $TrackOverridesTable(this);
+  late final Index idxTracksFolder = Index('idx_tracks_folder',
+      'CREATE INDEX idx_tracks_folder ON tracks (folder_path)');
+  late final Index idxTracksAlbum = Index(
+      'idx_tracks_album', 'CREATE INDEX idx_tracks_album ON tracks (album)');
+  late final Index idxTracksArtist = Index(
+      'idx_tracks_artist', 'CREATE INDEX idx_tracks_artist ON tracks (artist)');
+  late final Index idxTracksFavorite = Index('idx_tracks_favorite',
+      'CREATE INDEX idx_tracks_favorite ON tracks (is_favorite, last_played)');
+  late final Index idxTracksExcluded = Index('idx_tracks_excluded',
+      'CREATE INDEX idx_tracks_excluded ON tracks (is_excluded)');
+  late final Index idxYtFavorite = Index('idx_yt_favorite',
+      'CREATE INDEX idx_yt_favorite ON you_tube_tracks (is_favorite, liked_at)');
+  late final Index idxYtDownloaded = Index('idx_yt_downloaded',
+      'CREATE INDEX idx_yt_downloaded ON you_tube_tracks (download_path)');
+  late final Index idxYtLastPlayed = Index('idx_yt_lastPlayed',
+      'CREATE INDEX idx_yt_lastPlayed ON you_tube_tracks (last_played)');
+  late final Index idxYtCachedAt = Index('idx_yt_cachedAt',
+      'CREATE INDEX idx_yt_cachedAt ON you_tube_tracks (cached_at)');
+  late final Index idxPlaybackVideo = Index('idx_playback_video',
+      'CREATE INDEX idx_playback_video ON playback_log (video_id)');
+  late final Index idxPlaybackPlayedAt = Index('idx_playback_playedAt',
+      'CREATE INDEX idx_playback_playedAt ON playback_log (played_at)');
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2232,6 +2250,17 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         homeCache,
         radioStations,
         playbackLog,
-        trackOverrides
+        trackOverrides,
+        idxTracksFolder,
+        idxTracksAlbum,
+        idxTracksArtist,
+        idxTracksFavorite,
+        idxTracksExcluded,
+        idxYtFavorite,
+        idxYtDownloaded,
+        idxYtLastPlayed,
+        idxYtCachedAt,
+        idxPlaybackVideo,
+        idxPlaybackPlayedAt
       ];
 }

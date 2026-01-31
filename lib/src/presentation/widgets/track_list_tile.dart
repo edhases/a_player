@@ -9,6 +9,7 @@ import '../../core/services/audio_handler.dart';
 import '../widgets/search/metadata_pick_delegate.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../../core/utils/localization.dart';
+import '../../core/theme/app_theme.dart';
 
 class TrackListTile extends StatefulWidget {
   final Track track;
@@ -49,6 +50,7 @@ class _TrackListTileState extends State<TrackListTile> {
   Widget _buildTile(BuildContext context, TrackOverride? override) {
     // Updated Type
     final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
     final loc = AppLocalizations.of(context);
 
     // Use override if available, otherwise fallback to track data
@@ -71,7 +73,7 @@ class _TrackListTileState extends State<TrackListTile> {
                   style: TextStyle(
                     color: widget.isCurrentTrack
                         ? colorScheme.primary
-                        : Colors.grey[500],
+                        : colors.textSecondary,
                     fontWeight: widget.isCurrentTrack
                         ? FontWeight.bold
                         : FontWeight.normal,
@@ -105,7 +107,7 @@ class _TrackListTileState extends State<TrackListTile> {
           fontSize: 12,
           color: widget.isCurrentTrack
               ? colorScheme.primary.withValues(alpha: 0.7)
-              : Colors.grey[500],
+              : colors.textSecondary,
         ),
       ),
       trailing: Row(
@@ -115,17 +117,15 @@ class _TrackListTileState extends State<TrackListTile> {
             _formatDuration(Duration(milliseconds: widget.track.duration)),
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey[500],
+              color: colors.textSecondary,
             ),
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.grey),
+            icon: Icon(Icons.more_vert, color: colors.textSecondary),
             onSelected: (value) => _handleMenuAction(value),
             itemBuilder: (context) {
-              // Safe access to isExcluded using dynamic if needed, or assume generated
-              // Since build_runner acts on models, Track class might need regeneration to show property.
-              // I will access it dynamically for now to prevent compile errors in THIS step if file is analysed.
-              final isExcluded = (widget.track as dynamic).isExcluded == true;
+              // Access isExcluded directly - Track class has this property from Drift
+              final isExcluded = widget.track.isExcluded;
 
               return [
                 PopupMenuItem(
@@ -180,9 +180,9 @@ class _TrackListTileState extends State<TrackListTile> {
                 PopupMenuItem(
                   value: 'delete_file',
                   child: ListTile(
-                    leading: Icon(Icons.delete_forever, color: Colors.red),
+                    leading: Icon(Icons.delete_forever, color: colors.error),
                     title: Text(loc.deleteFile,
-                        style: TextStyle(color: Colors.red)),
+                        style: TextStyle(color: colors.error)),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),
@@ -257,7 +257,7 @@ class _TrackListTileState extends State<TrackListTile> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: context.appColors.error),
             child: Text(loc.delete),
           ),
         ],
@@ -404,7 +404,7 @@ class _TrackListTileState extends State<TrackListTile> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context).metadataUpdated),
-              backgroundColor: Colors.green,
+              backgroundColor: context.appColors.success,
               duration: const Duration(seconds: 2),
             ),
           );
@@ -417,7 +417,7 @@ class _TrackListTileState extends State<TrackListTile> {
             SnackBar(
               content: Text(AppLocalizations.of(context)
                   .translate('metadata_save_error', args: {'error': e})),
-              backgroundColor: Colors.red,
+              backgroundColor: context.appColors.error,
             ),
           );
         }

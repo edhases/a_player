@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:get_it/get_it.dart';
 import '../../core/services/equalizer_service.dart';
 import '../../core/utils/localization.dart';
+import '../../core/theme/app_theme.dart';
 
 class EqualizerScreen extends StatefulWidget {
   const EqualizerScreen({super.key});
@@ -56,22 +57,23 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
     }
 
     if (_equalizerService == null) {
+      final colors = context.appColors;
       return Scaffold(
         appBar: AppBar(title: Text(AppLocalizations.of(context).equalizer)),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.music_note, size: 48, color: Colors.white24),
+              Icon(Icons.music_note, size: 48, color: colors.textMuted),
               const SizedBox(height: 16),
               Text(
                 AppLocalizations.of(context).equalizerNotActive,
-                style: const TextStyle(color: Colors.white54),
+                style: TextStyle(color: colors.textSecondary),
               ),
               const SizedBox(height: 8),
               Text(
                 AppLocalizations.of(context).equalizerActivateMusic,
-                style: const TextStyle(color: Colors.white24, fontSize: 12),
+                style: TextStyle(color: colors.textMuted, fontSize: 12),
               ),
             ],
           ),
@@ -135,7 +137,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
             labelText: AppLocalizations.of(context).preset,
             border: const OutlineInputBorder(),
           ),
-          dropdownColor: Colors.grey[900],
+          dropdownColor: context.appColors.sheetBackground,
           items: eq.presetNames
               .map((name) => DropdownMenuItem(
                   value: name,
@@ -223,7 +225,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                   Text(freqLabel, style: const TextStyle(fontSize: 10)),
                   Text('${level.toStringAsFixed(1)}dB',
                       style:
-                          const TextStyle(fontSize: 10, color: Colors.white54)),
+                          TextStyle(fontSize: 10, color: context.appColors.textSecondary)),
                 ],
               ),
             );

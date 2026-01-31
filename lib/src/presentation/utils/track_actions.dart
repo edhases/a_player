@@ -6,6 +6,7 @@ import '../../core/services/cache_service.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/services/youtube_helper.dart';
 import '../../core/utils/localization.dart';
+import '../../core/theme/app_theme.dart';
 import '../pages/settings_screen.dart';
 
 class TrackActions {
@@ -87,15 +88,16 @@ class TrackActions {
   ) async {
     try {
       final ytHelper = GetIt.I<YouTubeHelper>();
-      final url = await ytHelper.getAudioUrl(videoId);
+      final audioData = await ytHelper.getAudioUrlWithAgent(videoId);
 
-      if (url != null) {
+      if (audioData != null) {
         await GetIt.I<CacheService>().cacheTrack(
           videoId: videoId,
-          url: url,
+          url: audioData['url']!,
           title: title,
           artist: artist,
           thumbnailUrl: thumbnail,
+          container: audioData['container'],
         );
       }
     } catch (e) {
@@ -123,19 +125,20 @@ class TrackActions {
     String thumbnail,
   ) {
     final loc = AppLocalizations.of(context);
+    final colors = context.appColors;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: colors.sheetBackground,
         title: Text(loc.translate('cache_full_title'),
-            style: const TextStyle(color: Colors.white)),
+            style: TextStyle(color: colors.textPrimary)),
         content: Text(loc.translate('cache_full_message'),
-            style: const TextStyle(color: Colors.white70)),
+            style: TextStyle(color: colors.textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(loc.translate('dont_cache'),
-                style: const TextStyle(color: Colors.white60)),
+                style: TextStyle(color: colors.textMuted)),
           ),
           TextButton(
             onPressed: () async {
@@ -158,7 +161,7 @@ class TrackActions {
             },
             child: Text(loc.ok,
                 style:
-                    const TextStyle(color: Colors.white)), // "OK" or "Increase"
+                    TextStyle(color: colors.textPrimary)), // "OK" or "Increase"
           ),
         ],
       ),

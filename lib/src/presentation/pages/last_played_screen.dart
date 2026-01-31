@@ -6,6 +6,7 @@ import '../../core/utils/localization.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/compact_song_tile.dart';
 import '../../domain/entities/youtube_song.dart';
+import '../../core/theme/app_theme.dart';
 
 class LastPlayedScreen extends StatelessWidget {
   const LastPlayedScreen({super.key});
@@ -16,12 +17,10 @@ class LastPlayedScreen extends StatelessWidget {
     final loc = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.black, // Dark theme background
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(loc.lastPlayedTitle,
-            style: const TextStyle(color: Colors.white)),
+        title: Text(loc.lastPlayedTitle),
         backgroundColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: FutureBuilder<List<PlaybackLogEntry>>(
         // Example query: Join with YouTubeTracks to get metadata
@@ -61,7 +60,7 @@ class LastPlayedScreen extends StatelessWidget {
               if (history.isEmpty) {
                 return Center(
                     child: Text(loc.noHistory,
-                        style: const TextStyle(color: Colors.white)));
+                        style: TextStyle(color: context.appColors.textPrimary)));
               }
 
               return ListView.builder(
@@ -116,9 +115,10 @@ class LastPlayedScreen extends StatelessWidget {
   void _showContextMenu(BuildContext context, YouTubeSong song) {
     final audioHandler = GetIt.I<MyAudioHandler>();
     final loc = AppLocalizations.of(context);
+    final colors = context.appColors;
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey[900],
+      backgroundColor: colors.sheetBackground,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -127,9 +127,9 @@ class LastPlayedScreen extends StatelessWidget {
         children: [
           const SizedBox(height: 8),
           ListTile(
-            leading: const Icon(Icons.queue_music, color: Colors.white),
+            leading: Icon(Icons.queue_music, color: colors.textPrimary),
             title: Text(loc.addToQueue,
-                style: const TextStyle(color: Colors.white)),
+                style: TextStyle(color: colors.textPrimary)),
             onTap: () {
               audioHandler.addYouTubeToQueue(song);
               Navigator.pop(context);
@@ -139,9 +139,9 @@ class LastPlayedScreen extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.play_arrow, color: Colors.white),
+            leading: Icon(Icons.play_arrow, color: colors.textPrimary),
             title:
-                Text(loc.playNow, style: const TextStyle(color: Colors.white)),
+                Text(loc.playNow, style: TextStyle(color: colors.textPrimary)),
             onTap: () {
               audioHandler.playYouTubeSong(song);
               Navigator.pop(context);

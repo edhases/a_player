@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
-import '../../core/services/innertube_service.dart';
+import '../../core/services/innertube/innertube.dart';
 
 import '../../core/services/audio_handler.dart';
 import '../../core/utils/media_item_adapter.dart';

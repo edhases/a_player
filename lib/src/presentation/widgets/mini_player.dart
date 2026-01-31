@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/theme/app_theme.dart';
 import '../pages/player_screen.dart';
 import '../blocs/player/player_bloc.dart';
 import 'common_artwork.dart';
@@ -12,6 +13,7 @@ class MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
 
     return BlocBuilder<PlayerBloc, PlayerState>(
       builder: (context, state) {
@@ -51,7 +53,7 @@ class MiniPlayer extends StatelessWidget {
               color: const Color(0xFF1E1E1E),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: colors.overlay,
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -72,7 +74,7 @@ class MiniPlayer extends StatelessWidget {
                               .clamp(0.0, 1.0)
                           : 0.0,
                       minHeight: 2,
-                      backgroundColor: Colors.grey[800],
+                      backgroundColor: colors.divider,
                       valueColor: AlwaysStoppedAnimation(colorScheme.primary),
                     );
                   },
@@ -121,7 +123,7 @@ class MiniPlayer extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.grey[400],
+                                color: colors.textSecondary,
                                 fontSize: 12,
                               ),
                             ),

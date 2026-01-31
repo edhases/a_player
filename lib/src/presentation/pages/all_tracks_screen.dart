@@ -8,6 +8,7 @@ import '../../core/services/audio_handler.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/utils/localization.dart';
 import '../../core/utils/media_item_adapter.dart';
+import '../../core/theme/app_theme.dart';
 
 import '../widgets/track_list_tile.dart';
 
@@ -42,6 +43,7 @@ class AllTracksScreen extends StatelessWidget {
               final tracks = snapshot.data ?? [];
 
               if (tracks.isEmpty) {
+                final colors = context.appColors;
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(32.0),
@@ -51,7 +53,7 @@ class AllTracksScreen extends StatelessWidget {
                         Icon(
                           Icons.library_music_outlined,
                           size: 80,
-                          color: Colors.grey[600],
+                          color: colors.textSecondary,
                         ),
                         const SizedBox(height: 24),
                         Text(
@@ -61,7 +63,7 @@ class AllTracksScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                         Text(
                           AppLocalizations.of(context).scanDesc,
-                          style: TextStyle(color: Colors.grey[500]),
+                          style: TextStyle(color: colors.textSecondary),
                         ),
                         const SizedBox(height: 32),
                         FilledButton.icon(

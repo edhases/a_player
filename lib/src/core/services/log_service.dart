@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'telegram_service.dart';
 
@@ -14,11 +16,97 @@ enum LogLevel {
   error,
 }
 
+/// Error categories for structured logging
+enum ErrorCategory {
+  playback,    // Audio playback issues
+  network,     // Network/API errors
+  cache,       // Cache/storage issues
+  auth,        // Authentication errors
+  ui,          // UI/rendering errors
+  database,    // Database errors
+  general,     // Uncategorized errors
+}
+
+/// Aggregated error entry for batching
+class _AggregatedError {
+  final ErrorCategory category;
+  final String message;
+  int count;
+  DateTime firstOccurrence;
+  DateTime lastOccurrence;
+
+  _AggregatedError({
+    required this.category,
+    required this.message,
+    this.count = 1,
+    DateTime? time,
+  })  : firstOccurrence = time ?? DateTime.now(),
+        lastOccurrence = time ?? DateTime.now();
+
+  void increment() {
+    count++;
+    lastOccurrence = DateTime.now();
+  }
+
+  String get key => '${category.name}:${message.hashCode}';
+}
+
+/// Playback analytics data
+class PlaybackAnalytics {
+  int songsPlayed = 0;
+  int playbackErrors = 0;
+  int cacheHits = 0;
+  int networkStreams = 0;
+  Duration totalPlaytime = Duration.zero;
+  DateTime sessionStart = DateTime.now();
+  final Map<String, int> errorCounts = {};
+
+  Duration get sessionDuration => DateTime.now().difference(sessionStart);
+
+  Map<String, dynamic> toSummary() => {
+        'songsPlayed': songsPlayed,
+        'playbackErrors': playbackErrors,
+        'cacheHits': cacheHits,
+        'networkStreams': networkStreams,
+        'totalPlaytime': totalPlaytime.inMinutes,
+        'sessionMinutes': sessionDuration.inMinutes,
+        'topErrors': _topErrors(3),
+      };
+
+  List<MapEntry<String, int>> _topErrors(int n) {
+    final sorted = errorCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(n).toList();
+  }
+
+  void reset() {
+    songsPlayed = 0;
+    playbackErrors = 0;
+    cacheHits = 0;
+    networkStreams = 0;
+    totalPlaytime = Duration.zero;
+    errorCounts.clear();
+    sessionStart = DateTime.now();
+  }
+}
+
 /// Centralized logging service with local file storage and Telegram integration
 class LogService {
   int _maxFileSize = 10 * 1024 * 1024; // Default 10MB
   static const int _maxFiles = 3;
   static const String _logFileName = 'oxide_player.log';
+
+  // Error aggregation
+  static const Duration _aggregationWindow = Duration(minutes: 5);
+  final Map<String, _AggregatedError> _errorBuffer = {};
+  Timer? _digestTimer;
+
+  // App info
+  String _appVersion = 'unknown';
+  String _buildNumber = 'unknown';
+
+  // Analytics
+  final PlaybackAnalytics analytics = PlaybackAnalytics();
 
   File? _logFile;
   bool _initialized = false;
@@ -68,12 +156,43 @@ class LogService {
       _logFile = File('${logsDir.path}/$_logFileName');
       _initialized = true;
 
+      // Load app version
+      await _loadAppVersion();
+
+      // Start error digest timer
+      _startDigestTimer();
+
       // Log startup info
-      info('LogService initialized');
+      info('LogService initialized (v$_appVersion+$_buildNumber)');
       await _logDeviceInfo();
     } catch (e) {
       debugPrint('[LogService] Failed to initialize: $e');
     }
+  }
+
+  /// Load app version from package info
+  Future<void> _loadAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _appVersion = packageInfo.version;
+      _buildNumber = packageInfo.buildNumber;
+    } catch (e) {
+      debugPrint('[LogService] Failed to load app version: $e');
+    }
+  }
+
+  /// Start timer for sending error digest
+  void _startDigestTimer() {
+    _digestTimer?.cancel();
+    _digestTimer = Timer.periodic(_aggregationWindow, (_) {
+      _sendErrorDigest();
+    });
+  }
+
+  /// Stop the digest timer
+  void dispose() {
+    _digestTimer?.cancel();
+    _sendErrorDigest(); // Flush remaining errors
   }
 
   /// Log device info at startup
@@ -142,17 +261,56 @@ class LogService {
         }
       }
 
-      if (GetIt.I.isRegistered<TelegramService>()) {
-        final deviceInfo = await getDeviceInfoSummary();
-        final formattedMessage = '🚨 <b>ERROR</b>\n'
-            '📱 <i>$deviceInfo</i>\n'
-            '🕐 ${DateTime.now().toIso8601String()}\n\n'
-            '<pre>$message</pre>';
-        GetIt.I<TelegramService>().sendMessage(formattedMessage);
-      }
+      // Aggregate error instead of sending immediately
+      // Detect category from message
+      final category = _detectCategory(message);
+      _aggregateError(category, message.split('\n').first);
     } catch (e) {
       // Ignore telegram errors to avoid loops
     }
+  }
+
+  /// Detect error category from message
+  ErrorCategory _detectCategory(String message) {
+    final lower = message.toLowerCase();
+    if (lower.contains('audio') ||
+        lower.contains('player') ||
+        lower.contains('playback') ||
+        lower.contains('stream')) {
+      return ErrorCategory.playback;
+    }
+    if (lower.contains('network') ||
+        lower.contains('http') ||
+        lower.contains('connection') ||
+        lower.contains('timeout') ||
+        lower.contains('api')) {
+      return ErrorCategory.network;
+    }
+    if (lower.contains('cache') ||
+        lower.contains('storage') ||
+        lower.contains('file') ||
+        lower.contains('disk')) {
+      return ErrorCategory.cache;
+    }
+    if (lower.contains('auth') ||
+        lower.contains('login') ||
+        lower.contains('token') ||
+        lower.contains('sign')) {
+      return ErrorCategory.auth;
+    }
+    if (lower.contains('widget') ||
+        lower.contains('render') ||
+        lower.contains('build') ||
+        lower.contains('layout')) {
+      return ErrorCategory.ui;
+    }
+    if (lower.contains('database') ||
+        lower.contains('db') ||
+        lower.contains('sqlite') ||
+        lower.contains('drift')) {
+      return ErrorCategory.database;
+    }
+    return ErrorCategory.general;
   }
 
   /// Convenience methods
@@ -162,6 +320,152 @@ class LogService {
       log(LogLevel.warning, message, error: error);
   void error(String message, {Object? error, StackTrace? stackTrace}) =>
       log(LogLevel.error, message, error: error, stackTrace: stackTrace);
+
+  /// Categorized error logging with aggregation
+  void errorWithCategory(
+    ErrorCategory category,
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    // Log to file normally
+    log(LogLevel.error, '[${category.name.toUpperCase()}] $message',
+        error: error, stackTrace: stackTrace);
+
+    // Track in analytics
+    analytics.playbackErrors++;
+    analytics.errorCounts[category.name] =
+        (analytics.errorCounts[category.name] ?? 0) + 1;
+
+    // Aggregate for Telegram digest
+    _aggregateError(category, message);
+  }
+
+  /// Add error to aggregation buffer
+  void _aggregateError(ErrorCategory category, String message) {
+    // Create a simplified key (first 100 chars of message)
+    final shortMessage = message.length > 100 ? message.substring(0, 100) : message;
+    final key = '${category.name}:${shortMessage.hashCode}';
+
+    if (_errorBuffer.containsKey(key)) {
+      _errorBuffer[key]!.increment();
+    } else {
+      _errorBuffer[key] = _AggregatedError(
+        category: category,
+        message: shortMessage,
+      );
+    }
+  }
+
+  /// Send aggregated error digest to Telegram
+  Future<void> _sendErrorDigest() async {
+    if (_errorBuffer.isEmpty) return;
+
+    try {
+      if (!GetIt.I.isRegistered<TelegramService>()) return;
+
+      final telegram = GetIt.I<TelegramService>();
+      final deviceInfo = await getDeviceInfoSummary();
+
+      // Group by category
+      final byCategory = <ErrorCategory, List<_AggregatedError>>{};
+      for (final err in _errorBuffer.values) {
+        byCategory.putIfAbsent(err.category, () => []).add(err);
+      }
+
+      // Build digest message
+      final buffer = StringBuffer();
+      buffer.writeln('📊 <b>Error Digest</b>');
+      buffer.writeln('📱 <i>$deviceInfo</i>');
+      buffer.writeln('🏷️ v$_appVersion+$_buildNumber');
+      buffer.writeln('⏱️ Session: ${analytics.sessionDuration.inMinutes}min');
+      buffer.writeln('🎵 Songs: ${analytics.songsPlayed} | Errors: ${analytics.playbackErrors}');
+      buffer.writeln('');
+
+      for (final category in byCategory.keys) {
+        final emoji = _categoryEmoji(category);
+        buffer.writeln('$emoji <b>${category.name.toUpperCase()}</b>');
+
+        for (final err in byCategory[category]!) {
+          if (err.count > 1) {
+            buffer.writeln('  • ${err.message} <i>(×${err.count})</i>');
+          } else {
+            buffer.writeln('  • ${err.message}');
+          }
+        }
+        buffer.writeln('');
+      }
+
+      await telegram.sendMessage(buffer.toString());
+      _errorBuffer.clear();
+    } catch (e) {
+      debugPrint('[LogService] Failed to send digest: $e');
+    }
+  }
+
+  /// Get emoji for error category
+  String _categoryEmoji(ErrorCategory category) {
+    return switch (category) {
+      ErrorCategory.playback => '🎧',
+      ErrorCategory.network => '🌐',
+      ErrorCategory.cache => '💾',
+      ErrorCategory.auth => '🔐',
+      ErrorCategory.ui => '🖼️',
+      ErrorCategory.database => '🗄️',
+      ErrorCategory.general => '⚠️',
+    };
+  }
+
+  /// Record song play for analytics
+  void recordSongPlayed({bool fromCache = false}) {
+    analytics.songsPlayed++;
+    if (fromCache) {
+      analytics.cacheHits++;
+    } else {
+      analytics.networkStreams++;
+    }
+  }
+
+  /// Record playtime for analytics
+  void recordPlaytime(Duration duration) {
+    analytics.totalPlaytime += duration;
+  }
+
+  /// Get analytics summary for Telegram
+  Future<void> sendAnalyticsSummary() async {
+    try {
+      if (!GetIt.I.isRegistered<TelegramService>()) return;
+
+      final telegram = GetIt.I<TelegramService>();
+      final deviceInfo = await getDeviceInfoSummary();
+      final summary = analytics.toSummary();
+
+      final buffer = StringBuffer();
+      buffer.writeln('📈 <b>Session Analytics</b>');
+      buffer.writeln('📱 <i>$deviceInfo</i>');
+      buffer.writeln('🏷️ v$_appVersion+$_buildNumber');
+      buffer.writeln('');
+      buffer.writeln('🎵 Songs played: ${summary['songsPlayed']}');
+      buffer.writeln('💾 From cache: ${summary['cacheHits']}');
+      buffer.writeln('🌐 Streamed: ${summary['networkStreams']}');
+      buffer.writeln('⏱️ Session: ${summary['sessionMinutes']} min');
+      buffer.writeln('🎧 Playtime: ${summary['totalPlaytime']} min');
+      buffer.writeln('❌ Errors: ${summary['playbackErrors']}');
+
+      final topErrors = summary['topErrors'] as List<MapEntry<String, int>>;
+      if (topErrors.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('<b>Top Errors:</b>');
+        for (final err in topErrors) {
+          buffer.writeln('  • ${err.key}: ${err.value}');
+        }
+      }
+
+      await telegram.sendMessage(buffer.toString());
+    } catch (e) {
+      debugPrint('[LogService] Failed to send analytics: $e');
+    }
+  }
 
   /// Sanitize sensitive data from log message
   String _sanitize(String message) {

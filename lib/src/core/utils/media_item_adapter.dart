@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart'; // Drift models
 import '../../domain/entities/youtube_song.dart';
+import '../../domain/entities/local_track.dart';
 
 class MediaItemAdapter {
   static MediaItem fromYouTubeSong(YouTubeSong song, {String? cachedUrl}) {
@@ -70,4 +71,40 @@ class MediaItemAdapter {
       },
     );
   }
+
+  /// Convert from domain LocalTrack to MediaItem
+  static MediaItem fromLocalTrack(LocalTrack track) {
+    Uri? artwork;
+    if (track.artworkUri != null && track.artworkUri!.isNotEmpty) {
+      artwork = Uri.parse(track.artworkUri!);
+    }
+
+    return MediaItem(
+      id: track.path,
+      album: track.album ?? 'Unknown Album',
+      title: track.title,
+      artist: track.artist ?? 'Unknown Artist',
+      duration: Duration(milliseconds: track.duration),
+      artUri: artwork,
+      extras: {
+        'isOnline': false,
+        'path': track.path,
+      },
+    );
+  }
+
+  /// Convert Drift Track to domain LocalTrack
+  static LocalTrack trackToLocalTrack(Track track) => LocalTrack(
+        path: track.path,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration: track.duration,
+        folderPath: track.folderPath,
+        artworkUri: track.artworkUri,
+        isFavorite: track.isFavorite,
+        mediaStoreId: track.mediaStoreId,
+        lastPlayed: track.lastPlayed,
+        isExcluded: track.isExcluded,
+      );
 }

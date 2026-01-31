@@ -18,6 +18,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final RecommendationService _recommendationService;
   final AppDatabase _db;
 
+  // Stream subscriptions to be cancelled on close
+  StreamSubscription? _youtubeTracksSubscription;
+  StreamSubscription? _favoriteTracksSubscription;
+
   HomeBloc({
     required RecommendationService recommendationService,
     required AppDatabase db,
@@ -28,14 +32,21 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeRefreshFeed>(_onLoadFeed);
 
     // Watch for changes in YouTubeTracks (likes/history)
-    _db.select(_db.youTubeTracks).watch().listen((_) {
+    _youtubeTracksSubscription = _db.select(_db.youTubeTracks).watch().listen((_) {
       add(HomeRefreshFeed());
     });
 
     // Watch for changes in Local Favorites
-    _db.watchFavoriteTracks().listen((_) {
+    _favoriteTracksSubscription = _db.watchFavoriteTracks().listen((_) {
       add(HomeRefreshFeed());
     });
+  }
+
+  @override
+  Future<void> close() {
+    _youtubeTracksSubscription?.cancel();
+    _favoriteTracksSubscription?.cancel();
+    return super.close();
   }
 
   Future<void> _onLoadFeed(HomeEvent event, Emitter<HomeState> emit) async {

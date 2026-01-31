@@ -1759,6 +1759,13 @@ class InnerTubeService {
           }
         }
 
+        // Category labels that should NOT be treated as artist names
+        const categoryLabels = {
+          'Single', 'Album', 'EP', 'Playlist', 'Song', 'Video',
+          'Сингл', 'Альбом', 'Плейлист', 'Пісня', 'Відео',
+          'Artist', 'Виконавець', 'Channel', 'Канал',
+        };
+
         // Extract Artist (Smart Check using Navigation Endpoints)
         final artistNames = <String>[];
         for (var run in subtitleRuns) {
@@ -1770,8 +1777,10 @@ class InnerTubeService {
           // Check for Artist or User Channel (Indie artists)
           if (pageType == 'MUSIC_PAGE_TYPE_ARTIST' ||
               pageType == 'MUSIC_PAGE_TYPE_USER_CHANNEL') {
-            if (run['text'] != null) {
-              artistNames.add(run['text']);
+            final text = run['text']?.toString().trim();
+            // Skip category labels - they are not artist names even if marked as ARTIST pageType
+            if (text != null && text.isNotEmpty && !categoryLabels.contains(text)) {
+              artistNames.add(text);
               // Capture the first valid browseId as artistId
               if (artistId == null) {
                 artistId = nav?['browseEndpoint']?['browseId'];
@@ -2009,19 +2018,41 @@ class InnerTubeService {
 
   /// Extract artist info from runs.
   /// Returns {'name': String, 'id': String?}
+  /// 
+  /// YouTube Music subtitle format is typically: "Category • Artist • Duration"
+  /// or "Artist • Album • Duration" or just "Artist"
   Map<String, String?> _extractArtistInfo(List runs) {
     if (runs.isEmpty) return {'name': 'Unknown', 'id': null};
 
     final artistParts = <String>[];
     String? artistId;
+    int separatorCount = 0;
+
+    // Category labels that should be skipped when extracting artist name
+    const categoryLabels = {
+      'Single', 'Album', 'EP', 'Playlist', 'Song', 'Video',
+      'Сингл', 'Альбом', 'Плейлист', 'Пісня', 'Відео',
+      'Artist', 'Виконавець', 'Channel', 'Канал',
+    };
 
     for (var run in runs) {
       final text = run['text']?.toString() ?? '';
       if (text.isEmpty) continue;
 
-      // Stop at the metadata separator
+      // Count separators - artist is usually before or after first separator
       if (text == ' • ' || text == '•') {
-        break;
+        separatorCount++;
+        // If we already found artist parts, we can stop
+        if (artistParts.isNotEmpty) {
+          break;
+        }
+        // Otherwise continue looking after the separator
+        continue;
+      }
+
+      // Skip category labels - they are not artist names
+      if (categoryLabels.contains(text)) {
+        continue;
       }
 
       // Stop if we hit view counts (defensive)
@@ -2029,6 +2060,11 @@ class InnerTubeService {
           text.contains('plays') ||
           text == 'Watch' ||
           text.contains(' переглядів')) {
+        break;
+      }
+      
+      // Stop if we hit duration pattern (e.g., "3:45", "1:23:45")
+      if (RegExp(r'^\d+:\d+').hasMatch(text)) {
         break;
       }
 

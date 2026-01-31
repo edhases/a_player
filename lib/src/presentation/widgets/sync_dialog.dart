@@ -4,6 +4,7 @@ import '../../core/services/favorites_service.dart';
 import '../../core/services/background_cache_service.dart';
 import '../../core/utils/localization.dart';
 import '../../domain/entities/youtube_song.dart';
+import '../../core/theme/app_theme.dart';
 import 'common_artwork.dart';
 
 /// Dialog for syncing liked songs from YouTube Music with cache selection
@@ -213,7 +214,7 @@ class _SyncDialogState extends State<SyncDialog> {
         const SizedBox(height: 4),
         Text(
           loc.translate('sync_select_for_cache'),
-          style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+          style: theme.textTheme.bodySmall?.copyWith(color: context.appColors.textSecondary),
         ),
         const SizedBox(height: 8),
         // Select all checkbox

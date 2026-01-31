@@ -42,4 +42,10 @@ class SleepTimerService {
     debugPrint('[SleepTimer] Finished. Stopping playback.');
     await _audioHandler.pause(); // Or stop() depending on preference
   }
+
+  /// Disposes resources used by this service.
+  void dispose() {
+    cancelTimer();
+    remainingTime.dispose();
+  }
 }

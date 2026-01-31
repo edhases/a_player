@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/common_artwork.dart';
+import '../../core/theme/app_theme.dart';
 
 import '../widgets/track_list_tile.dart';
 import '../../core/utils/localization.dart';
@@ -75,9 +76,9 @@ class DetailScreen extends StatelessWidget {
                 flexibleSpace: FlexibleSpaceBar(
                   title: Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      shadows: [Shadow(blurRadius: 8, color: Colors.black)],
+                      shadows: [Shadow(blurRadius: 8, color: context.appColors.overlay)],
                     ),
                   ),
                   background: Stack(
@@ -100,7 +101,7 @@ class DetailScreen extends StatelessWidget {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withValues(alpha: 0.8),
+                              context.appColors.overlay.withValues(alpha: 0.8),
                             ],
                           ),
                         ),
@@ -118,7 +119,7 @@ class DetailScreen extends StatelessWidget {
                       Text(
                         AppLocalizations.of(context).translate('tracks_count',
                             args: {'count': tracks.length}),
-                        style: TextStyle(color: Colors.grey[400]),
+                        style: TextStyle(color: context.appColors.textSecondary),
                       ),
                       const Spacer(),
                       FilledButton.icon(

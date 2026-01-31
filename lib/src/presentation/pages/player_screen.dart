@@ -1,29 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:just_audio/just_audio.dart' hide PlayerState;
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:provider/provider.dart';
 
-import '../../core/services/audio_handler.dart';
 import '../../data/datasources/app_database.dart';
 import 'equalizer_screen.dart';
 import '../widgets/common_artwork.dart';
 import '../../core/services/sleep_timer_service.dart';
 import '../../core/utils/localization.dart';
+import '../../core/utils/duration_formatter.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/youtube_helper.dart';
 import '../../core/services/favorites_service.dart';
-import '../../domain/entities/youtube_song.dart';
+import '../../core/services/innertube/innertube.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:get_it/get_it.dart';
 import '../blocs/player/player_bloc.dart';
-import '../blocs/queue/queue_bloc.dart';
 import '../widgets/lyrics_view.dart';
 import '../utils/track_actions.dart';
 import 'playlist_tracks_screen.dart';
 import 'detail_screen.dart';
+import '../widgets/player/player_widgets.dart';
+import '../../core/theme/app_theme.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String heroTag;
@@ -39,23 +36,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
 
     return Scaffold(
       key: const Key('player_screen'),
-      backgroundColor: Colors.black,
+      backgroundColor: colors.overlay,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.keyboard_arrow_down,
-              size: 32, color: Colors.white),
+          icon: Icon(Icons.keyboard_arrow_down,
+              size: 32, color: colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
             key: const Key('player_options_button'),
-            icon: const Icon(Icons.more_vert, color: Colors.white),
+            icon: Icon(Icons.more_vert, color: colors.textPrimary),
             onPressed: () {
               _showOptionsSheet(context);
             },
@@ -76,8 +74,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 end: Alignment.bottomCenter,
                 colors: [
                   colorScheme.primary.withValues(alpha: 0.4),
-                  Colors.black.withValues(alpha: 0.8),
-                  Colors.black,
+                  colors.overlay.withValues(alpha: 0.8),
+                  colors.overlay,
                 ],
                 stops: const [0.0, 0.6, 1.0],
               ),
@@ -148,7 +146,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.6),
+                color: context.appColors.overlay.withValues(alpha: 0.6),
                 blurRadius: 40,
                 offset: const Offset(0, 20),
               ),
@@ -190,9 +188,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
               minChildSize: 0.4,
               maxChildSize: 0.9,
               builder: (context, scrollController) {
+                final colors = context.appColors;
                 return Container(
                   decoration: BoxDecoration(
-                    color: Colors.grey[900],
+                    color: colors.sheetBackground,
                     borderRadius:
                         const BorderRadius.vertical(top: Radius.circular(24)),
                   ),
@@ -203,14 +202,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.grey[600],
+                          color: colors.textMuted,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Text('Lyrics',
+                      Text('Lyrics',
                           style: TextStyle(
-                              color: Colors.white,
+                              color: colors.textPrimary,
                               fontWeight: FontWeight.bold,
                               fontSize: 18)),
                       const SizedBox(height: 12),
@@ -244,8 +243,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             children: [
               // Dislike Button
               IconButton(
-                icon: const Icon(Icons.heart_broken,
-                    color: Colors.white70, size: 24),
+                icon: Icon(Icons.heart_broken,
+                    color: context.appColors.textSecondary, size: 24),
                 onPressed: () {
                   favService.dislikeTrack(videoId);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -262,7 +261,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 key: const Key('player_like_button'),
                 icon: Icon(
                   isLiked ? Icons.favorite : Icons.favorite_border,
-                  color: isLiked ? Colors.red : Colors.white70,
+                  color: isLiked ? context.appColors.error : context.appColors.textSecondary,
                   size: 28,
                 ),
                 onPressed: () {
@@ -289,7 +288,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           return IconButton(
             icon: Icon(
               isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: isFavorite ? Colors.red : Colors.white70,
+              color: isFavorite ? context.appColors.error : context.appColors.textSecondary,
               size: 28,
             ),
             onPressed: () => db.toggleFavorite(mediaItem.id),
@@ -305,8 +304,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       children: [
         Text(
           mediaItem.title,
-          style: const TextStyle(
-              fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+              fontSize: 24, fontWeight: FontWeight.bold, color: context.appColors.textPrimary),
           textAlign: TextAlign.start,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -314,32 +313,76 @@ class _PlayerScreenState extends State<PlayerScreen> {
         const SizedBox(height: 4),
         GestureDetector(
           key: const Key('player_artist_link'),
-          onTap: () {
+          onTap: () async {
             // Handle Artist Tap
             debugPrint(
                 '[PlayerScreen] Artist tapped. Extras: ${mediaItem.extras}');
+            
+            // Check if it's a YouTube track (online or from liked songs)
             final isOnline = mediaItem.extras?['isOnline'] == true;
-            debugPrint('[PlayerScreen] isOnline: $isOnline');
-            if (isOnline) {
-              final artistId = mediaItem.extras?['artistId'] as String?;
+            final isYouTube = mediaItem.extras?['isYouTube'] == true;
+            final videoId = mediaItem.extras?['videoId'] as String?;
+            final hasValidVideoId = videoId != null && videoId.length == 11;
+            
+            // Consider it as YouTube content if any of these are true
+            final isYouTubeContent = isOnline || isYouTube || hasValidVideoId;
+            debugPrint('[PlayerScreen] isOnline: $isOnline, isYouTube: $isYouTube, hasValidVideoId: $hasValidVideoId');
+            
+            if (isYouTubeContent) {
+              var artistId = mediaItem.extras?['artistId'] as String?;
               debugPrint('[PlayerScreen] artistId from extras: $artistId');
-              if (artistId != null) {
-                // Navigate to Online Artist (using PlaylistTracksScreen for now as a catch-all for lists)
-                // Or create a dedicated OnlineArtistScreen.
-                // For MVP, if it's a browseId, PlaylistTracksScreen handles it via InnerTubeService._fetchFullTracks
+              
+              // If no artistId, try to find it by searching
+              if (artistId == null && mediaItem.artist != null) {
+                debugPrint('[PlayerScreen] Searching for artist: ${mediaItem.artist}');
+                
+                // Show loading indicator
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(AppLocalizations.of(context).translate('searching_artist')),
+                        ],
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+                
+                try {
+                  final innerTube = GetIt.I<InnerTubeService>();
+                  artistId = await innerTube.findArtistId(mediaItem.artist!);
+                  debugPrint('[PlayerScreen] Found artistId: $artistId');
+                } catch (e) {
+                  debugPrint('[PlayerScreen] Artist search error: $e');
+                }
+                
+                // Hide loading snackbar
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                }
+              }
+              
+              if (artistId != null && context.mounted) {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => PlaylistTracksScreen(
-                      playlistId: artistId,
+                      playlistId: artistId!,
                       title: mediaItem.artist ?? 'Artist',
                       knownArtist: mediaItem.artist,
-                      isArtistPage:
-                          true, // New flag we might need? Or just treat as playlist.
+                      isArtistPage: true,
                     ),
                   ),
                 );
-              } else {
+              } else if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                       content: Text(
@@ -364,10 +407,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
             key: const Key('player_artist_text'),
             style: TextStyle(
               fontSize: 18,
-              color: Colors.white.withValues(alpha: 0.7),
+              color: context.appColors.textSecondary,
               decoration: TextDecoration.underline,
               decorationStyle: TextDecorationStyle.solid,
-              decorationColor: Colors.white.withValues(alpha: 0.5),
+              decorationColor: context.appColors.textMuted,
             ),
             textAlign: TextAlign.start,
             maxLines: 1,
@@ -398,8 +441,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 trackHeight: 4,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
                 activeTrackColor: Theme.of(context).colorScheme.primary,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: Colors.white,
+                inactiveTrackColor: context.appColors.textMuted,
+                thumbColor: context.appColors.textPrimary,
               ),
               child: Slider(
                 min: 0.0,
@@ -421,15 +464,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   Text(
                     _formatDuration(
                         Duration(milliseconds: sliderValue.round())),
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.w500),
                   ),
                   Text(
                     _formatDuration(duration),
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: context.appColors.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.w500),
                   ),
@@ -459,7 +502,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               icon: Icon(Icons.shuffle,
                   color: shuffleMode != AudioServiceShuffleMode.none
                       ? colorScheme.primary
-                      : Colors.white70),
+                      : context.appColors.textSecondary),
               onPressed: () => playerBloc.add(PlayerSetShuffleMode(
                   shuffleMode == AudioServiceShuffleMode.none
                       ? AudioServiceShuffleMode.all
@@ -467,8 +510,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
             IconButton(
               key: const Key('player_prev_button'),
-              icon: const Icon(Icons.skip_previous,
-                  color: Colors.white, size: 45),
+              icon: Icon(Icons.skip_previous,
+                  color: context.appColors.textPrimary, size: 45),
               onPressed: () => playerBloc.add(PlayerSkipPrevious()),
             ),
             GestureDetector(
@@ -481,12 +524,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 decoration: BoxDecoration(
                     shape: BoxShape.circle, color: colorScheme.primary),
                 child: Icon(isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: Colors.white, size: 50),
+                    color: context.appColors.textPrimary, size: 50),
               ),
             ),
             IconButton(
               key: const Key('player_next_button'),
-              icon: const Icon(Icons.skip_next, color: Colors.white, size: 45),
+              icon: Icon(Icons.skip_next, color: context.appColors.textPrimary, size: 45),
               onPressed: () => playerBloc.add(PlayerSkipNext()),
             ),
             IconButton(
@@ -497,7 +540,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       : Icons.repeat,
                   color: repeatMode != AudioServiceRepeatMode.none
                       ? colorScheme.primary
-                      : Colors.white70),
+                      : context.appColors.textSecondary),
               onPressed: () {
                 final modes = [
                   AudioServiceRepeatMode.none,
@@ -516,13 +559,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             IconButton(
-                icon: const Icon(Icons.equalizer, color: Colors.white54),
+                icon: Icon(Icons.equalizer, color: context.appColors.textSecondary),
                 onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (context) => const EqualizerScreen()))),
             IconButton(
-                icon: const Icon(Icons.lyrics_outlined, color: Colors.white54),
+                icon: Icon(Icons.lyrics_outlined, color: context.appColors.textSecondary),
                 tooltip: AppLocalizations.of(context).lyrics,
                 onPressed: () {
                   final mediaItem = state.mediaItem;
@@ -531,10 +574,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   }
                 }),
             IconButton(
-                icon: const Icon(Icons.playlist_play, color: Colors.white54),
-                onPressed: () => _showQueue(context)),
+                icon: Icon(Icons.playlist_play, color: context.appColors.textSecondary),
+                onPressed: () => QueueSheet.show(context)),
             IconButton(
-                icon: const Icon(Icons.info_outline, color: Colors.white54),
+                icon: Icon(Icons.info_outline, color: context.appColors.textSecondary),
                 onPressed: () {
                   _showDetailsSheet(context, state.mediaItem);
                 }),
@@ -544,122 +587,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  void _showQueue(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) {
-        // Use new context if needed, but we check bloc
-        return BlocBuilder<QueueBloc, QueueState>(
-          builder: (context, state) {
-            final currentQueue = state.queue;
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(AppLocalizations.of(context).currentQueue,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
-                ),
-                Expanded(
-                  child: ReorderableListView.builder(
-                    buildDefaultDragHandles: false,
-                    proxyDecorator: (child, index, animation) {
-                      return Material(
-                        color: Colors.transparent,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[850],
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.5),
-                                blurRadius: 8,
-                                spreadRadius: 2,
-                              )
-                            ],
-                          ),
-                          child: child,
-                        ),
-                      );
-                    },
-                    onReorder: (oldIndex, newIndex) {
-                      context
-                          .read<QueueBloc>()
-                          .add(QueueReorder(oldIndex, newIndex));
-                    },
-                    itemCount: currentQueue.length,
-                    itemBuilder: (context, index) {
-                      final item = currentQueue[index];
-                      // We need current item to highlight
-                      final currentItem =
-                          context.read<PlayerBloc>().state.mediaItem;
-                      final isCurrent = currentItem?.id == item.id;
-
-                      return ListTile(
-                        key: ValueKey(item.id),
-                        leading: _buildQueueArtwork(item),
-                        title: Text(item.title,
-                            style: TextStyle(
-                                color: isCurrent
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.white)),
-                        subtitle: Text(item.artist ?? '',
-                            style: const TextStyle(color: Colors.white70)),
-                        trailing: ReorderableDragStartListener(
-                          index: index,
-                          child: const Icon(Icons.drag_handle,
-                              color: Colors.white54),
-                        ),
-                        onTap: () {
-                          // Skip to selected item
-                          GetIt.I<MyAudioHandler>().skipToQueueItem(index);
-                          Navigator.pop(context);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildQueueArtwork(MediaItem item) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: CommonArtwork(
-        mediaStoreId: item.extras?['mediaStoreId'] as int?,
-        path: item.id,
-        url: item.artUri?.toString(),
-        size: 40,
-        radius: 4,
-      ),
-    );
-  }
-
   void _showOptionsSheet(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final mediaItem = context.read<PlayerBloc>().state.mediaItem;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey[900],
-      builder: (context) => Column(
+      backgroundColor: context.appColors.sheetBackground,
+      builder: (context) {
+        final colors = context.appColors;
+        return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
             key: const Key('player_download_action'),
-            leading: const Icon(Icons.download, color: Colors.white),
+            leading: Icon(Icons.download, color: colors.textPrimary),
             title:
-                Text(loc.download, style: const TextStyle(color: Colors.white)),
+                Text(loc.download, style: TextStyle(color: colors.textPrimary)),
             onTap: () async {
               Navigator.pop(context); // Close sheet
 
@@ -677,15 +621,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
               try {
                 final videoId = mediaItem.extras!['videoId'] as String;
                 final ytHelper = GetIt.I<YouTubeHelper>();
-                final url = await ytHelper.getAudioUrl(videoId);
+                final audioData = await ytHelper.getAudioUrlWithAgent(videoId);
 
-                if (url != null) {
+                if (audioData != null) {
                   await GetIt.I<CacheService>().cacheTrack(
                     videoId: videoId,
-                    url: url,
+                    url: audioData['url']!,
                     title: mediaItem.title,
                     artist: mediaItem.artist ?? 'Unknown',
                     thumbnailUrl: mediaItem.artUri?.toString() ?? '',
+                    container: audioData['container'],
                   );
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -710,18 +655,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.timer, color: Colors.white),
+            leading: Icon(Icons.timer, color: colors.textPrimary),
             title: Text(loc.sleepTimer,
-                style: const TextStyle(color: Colors.white)),
+                style: TextStyle(color: colors.textPrimary)),
             onTap: () {
               Navigator.pop(context); // Close options sheet first
               _showSleepTimerDialog(context);
             },
           ),
           ListTile(
-            leading: const Icon(Icons.share, color: Colors.white),
+            leading: Icon(Icons.share, color: colors.textPrimary),
             title: Text(loc.shareTrack,
-                style: const TextStyle(color: Colors.white)),
+                style: TextStyle(color: colors.textPrimary)),
             onTap: () async {
               Navigator.pop(context);
               final videoId = mediaItem?.extras?['videoId'] as String?;
@@ -737,69 +682,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
             },
           ),
         ],
-      ),
+      );},
     );
   }
 
   void _showSleepTimerDialog(BuildContext context) {
     final sleepTimer = GetIt.I<SleepTimerService>();
-    final loc = AppLocalizations.of(context);
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => ValueListenableBuilder<Duration?>(
-          valueListenable: sleepTimer.remainingTime,
-          builder: (context, remaining, child) {
-            return SafeArea(
-              child: StatefulBuilder(
-                builder: (context, setState) {
-                  // Default to 15 minutes or keep previous state if we could persist it
-                  // For now, simple local state reset on open is fine, or we could lift it.
-                  // Since we are inside builder, we need a variable outside or init here.
-                  // But set state inside StatefulBuilder re-runs this builder.
-
-                  // Initialize checking mainly if we need a variable that persists
-                  // through slider changes.
-                  // We can't easily init state here without it resetting.
-                  // Actually, let's use a variable captured from closure if we want defaults,
-                  // but for a simple slider in a dialog, we can assume a default
-                  // and modifying it requires a state holder.
-                  // Let's assume we initialize `selectedMinutes` to 15.
-
-                  return _SleepTimerContent(
-                    sleepTimer: sleepTimer,
-                    loc: loc,
-                    remaining: remaining,
-                  );
-                },
-              ),
-            );
-          }),
-    );
+    SleepTimerDialog.show(context, sleepTimer);
   }
 
   void _showDetailsSheet(BuildContext context, MediaItem? item) {
     if (item == null) return;
+    final colors = context.appColors;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: colors.sheetBackground,
         title: Text(AppLocalizations.of(context).trackDetails,
-            style: const TextStyle(color: Colors.white)),
+            style: TextStyle(color: colors.textPrimary)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _detailRow(AppLocalizations.of(context).trackDetails,
+            _detailRow(context, AppLocalizations.of(context).trackDetails,
                 item.title), // Title is title
-            _detailRow(
+            _detailRow(context,
                 AppLocalizations.of(context).artists, item.artist ?? 'Unknown'),
-            _detailRow(
+            _detailRow(context,
                 AppLocalizations.of(context).albums, item.album ?? 'Unknown'),
-            _detailRow(AppLocalizations.of(context).path, item.id),
+            _detailRow(context, AppLocalizations.of(context).path, item.id),
           ],
         ),
         actions: [
@@ -811,17 +722,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  Widget _detailRow(BuildContext context, String label, String value) {
+    final colors = context.appColors;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              style: TextStyle(color: colors.textSecondary, fontSize: 12)),
           SelectableText(
             value,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: colors.textPrimary, fontSize: 14),
             maxLines: 4,
           ),
         ],
@@ -829,127 +741,5 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-}
-
-class _SleepTimerContent extends StatefulWidget {
-  final SleepTimerService sleepTimer;
-  final AppLocalizations loc;
-  final Duration? remaining;
-
-  const _SleepTimerContent({
-    required this.sleepTimer,
-    required this.loc,
-    required this.remaining,
-  });
-
-  @override
-  State<_SleepTimerContent> createState() => _SleepTimerContentState();
-}
-
-class _SleepTimerContentState extends State<_SleepTimerContent> {
-  double _selectedMinutes = 30.0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            widget.remaining != null
-                ? '${widget.loc.sleepTimer}: ${_formatDuration(widget.remaining!)}'
-                : widget.loc.setSleepTimer,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        if (widget.remaining != null)
-          ListTile(
-            title: Text(
-              widget.loc.stopTimer,
-              style: const TextStyle(color: Colors.red),
-            ),
-            leading: const Icon(Icons.timer_off, color: Colors.red),
-            onTap: () {
-              widget.sleepTimer.cancelTimer();
-              Navigator.pop(context);
-            },
-          )
-        else ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Column(
-              children: [
-                Text(
-                  '${_selectedMinutes.round()} ${widget.loc.minutesSuffix}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Slider(
-                  value: _selectedMinutes,
-                  min: 1,
-                  max: 120,
-                  divisions: 119,
-                  activeColor: Theme.of(context).colorScheme.primary,
-                  inactiveColor: Colors.white24,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedMinutes = value;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: () {
-                  widget.sleepTimer.startTimer(
-                    Duration(minutes: _selectedMinutes.round()),
-                  );
-                  Navigator.pop(context);
-                },
-                child: Text(
-                  widget.loc.startTimer,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
+  String _formatDuration(Duration d) => d.formatted;
 }

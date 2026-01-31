@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart';
 import '../blocs/lyrics/lyrics_bloc.dart';
 import '../../core/models/lyrics_model.dart';
 import '../../core/utils/localization.dart';
+import '../../core/theme/app_theme.dart';
 
 class LyricsView extends StatefulWidget {
   final MediaItem mediaItem;
@@ -119,18 +120,20 @@ class _LyricsViewState extends State<LyricsView> {
           return const Center(child: CircularProgressIndicator());
         } else if (state is LyricsNotFound) {
           final loc = AppLocalizations.of(context);
+          final colors = context.appColors;
           return Center(
             child: Text(
               loc.noLyricsFound,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+              style: TextStyle(color: colors.textSecondary),
             ),
           );
         } else if (state is LyricsError) {
           final loc = AppLocalizations.of(context);
+          final colors = context.appColors;
           return Center(
             child: Text(
               loc.errorLoadingLyrics,
-              style: TextStyle(color: Colors.red.withValues(alpha: 0.6)),
+              style: TextStyle(color: colors.error),
             ),
           );
         } else if (state is LyricsLoaded) {
@@ -149,7 +152,7 @@ class _LyricsViewState extends State<LyricsView> {
           return Center(
             child: Text(
               AppLocalizations.of(context).noLyricsFound,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+              style: TextStyle(color: context.appColors.textSecondary),
             ),
           );
         }
@@ -159,6 +162,7 @@ class _LyricsViewState extends State<LyricsView> {
   }
 
   Widget _buildPlainLyrics(String text, String source) {
+    final colors = context.appColors;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -166,8 +170,8 @@ class _LyricsViewState extends State<LyricsView> {
           Text(
             text,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: colors.textPrimary,
               fontSize: 18,
               height: 1.6,
             ),
@@ -176,7 +180,7 @@ class _LyricsViewState extends State<LyricsView> {
           Text(
             'Source: $source',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.3),
+              color: colors.textMuted,
               fontSize: 12,
               fontStyle: FontStyle.italic,
             ),
@@ -213,13 +217,14 @@ class _LyricsViewState extends State<LyricsView> {
         itemCount: lines.length + 1, // +1 for source
         itemBuilder: (context, index) {
           if (index == lines.length) {
+            final colors = context.appColors;
             return Container(
               height: 60.0,
               alignment: Alignment.center,
               child: Text(
                 'Source: $source',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.3),
+                  color: colors.textMuted,
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
                 ),
@@ -227,6 +232,7 @@ class _LyricsViewState extends State<LyricsView> {
             );
           }
           final isCurrent = index == _currentIndex;
+          final colors = context.appColors;
           return Center(
             child: SizedBox(
               height: 60.0,
@@ -234,8 +240,8 @@ class _LyricsViewState extends State<LyricsView> {
                 duration: const Duration(milliseconds: 200),
                 style: TextStyle(
                   color: isCurrent
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.5),
+                      ? colors.textPrimary
+                      : colors.textSecondary,
                   fontSize: isCurrent ? 24 : 18,
                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                 ),

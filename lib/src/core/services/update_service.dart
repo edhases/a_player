@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/update_info.dart';
 import 'settings_service.dart';
@@ -103,10 +103,32 @@ class UpdateService {
     void Function(int received, int total)? onProgress,
   }) async {
     try {
+      // Clean up old APKs before downloading (keep current version if exists)
+      await cleanupOldApks(excludeVersionCode: updateInfo.versionCode);
+
       final tempDir = await getTemporaryDirectory();
       final apkPath =
           '${tempDir.path}/oxide_update_${updateInfo.versionCode}.apk';
       final apkFile = File(apkPath);
+
+      // Check if APK already exists and verify checksum
+      if (await apkFile.exists() && updateInfo.apkSha256.isNotEmpty) {
+        debugPrint('[UpdateService] APK already exists, verifying checksum...');
+        final bytes = await apkFile.readAsBytes();
+        final digest = sha256.convert(bytes);
+        final computedHash = digest.toString().toLowerCase();
+        final expectedHash = updateInfo.apkSha256.toLowerCase();
+
+        if (computedHash == expectedHash) {
+          debugPrint('[UpdateService] Existing APK verified, skipping download');
+          // Report progress as complete
+          onProgress?.call(bytes.length, bytes.length);
+          return apkFile;
+        } else {
+          debugPrint('[UpdateService] Existing APK corrupted, re-downloading...');
+          await apkFile.delete();
+        }
+      }
 
       // Download APK
       await _dio.download(
@@ -160,61 +182,22 @@ class UpdateService {
           final result = await Permission.requestInstallPackages.request();
           if (!result.isGranted) {
             debugPrint('[UpdateService] Install permission denied');
-            // Consider returning here or letting the system prompt fail
-            // But usually we need to guide the user to settings if request() fails
-            // to show a dialog (system behavior varies).
+            return false;
           }
         }
       }
 
-      // Prepare URI
-      Uri uri;
+      debugPrint('[UpdateService] Opening APK for installation: ${apkFile.path}');
 
-      if (Platform.isAndroid) {
-        // Use FileProvider for Android 7.0+
-        final packageInfo = await PackageInfo.fromPlatform();
-        final packageName = packageInfo.packageName;
+      // Use open_filex which properly handles FileProvider and APK installation
+      final result = await OpenFilex.open(
+        apkFile.path,
+        type: 'application/vnd.android.package-archive',
+      );
 
-        // Construct content URI manually to avoid open_file dependency if possible,
-        // but url_launcher handling of content:// is best effort.
-        // Format: content://<authority>/<path_name>/<filename>
-        // authority defined in AndroidManifest: ${applicationId}.fileprovider
-        // path_name defined in file_paths.xml: matches directory of apkFile
+      debugPrint('[UpdateService] OpenFilex result: ${result.type}, message: ${result.message}');
 
-        // We assume apkFile is in getTemporaryDirectory which maps to <cache-path name="cache" />
-        final tempDir = await getTemporaryDirectory();
-
-        // Verify file is actually in temp dir
-        if (apkFile.path.startsWith(tempDir.path)) {
-          final fileName = apkFile.path.split('/').last;
-          // "cache" is the name in file_paths.xml for cache-path
-          uri =
-              Uri.parse('content://$packageName.fileprovider/cache/$fileName');
-        } else {
-          // Fallback to file URI (will fail on recent Android)
-          uri = Uri.file(apkFile.path);
-        }
-      } else {
-        uri = Uri.file(apkFile.path);
-      }
-
-      debugPrint('[UpdateService] Launching install intent for: $uri');
-
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        );
-        return true;
-      } else {
-        debugPrint('[UpdateService] Cannot launch APK URI directly');
-        // Final fallback: try just file path which sometimes works with url_launcher on older devices
-        if (uri.scheme == 'content') {
-          final fileUri = Uri.file(apkFile.path);
-          return await launchUrl(fileUri, mode: LaunchMode.externalApplication);
-        }
-        return false;
-      }
+      return result.type == ResultType.done;
     } catch (e) {
       debugPrint('[UpdateService] Error installing APK: $e');
       return false;
@@ -222,7 +205,8 @@ class UpdateService {
   }
 
   /// Clean up old downloaded APK files
-  Future<void> cleanupOldApks() async {
+  /// [excludeVersionCode] - if provided, skip deleting APK with this version code
+  Future<void> cleanupOldApks({int? excludeVersionCode}) async {
     try {
       final tempDir = await getTemporaryDirectory();
       final dir = Directory(tempDir.path);
@@ -231,6 +215,12 @@ class UpdateService {
         if (entity is File &&
             entity.path.contains('oxide_update_') &&
             entity.path.endsWith('.apk')) {
+          // Skip the APK we're about to install
+          if (excludeVersionCode != null &&
+              entity.path.contains('oxide_update_$excludeVersionCode.apk')) {
+            continue;
+          }
+          debugPrint('[UpdateService] Deleting old APK: ${entity.path}');
           await entity.delete();
         }
       }

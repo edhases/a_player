@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../../core/utils/localization.dart';
+import '../../core/theme/app_theme.dart';
 
 class CompactSongTile extends StatelessWidget {
   final YouTubeSong song;
@@ -17,6 +18,7 @@ class CompactSongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
       visualDensity: VisualDensity.compact,
@@ -30,14 +32,14 @@ class CompactSongTile extends StatelessWidget {
             imageUrl: song.thumbnailUrl,
             fit: BoxFit.cover,
             placeholder: (context, url) => Container(
-              color: Colors.grey[900],
+              color: colors.sheetBackground,
               child:
-                  const Icon(Icons.music_note, color: Colors.white24, size: 20),
+                  Icon(Icons.music_note, color: colors.textMuted, size: 20),
             ),
             errorWidget: (context, url, error) => Container(
-              color: Colors.grey[900],
-              child: const Icon(Icons.broken_image,
-                  color: Colors.white24, size: 20),
+              color: colors.sheetBackground,
+              child: Icon(Icons.broken_image,
+                  color: colors.textMuted, size: 20),
             ),
           ),
         ),

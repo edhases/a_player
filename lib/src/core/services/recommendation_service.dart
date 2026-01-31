@@ -8,7 +8,7 @@ import '../../data/datasources/app_database.dart';
 // Removed Isar models
 import '../../domain/entities/youtube_song.dart';
 import '../../domain/entities/home_section.dart';
-import 'innertube_service.dart';
+import 'innertube/innertube.dart';
 // LocalizationService removed
 import 'settings_service.dart';
 import '../utils/localization.dart';
@@ -134,67 +134,58 @@ class RecommendationService {
       }
 
       // 1. Try to get personalized home data from InnerTube
-      final homeData = await _innerTube.getHomeData();
-      if (homeData.isSuccess && (homeData.data?.isNotEmpty ?? false)) {
+      final homeShelves = await _innerTube.getHomeData();
+      if (homeShelves.isNotEmpty) {
         final List<HomeSection> sections = [];
 
         if (likedSection != null) {
           sections.add(likedSection);
         }
 
-        for (var sectionData in homeData.data!) {
-          final title = sectionData['title'] as String? ?? 'Recommended';
-          final itemsData = sectionData['items'] as List<dynamic>?;
+        for (var shelf in homeShelves) {
+          final title = shelf.title;
+          final songs = shelf.items;
 
-          if (itemsData == null || itemsData.isEmpty) continue;
+          if (songs.isEmpty) continue;
 
-          final List<YouTubeSong> songs = [];
-          for (var item in itemsData) {
-            if (item is YouTubeSong) {
-              songs.add(item);
+          // Determine type based on title or content
+          SectionType type = SectionType.horizontal;
+
+          final lowerTitle = title.toLowerCase();
+
+          if (lowerTitle.contains('quick picks') ||
+              lowerTitle.contains('швидкий вибір') ||
+              lowerTitle.contains('start radio')) {
+            // Keep Quick Picks as horizontal paged grid
+            type = SectionType.horizontal;
+          } else if (lowerTitle.contains('listen again') ||
+              lowerTitle.contains('знову') ||
+              lowerTitle.contains('history')) {
+            // History as simple vertical list
+            type = SectionType.vertical;
+          } else {
+            // Everything else (Mixes, Albums, New Releases) as Grid (Tiles)
+            type = SectionType.grid;
+          }
+
+          // Try to match known English titles to localized strings
+          String displayTitle = title;
+          if (loc != null) {
+            final lower = title.toLowerCase();
+            if (lower == 'made for you' || lower.contains('made for you')) {
+              displayTitle = loc.madeForYou;
+            } else if (lower == 'quick picks') {
+              displayTitle = loc.quickPicks;
+            } else if (lower == 'listen again') {
+              displayTitle = loc.listenAgain;
+            } else if (lower == 'recommended' ||
+                lower.contains('recommended')) {
+              displayTitle = loc.recommendedForYou;
             }
           }
 
-          if (songs.isNotEmpty) {
-            // Determine type based on title or content
-            SectionType type = SectionType.horizontal;
-
-            final lowerTitle = title.toLowerCase();
-
-            if (lowerTitle.contains('quick picks') ||
-                lowerTitle.contains('швидкий вибір') ||
-                lowerTitle.contains('start radio')) {
-              // Keep Quick Picks as horizontal paged grid
-              type = SectionType.horizontal;
-            } else if (lowerTitle.contains('listen again') ||
-                lowerTitle.contains('знову') ||
-                lowerTitle.contains('history')) {
-              // History as simple vertical list
-              type = SectionType.vertical;
-            } else {
-              // Everything else (Mixes, Albums, New Releases) as Grid (Tiles)
-              type = SectionType.grid;
-            }
-
-            // Try to match known English titles to localized strings
-            String displayTitle = title;
-            if (loc != null) {
-              final lower = title.toLowerCase();
-              if (lower == 'made for you' || lower.contains('made for you')) {
-                displayTitle = loc.madeForYou;
-              } else if (lower == 'quick picks') {
-                displayTitle = loc.quickPicks;
-              } else if (lower == 'listen again') {
-                displayTitle = loc.listenAgain;
-              } else if (lower == 'recommended' ||
-                  lower.contains('recommended')) {
-                displayTitle = loc.recommendedForYou;
-              }
-            }
-
-            sections.add(
-                HomeSection(title: displayTitle, songs: songs, type: type));
-          }
+          sections.add(
+              HomeSection(title: displayTitle, songs: songs, type: type));
         }
 
         return sections;

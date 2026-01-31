@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../widgets/paged_song_list.dart';
 import '../widgets/youtube_song_menu.dart';
-import '../../core/services/innertube_service.dart';
+import '../../core/services/innertube/innertube.dart';
 import '../../core/services/google_auth_service.dart';
 import '../../core/utils/localization.dart';
 import '../../core/services/smart_play_service.dart';
@@ -27,8 +27,8 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
 
   bool _isLoggedIn = false;
   bool _isLoading = true;
-  List<Map<String, dynamic>> _sections = [];
-  List<Map<String, dynamic>> _playlists = [];
+  List<HomeShelf> _sections = [];
+  List<YouTubePlaylist> _playlists = [];
   String? _error;
 
   StreamSubscription<bool>? _loginStatusSubscription;
@@ -85,20 +85,17 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
     });
 
     try {
-      final sectionsResult = await _innerTube.getHomeData();
+      final sections = await _innerTube.getHomeData();
       final playlists = await _innerTube.getLibraryPlaylists();
 
       setState(() {
-        if (sectionsResult.isSuccess) {
-          _sections = sectionsResult.data!;
-        } else {
-          _error = sectionsResult.error;
-        }
+        _sections = sections;
         _playlists = playlists;
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
+        _error = e.toString();
         _isLoading = false;
       });
     }
@@ -273,13 +270,13 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
                 return GestureDetector(
                   onTap: () {
                     final song = YouTubeSong(
-                      videoId: playlist['playlistId'],
-                      title: playlist['title'],
+                      videoId: playlist.id,
+                      title: playlist.title,
                       artist:
-                          'Unknown', // Library playlists usually don't have artist info here
-                      thumbnailUrl: playlist['thumbnail'],
+                          playlist.author ?? 'Unknown', // Library playlists usually don't have artist info here
+                      thumbnailUrl: playlist.thumbnailUrl ?? '',
                       isPlaylist: true,
-                      playlistId: playlist['playlistId'],
+                      playlistId: playlist.id,
                       category: 'Playlist',
                     );
                     _playSong(song);
@@ -292,14 +289,14 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: CommonArtwork(
-                            url: playlist['thumbnail'],
+                            url: playlist.thumbnailUrl,
                             size: 120,
                           ),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        playlist['title'],
+                        playlist.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -320,26 +317,9 @@ class _YouTubeHubScreenState extends State<YouTubeHubScreen> {
     );
   }
 
-  Widget _buildSection(Map<String, dynamic> section) {
-    final title = section['title'] as String;
-    final List<dynamic> itemsDynamic = section['items'];
-    // Convert the dynamic items to YouTubeSong objects properly
-    final items = <YouTubeSong>[];
-    for (final item in itemsDynamic) {
-      if (item is YouTubeSong) {
-        items.add(item);
-      } else if (item is Map<String, dynamic>) {
-        items.add(YouTubeSong(
-          videoId: item['videoId'] ?? '',
-          title: item['title'] ?? '',
-          artist: item['artist'] ?? '',
-          thumbnailUrl: item['thumbnailUrl'] ?? '',
-          isPlaylist: item['isPlaylist'] ?? false,
-          playlistId: item['playlistId'],
-          category: item['category'] ?? '',
-        ));
-      }
-    }
+  Widget _buildSection(HomeShelf section) {
+    final title = section.title;
+    final items = section.items;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:get_it/get_it.dart';
 import '../../domain/entities/youtube_song.dart';
 import 'cache_service.dart';
 import 'youtube_helper.dart';
 
 /// Service for background caching of songs
 class BackgroundCacheService {
-  final CacheService _cacheService = GetIt.I<CacheService>();
-  final YouTubeHelper _ytHelper = GetIt.I<YouTubeHelper>();
+  final CacheService _cacheService;
+  final YouTubeHelper _ytHelper;
+
+  BackgroundCacheService({
+    required CacheService cacheService,
+    required YouTubeHelper ytHelper,
+  })  : _cacheService = cacheService,
+        _ytHelper = ytHelper;
 
   // Current caching state
   bool _isCaching = false;
@@ -68,14 +73,15 @@ class BackgroundCacheService {
       try {
         debugPrint('[BackgroundCache] Caching: ${song.title}');
         
-        final url = await _ytHelper.getAudioUrl(song.videoId);
-        if (url != null) {
+        final audioData = await _ytHelper.getAudioUrlWithAgent(song.videoId);
+        if (audioData != null) {
           await _cacheService.cacheTrack(
             videoId: song.videoId,
-            url: url,
+            url: audioData['url']!,
             title: song.title,
             artist: song.artist,
             thumbnailUrl: song.thumbnailUrl,
+            container: audioData['container'],
           );
           _completedTasks++;
           debugPrint('[BackgroundCache] Cached: ${song.title}');

@@ -63,6 +63,9 @@ build_output.txt
 audite.md
 lib/src/core/config/app_secrets.dart
 
+# Old InnerTube service (deprecated, kept for reference)
+lib/src/core/services/innertube_service.dart
+
 # Secrets
 lib/src/core/config/app_secrets.dart
 

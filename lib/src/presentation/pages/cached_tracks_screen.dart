@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/utils/localization.dart';
 import '../../core/services/download_service.dart';
 import '../../domain/entities/youtube_song.dart';
+import '../../core/theme/app_theme.dart';
 
 class CachedTracksScreen extends StatefulWidget {
   const CachedTracksScreen({super.key});
@@ -73,7 +74,7 @@ class _CachedTracksScreenState extends State<CachedTracksScreen> {
                           height: 48,
                           fit: BoxFit.cover,
                           errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[800],
+                            color: context.appColors.sheetBackground,
                             child: const Icon(Icons.music_note),
                           ),
                         ),

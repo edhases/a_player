@@ -3,8 +3,7 @@ import 'package:get_it/get_it.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:rxdart/rxdart.dart';
 
-import '../../../core/services/innertube_service.dart';
-import '../../../core/utils/result.dart';
+import '../../../core/services/innertube/innertube.dart';
 import '../../../domain/entities/youtube_song.dart';
 
 class MetadataPickDelegate extends SearchDelegate<YouTubeSong?> {
@@ -65,7 +64,7 @@ class MetadataPickDelegate extends SearchDelegate<YouTubeSong?> {
           return const Center(child: Text("Type to search..."));
         }
 
-        return FutureBuilder<Result<List<YouTubeSong>>>(
+        return FutureBuilder<List<YouTubeSong>>(
           future: _innerTubeService.search(debouncedQuery),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -78,12 +77,7 @@ class MetadataPickDelegate extends SearchDelegate<YouTubeSong?> {
               return const Center(child: Text('No results found'));
             }
 
-            final result = snapshot.data!;
-            if (result.isFailure) {
-              return Center(child: Text('Error: ${result.error}'));
-            }
-
-            final songs = result.data!;
+            final songs = snapshot.data!;
             if (songs.isEmpty) {
               return const Center(child: Text('No results found'));
             }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../domain/entities/youtube_song.dart';
+import '../../core/theme/app_theme.dart';
 
 class SongCard extends StatelessWidget {
   final YouTubeSong song;
@@ -14,6 +15,7 @@ class SongCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -36,15 +38,15 @@ class SongCard extends StatelessWidget {
                   imageUrl: song.thumbnailUrl,
                   fit: BoxFit.cover,
                   placeholder: (context, url) => Container(
-                    color: Colors.grey[900],
-                    child: const Center(
-                      child: Icon(Icons.music_note, color: Colors.white24),
+                    color: colors.sheetBackground,
+                    child: Center(
+                      child: Icon(Icons.music_note, color: colors.textMuted),
                     ),
                   ),
                   errorWidget: (context, url, error) => Container(
-                    color: Colors.grey[900],
-                    child: const Center(
-                      child: Icon(Icons.broken_image, color: Colors.white24),
+                    color: colors.sheetBackground,
+                    child: Center(
+                      child: Icon(Icons.broken_image, color: colors.textMuted),
                     ),
                   ),
                 ),
@@ -73,7 +75,7 @@ class SongCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.person, size: 14, color: Colors.grey),
+                        Icon(Icons.person, size: 14, color: colors.textSecondary),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -84,7 +86,7 @@ class SongCard extends StatelessWidget {
                                 .textTheme
                                 .bodyMedium
                                 ?.copyWith(
-                                  color: Colors.grey[400],
+                                  color: colors.textSecondary,
                                 ),
                           ),
                         ),
@@ -97,7 +99,7 @@ class SongCard extends StatelessWidget {
                           _formatDuration(Duration(seconds: song.duration)),
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.grey[600],
+                                    color: colors.textMuted,
                                   ),
                         ),
                       ),

@@ -10,6 +10,7 @@ import '../../core/services/youtube_helper.dart';
 import '../../core/utils/localization.dart';
 import '../pages/playlist_tracks_screen.dart';
 import '../utils/track_actions.dart';
+import '../../core/theme/app_theme.dart';
 
 /// Reusable bottom sheet menu for YouTubeSong actions.
 ///
@@ -70,12 +71,12 @@ class YouTubeSongMenu extends StatelessWidget {
                 placeholder: (_, __) => Container(
                   width: 48,
                   height: 48,
-                  color: Colors.grey[800],
+                  color: context.appColors.sheetBackground,
                 ),
                 errorWidget: (_, __, ___) => Container(
                   width: 48,
                   height: 48,
-                  color: Colors.grey[800],
+                  color: context.appColors.sheetBackground,
                   child: const Icon(Icons.music_note),
                 ),
               ),
@@ -185,15 +186,16 @@ class YouTubeSongMenu extends StatelessWidget {
 
     try {
       final ytHelper = GetIt.I<YouTubeHelper>();
-      final url = await ytHelper.getAudioUrl(song.videoId);
+      final audioData = await ytHelper.getAudioUrlWithAgent(song.videoId);
 
-      if (url != null) {
+      if (audioData != null) {
         await GetIt.I<CacheService>().cacheTrack(
           videoId: song.videoId,
-          url: url,
+          url: audioData['url']!,
           title: song.title,
           artist: song.artist,
           thumbnailUrl: song.thumbnailUrl,
+          container: audioData['container'],
         );
 
         if (context.mounted) {

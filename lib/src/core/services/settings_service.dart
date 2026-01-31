@@ -247,4 +247,9 @@ class SettingsService {
       _prefs.setString(key, value);
 
   Future<void> remove(String key) => _prefs.remove(key);
+
+  /// Disposes resources used by this service.
+  void dispose() {
+    _settingsController.close();
+  }
 }

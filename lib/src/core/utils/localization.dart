@@ -186,6 +186,8 @@ class AppLocalizations {
       translate('permission_notifications_desc');
   String get permissionInstallTitle => translate('permission_install_title');
   String get permissionInstallDesc => translate('permission_install_desc');
+  String get permissionStorageTitle => translate('permission_storage_title');
+  String get permissionStorageDesc => translate('permission_storage_desc');
   String get statusGranted => translate('status_granted');
   String get statusDenied => translate('status_denied');
   String get grantPermissions => translate('grant_permissions');

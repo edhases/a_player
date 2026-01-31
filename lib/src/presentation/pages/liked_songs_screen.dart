@@ -13,6 +13,7 @@ import '../widgets/common_artwork.dart';
 import '../widgets/sync_dialog.dart';
 import '../../core/utils/localization.dart';
 import '../utils/track_actions.dart';
+import '../../core/theme/app_theme.dart';
 
 class LikedSongsScreen extends StatefulWidget {
   const LikedSongsScreen({super.key});
@@ -79,13 +80,14 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
     }
     
     final mediaItems = songsList.map((song) => MediaItem(
-      id: 'youtube:${song.videoId}',
+      id: song.videoId,
       title: song.title,
       artist: song.artist,
       artUri: Uri.tryParse(song.thumbnailUrl),
       duration: Duration(seconds: song.duration),
       extras: {
         'videoId': song.videoId,
+        'isOnline': true,
         'isYouTube': true,
       },
     )).toList();
@@ -223,7 +225,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                         Text(
                           _cacheProgress!.currentSong,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey,
+                            color: context.appColors.textSecondary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -248,8 +250,8 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.favorite_border,
-                                size: 64, color: Colors.grey),
+                            Icon(Icons.favorite_border,
+                                size: 64, color: context.appColors.textSecondary),
                             const SizedBox(height: 16),
                             Text(
                               loc.noTracksFound,
@@ -272,7 +274,7 @@ class _LikedSongsScreenState extends State<LikedSongsScreen> {
                             subtitle: Text(song.artist,
                                 maxLines: 1, overflow: TextOverflow.ellipsis),
                             trailing: IconButton(
-                              icon: const Icon(Icons.favorite, color: Colors.red),
+                              icon: Icon(Icons.favorite, color: context.appColors.error),
                               onPressed: () async {
                                 // Allow unliking from the list
                                 await TrackActions.handleLikeButton(

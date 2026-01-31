@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import '../../core/theme/app_theme.dart';
 
 /// A unified widget for displaying audio artwork.
 /// Prioritizes on_audio_query (fast) using mediaStoreId, falls back to direct file reading.
@@ -113,16 +114,17 @@ class CommonArtwork extends StatelessWidget {
   }
 
   Widget _buildPlaceholder(BuildContext context) {
+    final colors = context.appColors;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Colors.grey[850],
+        color: colors.divider,
         borderRadius: BorderRadius.circular(radius),
       ),
       child: Icon(
         placeholderIcon,
-        color: Colors.grey[600],
+        color: colors.textMuted,
         size: size * 0.5,
       ),
     );

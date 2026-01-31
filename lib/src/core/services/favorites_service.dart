@@ -4,23 +4,22 @@ import 'package:get_it/get_it.dart';
 import '../../data/datasources/app_database.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../services/recommendation_service.dart';
-import '../services/innertube_service.dart';
+import '../services/innertube/innertube.dart';
 
 class FavoritesService {
-  final RecommendationService
-      _recommendationService; // Keep just in case needed logic, but not for DB
-  final AppDatabase _db =
-      GetIt.I<AppDatabase>(); // Direct dependency or injected
-  InnerTubeService? _innerTubeService;
+  final RecommendationService _recommendationService;
+  final AppDatabase _db;
+  final InnerTubeService? _innerTubeService;
 
-  FavoritesService(this._recommendationService);
-
-  Future<void> init() async {
-    // Get InnerTubeService for YouTube sync
-    if (GetIt.I.isRegistered<InnerTubeService>()) {
-      _innerTubeService = GetIt.I<InnerTubeService>();
-    }
-  }
+  FavoritesService(
+    this._recommendationService, {
+    required AppDatabase db,
+    InnerTubeService? innerTubeService,
+  })  : _db = db,
+        _innerTubeService = innerTubeService ?? 
+            (GetIt.I.isRegistered<InnerTubeService>() 
+                ? GetIt.I<InnerTubeService>() 
+                : null);
 
   Future<void> toggleFavorite({
     required String videoId,
@@ -138,7 +137,7 @@ class FavoritesService {
     
     try {
       // Fetch liked songs from YouTube Music
-      final youTubeLiked = await _innerTubeService!.getYouTubeLikedSongs(limit: 500);
+      final youTubeLiked = await _innerTubeService!.getYouTubeLikedSongs();
       debugPrint('[FavoritesService] Fetched ${youTubeLiked.length} liked songs from YouTube');
 
       if (youTubeLiked.isEmpty) {

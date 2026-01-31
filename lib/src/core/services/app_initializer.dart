@@ -11,7 +11,7 @@ import 'cache_service.dart';
 import 'download_service.dart';
 import 'favorites_service.dart';
 import 'google_auth_service.dart';
-import 'innertube_service.dart';
+import 'innertube/innertube.dart';
 import 'data_management_service.dart';
 
 import 'log_service.dart';
@@ -107,7 +107,7 @@ class AppInitializer {
     final youtubeHelper = FakeYouTubeHelper(db);
     GetIt.I.registerSingleton<YouTubeHelper>(youtubeHelper);
 
-    final cacheService = FakeCacheService();
+    final cacheService = FakeCacheService(db: db, settingsService: settingsService);
     await cacheService.init();
     GetIt.I.registerSingleton<CacheService>(cacheService);
 
@@ -141,8 +141,7 @@ class AppInitializer {
     );
 
     // FavoritesService (depends on RecommendationService + InnerTubeService)
-    final favoritesService = FavoritesService(recommendationService);
-    await favoritesService.init();
+    final favoritesService = FavoritesService(recommendationService, db: db);
     GetIt.I.registerSingleton<FavoritesService>(favoritesService);
 
     // Initialize Audio Handler
@@ -214,23 +213,29 @@ class AppInitializer {
     GetIt.I.registerSingleton<MetadataMatchingService>(metadataMatchingService);
 
     // FavoritesService
-    final favoritesService = FavoritesService(recommendationService);
-    await favoritesService.init();
+    final favoritesService = FavoritesService(recommendationService, db: db);
     GetIt.I.registerSingleton<FavoritesService>(favoritesService);
 
     // DataManagementService
+    final settingsService = GetIt.I<SettingsService>();
     final dataManagementService =
-        DataManagementService(GetIt.I<SettingsService>(), db);
+        DataManagementService(settingsService, db);
     GetIt.I.registerSingleton<DataManagementService>(dataManagementService);
 
     // CacheService
-    final cacheService = CacheService();
+    final cacheService = CacheService(
+      db: db,
+      settingsService: settingsService,
+    );
     await cacheService.init();
     GetIt.I.registerSingleton<CacheService>(cacheService);
 
     // BackgroundCacheService
     GetIt.I.registerSingleton<BackgroundCacheService>(
-      BackgroundCacheService(),
+      BackgroundCacheService(
+        cacheService: cacheService,
+        ytHelper: youtubeHelper,
+      ),
       dispose: (service) => service.dispose(),
     );
 

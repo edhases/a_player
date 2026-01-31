@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
 import '../../domain/entities/youtube_song.dart';
 import '../../presentation/pages/playlist_tracks_screen.dart';
 import 'audio_handler.dart';
-import 'innertube_service.dart';
+import 'innertube/innertube.dart';
 
 /// Result of a Smart Play operation
 enum SmartPlayResultType {
@@ -52,6 +54,11 @@ class SmartPlayResult {
 class SmartPlayService {
   final InnerTubeService _innerTube;
   final MyAudioHandler _audioHandler;
+  
+  // Debounce and duplicate prevention
+  String? _currentlyLoadingPlaylistId;
+  Timer? _debounceTimer;
+  static const _debounceDuration = Duration(milliseconds: 300);
 
   SmartPlayService({
     InnerTubeService? innerTube,
@@ -63,19 +70,35 @@ class SmartPlayService {
   ///
   /// Returns true if:
   /// - song.isPlaylist is true
-  /// - song.playlistId is not null
   /// - videoId is not 11 characters (likely an album/playlist ID)
+  ///
+  /// Note: playlistId alone does NOT mean it needs resolution.
+  /// Songs from "Listen Again" have playlistId for context but are still songs.
+  /// A valid YouTube video ID is always 11 characters.
   bool needsPlaylistResolution(YouTubeSong song) {
-    final isSuspectId = song.videoId.length != 11 && song.videoId.isNotEmpty;
-    return song.isPlaylist || song.playlistId != null || isSuspectId;
+    // If explicitly marked as playlist, resolve it
+    if (song.isPlaylist) return true;
+    
+    // If videoId is 11 chars, it's a regular YouTube video - play directly
+    if (song.videoId.length == 11) return false;
+    
+    // If videoId is not 11 chars and not empty, it's likely a playlist/album ID
+    if (song.videoId.isNotEmpty) return true;
+    
+    return false;
   }
 
   /// Gets the effective playlist ID from a song.
   String? getPlaylistId(YouTubeSong song) {
-    if (song.playlistId != null) return song.playlistId;
+    // If explicitly a playlist and has playlistId, use it
+    if (song.isPlaylist && song.playlistId != null) return song.playlistId;
+    
+    // If videoId is not a standard 11-char ID, it's likely a playlist/album ID
     if (song.videoId.length != 11 && song.videoId.isNotEmpty) {
       return song.videoId;
     }
+    
+    // For regular songs with playlistId, this is just context, not for resolution
     return null;
   }
 
@@ -124,7 +147,14 @@ class SmartPlayService {
       return SmartPlayResult.error('Could not determine playlist ID');
     }
 
+    // Prevent duplicate requests for the same playlist
+    if (_currentlyLoadingPlaylistId == playlistId) {
+      debugPrint('[SmartPlay] Already loading $playlistId, skipping duplicate request');
+      return SmartPlayResult.error('Already loading this playlist');
+    }
+
     debugPrint('[SmartPlay] Resolving playlist: $playlistId');
+    _currentlyLoadingPlaylistId = playlistId;
 
     // Show loading feedback
     if (showSnackbars && context.mounted) {
@@ -139,6 +169,9 @@ class SmartPlayService {
     try {
       final tracks = await _innerTube.getPlaylistTracks(playlistId);
       debugPrint('[SmartPlay] Fetched ${tracks.length} tracks');
+      
+      // Clear loading state
+      _currentlyLoadingPlaylistId = null;
 
       if (!context.mounted) {
         return SmartPlayResult.error('Context no longer mounted');
@@ -207,6 +240,7 @@ class SmartPlayService {
       return SmartPlayResult.navigatedToPlaylist(tracks);
     } catch (e) {
       debugPrint('[SmartPlay] Error: $e');
+      _currentlyLoadingPlaylistId = null; // Clear on error
 
       if (showSnackbars && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -222,5 +256,10 @@ class SmartPlayService {
   /// Use this when you already know it's a single track.
   Future<void> playDirectly(YouTubeSong song) async {
     await _audioHandler.playYouTubeSong(song);
+  }
+  
+  /// Dispose resources
+  void dispose() {
+    _debounceTimer?.cancel();
   }
 }

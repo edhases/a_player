@@ -7,9 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:get_it/get_it.dart';
 
-import '../../core/utils/result.dart';
 import '../../core/services/cache_service.dart';
-import '../../core/services/innertube_service.dart';
+import '../../core/services/innertube/innertube.dart';
 import '../../core/services/music_finder.dart';
 import '../../core/services/recommendation_service.dart';
 import '../../core/services/settings_service.dart';
@@ -354,19 +353,19 @@ class FakeInnerTubeService extends InnerTubeService {
   ];
 
   @override
-  Future<Result<List<YouTubeSong>>> search(String query) async {
+  Future<List<YouTubeSong>> search(String query, {String filter = 'songs', int limit = 20}) async {
     searchHistory.add(query);
     TestTracker.recordSearch(query);
     await Future<void>.delayed(searchDelay);
 
     if (simulateSearchFailure) {
-      return Result.failure(failureMessage ?? 'Simulated search failure');
+      throw Exception(failureMessage ?? 'Simulated search failure');
     }
 
     // Check for query-specific results
     final lowerQuery = query.toLowerCase();
     if (_querySpecificResults.containsKey(lowerQuery)) {
-      return Result.success(_querySpecificResults[lowerQuery]!);
+      return _querySpecificResults[lowerQuery]!;
     }
 
     // Filter results by query for more realistic behavior
@@ -376,10 +375,10 @@ class FakeInnerTubeService extends InnerTubeService {
     }).toList();
 
     // If no match, return all results (like actual search does)
-    return Result.success(filtered.isEmpty ? _searchResults : filtered);
+    return filtered.isEmpty ? _searchResults : filtered;
   }
 
-  @override
+  // getSongUrl is not part of facade, kept for test compatibility
   Future<Map<String, String>?> getSongUrl(String videoId) async {
     return {'url': 'https://example.test/audio/$videoId', 'agent': 'TestUA'};
   }
@@ -397,10 +396,10 @@ class FakeInnerTubeService extends InnerTubeService {
   }
 
   @override
-  Future<List<YouTubeSong>> getArtistTopTracks(String artistId) async {
-    TestTracker.navigatedArtists.add(artistId);
-    if (artistId == _artistIdUa) return _artistTracksUa;
-    if (artistId == _artistIdRock) return _rockArtistTracks;
+  Future<List<YouTubeSong>> getArtistTopTracks(String browseId) async {
+    TestTracker.navigatedArtists.add(browseId);
+    if (browseId == _artistIdUa) return _artistTracksUa;
+    if (browseId == _artistIdRock) return _rockArtistTracks;
     return _artistTracks;
   }
 
@@ -628,6 +627,9 @@ class FakeCacheService extends CacheService {
   // For testing failure scenarios
   bool simulateCacheFailure = false;
   bool simulateNoSpace = false;
+
+  FakeCacheService({required AppDatabase db, SettingsService? settingsService})
+      : super(db: db, settingsService: settingsService);
 
   @override
   Future<void> init() async {}

@@ -8,23 +8,28 @@ import 'package:http/http.dart' as http;
 import '../../data/datasources/app_database.dart';
 // import '../services/recommendation_service.dart'; // Removed
 import 'package:flutter/foundation.dart';
-import 'package:get_it/get_it.dart';
 import 'settings_service.dart';
 
 class CacheService {
-  final AppDatabase _db = GetIt.I<AppDatabase>();
+  final AppDatabase _db;
+  final SettingsService? _settingsService;
   final Dio _dio = Dio();
 
   // Default max cache size: 500MB
   static const int _defaultMaxCacheSize = 500 * 1024 * 1024;
   int _maxCacheSize = _defaultMaxCacheSize;
 
-  CacheService();
+  CacheService({
+    required AppDatabase db,
+    SettingsService? settingsService,
+  })  : _db = db,
+        _settingsService = settingsService;
 
   Future<void> init() async {
-    // Load max cache size
-    if (GetIt.I.isRegistered<SettingsService>()) {
-      _maxCacheSize = GetIt.I<SettingsService>().loadMaxCacheSize();
+    // Load max cache size from settings
+    final settings = _settingsService;
+    if (settings != null) {
+      _maxCacheSize = settings.loadMaxCacheSize();
     }
   }
 
@@ -255,7 +260,28 @@ class CacheService {
             downloadPath: Value(null), fileSize: Value(null)));
   }
 
+  /// Returns total cache usage in bytes
+  /// First tries to calculate from actual files, falls back to DB records
   Future<int> getCacheUsage() async {
+    try {
+      // First try to get actual file sizes from disk
+      final cacheDir = await getCacheDirectory();
+      if (await cacheDir.exists()) {
+        int totalSize = 0;
+        await for (final entity in cacheDir.list()) {
+          if (entity is File) {
+            try {
+              totalSize += await entity.length();
+            } catch (_) {}
+          }
+        }
+        if (totalSize > 0) return totalSize;
+      }
+    } catch (e) {
+      debugPrint('[CacheService] Error getting cache from disk: $e');
+    }
+    
+    // Fallback to DB records
     final allTracks = await (_db.select(_db.youTubeTracks)
           ..where((t) => t.downloadPath.isNotNull()))
         .get();

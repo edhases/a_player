@@ -1,3 +1,5 @@
+import '../../core/utils/duration_formatter.dart';
+
 class YouTubeSong {
   final String videoId;
   final String title;
@@ -54,6 +56,26 @@ class YouTubeSong {
   // Helper to identify functionality
   bool get isMix => isPlaylist || (playlistId != null && videoId.isNotEmpty);
 
+  /// Formatted duration string (e.g., "3:45" or "1:02:30")
+  String get durationFormatted {
+    if (duration <= 0) return '0:00';
+    final d = Duration(seconds: duration);
+    if (d.inHours > 0) {
+      return DurationFormatter.format(d);
+    }
+    return DurationFormatter.formatMinimal(d);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is YouTubeSong &&
+          runtimeType == other.runtimeType &&
+          videoId == other.videoId;
+
+  @override
+  int get hashCode => videoId.hashCode;
+
   @override
   String toString() =>
       'YouTubeSong(title: $title, id: $videoId, isPlaylist: $isPlaylist)';
@@ -68,5 +90,23 @@ class YouTubeSong {
         'playlistId': playlistId,
         'isPlaylist': isPlaylist,
         'artistId': artistId,
+        'category': category,
       };
+
+  Map<String, dynamic> toMap() => toJson();
+
+  factory YouTubeSong.fromMap(Map<String, dynamic> map) {
+    return YouTubeSong(
+      videoId: map['videoId'] as String? ?? '',
+      title: map['title'] as String? ?? '',
+      artist: map['artist'] as String? ?? '',
+      thumbnailUrl: map['thumbnailUrl'] as String? ?? '',
+      duration: map['duration'] as int? ?? 0,
+      isLive: map['isLive'] as bool? ?? false,
+      playlistId: map['playlistId'] as String?,
+      isPlaylist: map['isPlaylist'] as bool? ?? false,
+      category: map['category'] as String? ?? '',
+      artistId: map['artistId'] as String?,
+    );
+  }
 }

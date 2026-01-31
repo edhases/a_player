@@ -1,6 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
-import '../../data/datasources/app_database.dart';
+import '../entities/local_track.dart';
 
 /// A base class for entries in the hierarchical file view.
 abstract class FileSystemEntry {
@@ -19,7 +19,7 @@ class FolderEntry extends FileSystemEntry {
 /// Represents a music track file in the hierarchy.
 class TrackEntry extends FileSystemEntry {
   /// The full track data from the database.
-  final Track track;
+  final LocalTrack track;
   TrackEntry(super.name, this.track);
 }
 
@@ -31,7 +31,7 @@ class HierarchyService {
   /// [allTracks] is the complete list of tracks from the database.
   /// [path] is the directory whose contents are to be listed. A path of '.'
   /// represents the root level.
-  List<FileSystemEntry> getEntriesForPath(List<Track> allTracks, String path) {
+  List<FileSystemEntry> getEntriesForPath(List<LocalTrack> allTracks, String path) {
     final entries = <FileSystemEntry>[];
     final directChildren = <String>{}; // Used to avoid duplicate folder entries
 

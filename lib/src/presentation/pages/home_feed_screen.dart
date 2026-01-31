@@ -15,6 +15,7 @@ import '../../core/utils/localization.dart';
 import '../../data/datasources/app_database.dart';
 import '../../core/services/audio_handler.dart';
 import '../blocs/home/home_bloc.dart';
+import '../../core/theme/app_theme.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -157,10 +158,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.error_outline,
                             size: 48,
-                            color: Colors.red,
+                            color: context.appColors.error,
                           ),
                           const SizedBox(height: 16),
                           Text(

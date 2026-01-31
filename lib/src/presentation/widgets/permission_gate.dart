@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/utils/localization.dart';
 import '../../core/utils/test_overrides.dart';
 import '../../core/services/music_finder.dart';
+import '../../core/theme/app_theme.dart';
 import 'package:get_it/get_it.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -198,7 +199,7 @@ class _PermissionGateState extends State<PermissionGate>
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.7),
+                            .withValues(alpha: 0.7),
                       ),
                 ),
               ),
@@ -293,6 +294,10 @@ class _PermissionItem extends StatelessWidget {
       title = loc.permissionAudioTitle;
       desc = loc.permissionAudioDesc;
       icon = Icons.library_music_rounded;
+    } else if (permission == Permission.manageExternalStorage) {
+      title = loc.permissionStorageTitle;
+      desc = loc.permissionStorageDesc;
+      icon = Icons.folder_open_rounded;
     } else if (permission == Permission.notification) {
       title = loc.permissionNotificationsTitle;
       desc = loc.permissionNotificationsDesc;
@@ -306,12 +311,12 @@ class _PermissionItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isGranted
-              ? Colors.green.withOpacity(0.5)
-              : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              ? context.appColors.success.withValues(alpha: 0.5)
+              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
       ),
       child: Row(
@@ -319,7 +324,7 @@ class _PermissionItem extends StatelessWidget {
           Icon(
             icon,
             color: isGranted
-                ? Colors.green
+                ? context.appColors.success
                 : Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(width: 16),
@@ -341,7 +346,7 @@ class _PermissionItem extends StatelessWidget {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.6),
+                        .withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -352,14 +357,14 @@ class _PermissionItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: isGranted
-                  ? Colors.green.withOpacity(0.1)
-                  : Colors.red.withOpacity(0.1),
+                  ? context.appColors.success.withValues(alpha: 0.1)
+                  : context.appColors.error.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               isGranted ? loc.statusGranted : loc.statusDenied,
               style: TextStyle(
-                color: isGranted ? Colors.green : Colors.red,
+                color: isGranted ? context.appColors.success : context.appColors.error,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),

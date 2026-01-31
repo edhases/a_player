@@ -10,6 +10,11 @@ part 'app_database.g.dart';
 // --- TABLE DEFINITIONS ---
 
 @DataClassName('Track')
+@TableIndex(name: 'idx_tracks_folder', columns: {#folderPath})
+@TableIndex(name: 'idx_tracks_album', columns: {#album})
+@TableIndex(name: 'idx_tracks_artist', columns: {#artist})
+@TableIndex(name: 'idx_tracks_favorite', columns: {#isFavorite, #lastPlayed})
+@TableIndex(name: 'idx_tracks_excluded', columns: {#isExcluded})
 class Tracks extends Table {
   TextColumn get path => text()();
   TextColumn get title => text()();
@@ -24,13 +29,15 @@ class Tracks extends Table {
   BoolColumn get isExcluded => boolean().withDefault(const Constant(false))();
 
   @override
-  List<Set<Column>> get uniqueKeys => [
-        {path}, // path is unique
-      ];
+  Set<Column> get primaryKey => {path}; // Use proper PRIMARY KEY instead of uniqueKeys
 }
 
 // YouTube track table for caching metadata and offline support
 @DataClassName('YouTubeTrack')
+@TableIndex(name: 'idx_yt_favorite', columns: {#isFavorite, #likedAt})
+@TableIndex(name: 'idx_yt_downloaded', columns: {#downloadPath})
+@TableIndex(name: 'idx_yt_lastPlayed', columns: {#lastPlayed})
+@TableIndex(name: 'idx_yt_cachedAt', columns: {#cachedAt})
 class YouTubeTracks extends Table {
   TextColumn get videoId => text()();
   TextColumn get title => text()();
@@ -67,6 +74,8 @@ class RadioStations extends Table {
 
 // Replacement for ListenHistory
 @DataClassName('PlaybackLogEntry')
+@TableIndex(name: 'idx_playback_video', columns: {#videoId})
+@TableIndex(name: 'idx_playback_playedAt', columns: {#playedAt})
 class PlaybackLog extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get videoId => text()();
@@ -128,7 +137,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -153,13 +162,7 @@ class AppDatabase extends _$AppDatabase {
           if (from < 8) {
             await m.addColumn(tracks, tracks.lastPlayed);
           }
-          if (from < 9) {
-            try {
-              await m.addColumn(tracks, tracks.lastPlayed);
-            } catch (e) {
-              // Ignore if column already exists
-            }
-          }
+          // Note: Migration 9 was duplicate of 8, removed
           if (from < 10) {
             await m.addColumn(tracks, tracks.isExcluded);
           }
@@ -173,6 +176,20 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(youTubeTracks, youTubeTracks.fileSize);
             await m.addColumn(youTubeTracks, youTubeTracks.isFavorite);
             await m.addColumn(youTubeTracks, youTubeTracks.likedAt);
+          }
+          if (from < 13) {
+            // Add indices for better query performance
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks (folder_path)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks (album)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks (artist)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_favorite ON tracks (is_favorite, last_played)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_excluded ON tracks (is_excluded)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_favorite ON you_tube_tracks (is_favorite, liked_at)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_downloaded ON you_tube_tracks (download_path)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_lastPlayed ON you_tube_tracks (last_played)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_cachedAt ON you_tube_tracks (cached_at)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_playback_video ON playback_log (video_id)');
+            await customStatement('CREATE INDEX IF NOT EXISTS idx_playback_playedAt ON playback_log (played_at)');
           }
         },
       );
@@ -442,6 +459,8 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'db.sqlite'));
-    return NativeDatabase(file);
+    return NativeDatabase(file, setup: (db) {
+      db.execute('PRAGMA foreign_keys = ON');
+    });
   });
 }

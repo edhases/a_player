@@ -131,4 +131,9 @@ class GoogleAuthService {
       return null;
     }
   }
+
+  /// Dispose of resources
+  void dispose() {
+    _loginStatusController.close();
+  }
 }

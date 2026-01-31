@@ -3,7 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 
 import '../../data/datasources/app_database.dart';
-import '../../core/services/innertube_service.dart';
+import '../../core/services/innertube/innertube.dart';
 import '../../domain/entities/youtube_song.dart';
 import 'tag_editor_service.dart';
 import 'settings_service.dart';
@@ -44,7 +44,7 @@ class MetadataMatchingService {
 
       // Крок 2: Пошук на YouTube Music (using InnerTubeService)
       final searchResult = await _innerTube.search(query);
-      final songs = searchResult.data?.take(3).toList() ?? [];
+      final songs = searchResult.take(3).toList();
 
       if (songs.isEmpty) return null;
 
@@ -72,11 +72,7 @@ class MetadataMatchingService {
   /// Manual search for tracks for user selection.
   Future<List<YouTubeSong>> searchTracks(String query) async {
     try {
-      final result = await _innerTube.search(query);
-      if (result.isSuccess) {
-        return result.data ?? [];
-      }
-      return [];
+      return await _innerTube.search(query);
     } catch (e) {
       debugPrint('[MetadataMatcher] Search error: $e');
       return [];

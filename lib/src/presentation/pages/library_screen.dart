@@ -10,6 +10,7 @@ import '../../core/utils/localization.dart';
 import 'folder_screen.dart';
 import '../../core/services/audio_handler.dart';
 import '../blocs/library/library_bloc.dart';
+import '../../core/theme/app_theme.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
@@ -38,12 +39,12 @@ class LibraryScreen extends StatelessWidget {
               child: DropdownButton<LibraryViewMode>(
                 key: const Key('library_view_mode_dropdown'),
                 value: state.viewMode,
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                icon: Icon(Icons.arrow_drop_down, color: context.appColors.textPrimary),
                 dropdownColor: Theme.of(context).cardColor,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: context.appColors.textPrimary,
                 ),
                 onChanged: (LibraryViewMode? newValue) {
                   if (newValue != null) {
@@ -115,7 +116,7 @@ class LibraryScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.radio, size: 64, color: Colors.grey),
+            Icon(Icons.radio, size: 64, color: context.appColors.textSecondary),
             const SizedBox(height: 16),
             Text(AppLocalizations.of(context).noRadioStations),
             TextButton(
@@ -262,13 +263,13 @@ class LibraryScreen extends StatelessWidget {
         return ListTile(
           leading: Icon(
             isExcluded ? Icons.folder_off : Icons.folder,
-            color: isExcluded ? Colors.grey : Theme.of(context).primaryColor,
+            color: isExcluded ? context.appColors.textSecondary : Theme.of(context).primaryColor,
             size: 32,
           ),
           title: Text(
             folderName,
             style: TextStyle(
-              color: isExcluded ? Colors.grey : null,
+              color: isExcluded ? context.appColors.textSecondary : null,
               decoration: isExcluded ? TextDecoration.lineThrough : null,
             ),
           ),

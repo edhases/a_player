@@ -151,4 +151,63 @@ class TelegramService {
       return false;
     }
   }
+
+  /// Send session analytics summary
+  Future<bool> sendAnalytics() async {
+    if (!isConfigured) return false;
+
+    try {
+      if (GetIt.I.isRegistered<LogService>()) {
+        final logService = GetIt.I<LogService>();
+        await logService.sendAnalyticsSummary();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[TelegramService] Failed to send analytics: $e');
+      return false;
+    }
+  }
+
+  /// Send crash report with context
+  Future<bool> sendCrashReport({
+    required String error,
+    String? stackTrace,
+    Map<String, dynamic>? context,
+  }) async {
+    if (!isConfigured) return false;
+
+    try {
+      final logService = GetIt.I<LogService>();
+      final deviceInfo = await logService.getDeviceInfoSummary();
+
+      final buffer = StringBuffer();
+      buffer.writeln('💥 <b>CRASH REPORT</b>');
+      buffer.writeln('📱 <i>$deviceInfo</i>');
+      buffer.writeln('🕐 ${DateTime.now().toIso8601String()}');
+      buffer.writeln('');
+      buffer.writeln('<b>Error:</b>');
+      buffer.writeln('<pre>$error</pre>');
+
+      if (stackTrace != null && stackTrace.isNotEmpty) {
+        final shortStack = stackTrace.split('\n').take(15).join('\n');
+        buffer.writeln('');
+        buffer.writeln('<b>Stack:</b>');
+        buffer.writeln('<pre>$shortStack</pre>');
+      }
+
+      if (context != null && context.isNotEmpty) {
+        buffer.writeln('');
+        buffer.writeln('<b>Context:</b>');
+        for (final entry in context.entries) {
+          buffer.writeln('• ${entry.key}: ${entry.value}');
+        }
+      }
+
+      return await sendMessage(buffer.toString());
+    } catch (e) {
+      debugPrint('[TelegramService] Failed to send crash report: $e');
+      return false;
+    }
+  }
 }

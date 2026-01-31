@@ -9,7 +9,7 @@ const String kEqPresetKey = 'eq_preset';
 const String kEqCustomLevelsKey = 'eq_custom_levels';
 
 class EqualizerService {
-  final _settingsService = GetIt.I<SettingsService>();
+  final SettingsService _settingsService;
 
   // The just_audio wrapper for Android Equalizer
   AndroidEqualizer? _androidEqualizer;
@@ -37,6 +37,10 @@ class EqualizerService {
   double maxDecibels = 15.0;
 
   bool get isInitialized => _androidEqualizer != null;
+  
+  /// Creates an EqualizerService with optional dependency injection.
+  EqualizerService({SettingsService? settingsService})
+      : _settingsService = settingsService ?? GetIt.I<SettingsService>();
 
   /// Initialize using the AudioPipeline logic
   /// Note: just_audio's AndroidEqualizer is usually part of the AudioPipeline.

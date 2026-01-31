@@ -8,7 +8,7 @@ import 'package:oxide_player/src/core/services/settings_service.dart';
 import 'package:oxide_player/src/data/datasources/app_database.dart';
 import 'package:oxide_player/src/core/services/audio_source_factory.dart';
 import 'package:oxide_player/src/core/services/recommendation_service.dart';
-import 'package:oxide_player/src/core/services/innertube_service.dart';
+import 'package:oxide_player/src/core/services/innertube/innertube.dart';
 import 'package:oxide_player/src/core/services/metadata_matching_service.dart';
 
 import 'package:oxide_player/src/core/services/widget_service.dart';

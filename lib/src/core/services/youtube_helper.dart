@@ -15,20 +15,52 @@ class YouTubeHelper {
   YouTubeHelper(this._db);
   final RateLimiter _rateLimiter = RateLimiter();
 
+  // LRU cache with maximum size limit
+  static const int _maxCacheSize = 150;
   final Map<String, _CachedUrl> _urlCache = {};
+  final List<String> _cacheOrder = []; // Track access order for LRU
+
+  /// Add to cache with LRU eviction
+  void _addToCache(String videoId, _CachedUrl cached) {
+    // Remove if already exists to update order
+    if (_urlCache.containsKey(videoId)) {
+      _cacheOrder.remove(videoId);
+    }
+    
+    // Evict oldest entries if cache is full
+    while (_urlCache.length >= _maxCacheSize && _cacheOrder.isNotEmpty) {
+      final oldest = _cacheOrder.removeAt(0);
+      _urlCache.remove(oldest);
+    }
+    
+    _urlCache[videoId] = cached;
+    _cacheOrder.add(videoId);
+  }
+
+  /// Get from cache and update LRU order
+  _CachedUrl? _getFromCache(String videoId) {
+    final cached = _urlCache[videoId];
+    if (cached != null) {
+      // Move to end (most recently used)
+      _cacheOrder.remove(videoId);
+      _cacheOrder.add(videoId);
+    }
+    return cached;
+  }
 
   /// Отримати URL для потокування аудіо
   Future<String?> getAudioUrl(String videoId) async {
     try {
-      // 1. Check shared cache
+      // 1. Check shared cache with LRU access
       final now = DateTime.now();
-      if (_urlCache.containsKey(videoId)) {
-        final cached = _urlCache[videoId]!;
+      final cached = _getFromCache(videoId);
+      if (cached != null) {
         if (cached.expiry.isAfter(now)) {
           debugPrint('[YouTubeHelper] using shared cached URL for: $videoId');
           return cached.url;
         } else {
           _urlCache.remove(videoId);
+          _cacheOrder.remove(videoId);
         }
       }
 
@@ -57,12 +89,12 @@ class YouTubeHelper {
       debugPrint(
           '[YouTubeHelper] Selected: ${audioStream.codec.subtype} @ ${audioStream.bitrate.kiloBitsPerSecond.toStringAsFixed(0)} kbps');
 
-      // Save to cache (default TTL 1 hour or stream expiry if parseable)
-      _urlCache[videoId] = _CachedUrl(
+      // Save to LRU cache (default TTL 45 min)
+      _addToCache(videoId, _CachedUrl(
         url: url,
         expiry: now
             .add(const Duration(minutes: 45)), // slightly less than typical 1h
-      );
+      ));
 
       return url;
     } catch (e) {
@@ -79,10 +111,10 @@ class YouTubeHelper {
   /// - Validates contentLength to avoid corrupted streams
   Future<Map<String, String>?> getAudioUrlWithAgent(String videoId) async {
     try {
-      // Check cache first
+      // Check LRU cache first
       final now = DateTime.now();
-      if (_urlCache.containsKey(videoId)) {
-        final cached = _urlCache[videoId]!;
+      final cached = _getFromCache(videoId);
+      if (cached != null) {
         if (cached.expiry.isAfter(now)) {
           debugPrint(
               '[YouTubeHelper] using cached URL with agent for: $videoId');
@@ -92,6 +124,7 @@ class YouTubeHelper {
           };
         } else {
           _urlCache.remove(videoId);
+          _cacheOrder.remove(videoId);
         }
       }
 
@@ -123,11 +156,11 @@ class YouTubeHelper {
           '[YouTubeHelper] Selected: $codec @ ${audioStream.bitrate.kiloBitsPerSecond.toStringAsFixed(0)} kbps, '
           'container: $container, size: ${audioStream.size.totalMegaBytes.toStringAsFixed(1)} MB');
 
-      // Cache the URL
-      _urlCache[videoId] = _CachedUrl(
+      // Add to LRU cache
+      _addToCache(videoId, _CachedUrl(
         url: url,
         expiry: now.add(const Duration(minutes: 45)),
-      );
+      ));
 
       return {
         'url': url,

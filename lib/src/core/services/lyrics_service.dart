@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import '../models/lyrics_model.dart';
-import 'innertube_service.dart';
+import 'innertube/innertube.dart';
+import 'ksoft_service.dart';
 
 class LyricsService {
   static const String _lrclibUrl = 'https://lrclib.net/api';
@@ -11,11 +12,13 @@ class LyricsService {
       'wyAjHxnpbmPpTaF_aq2hbxKKDmlqyTJ2g6sCNCTghry23OHn0xfsgu1p5T5CoIRp';
 
   final InnerTubeService _innerTube;
+  final KSoftService _ksoft;
 
   // In-memory cache: key = "artist|title" or trackId
   final Map<String, LyricsModel> _cache = {};
 
-  LyricsService(this._innerTube);
+  LyricsService(this._innerTube, {KSoftService? ksoft})
+      : _ksoft = ksoft ?? KSoftService();
 
   /// Generate cache key from track info
   String _cacheKey(String trackName, String artistName) {
@@ -69,10 +72,8 @@ class LyricsService {
     if (effectiveVideoId == null) {
       try {
         final searchResult = await _innerTube.search('$artistName $trackName');
-        if (searchResult.isSuccess &&
-            searchResult.data != null &&
-            searchResult.data!.isNotEmpty) {
-          effectiveVideoId = searchResult.data!.first.videoId;
+        if (searchResult.isNotEmpty) {
+          effectiveVideoId = searchResult.first.videoId;
         }
       } catch (e) {
         debugPrint('[LyricsService] YTM search failed: $e');
@@ -107,7 +108,7 @@ class LyricsService {
 
     // 2.1 Return YouTube Music if we found plain lyrics (Priority 1 for Plain)
     if (ytmCandidate != null && ytmCandidate.plainLyrics.isNotEmpty) {
-      debugPrint('[LyricsService] � Returning plain lyrics from YouTube Music');
+      debugPrint('[LyricsService] 🟡 Returning plain lyrics from YouTube Music');
       _cache[key] = ytmCandidate;
       return ytmCandidate;
     }
@@ -119,8 +120,27 @@ class LyricsService {
       return lrclibCandidate;
     }
 
-    // 2.3 Fallback to Genius (Priority 3 for Plain)
-    debugPrint('[LyricsService] Fallback to Genius (Priority 3 for Plain)...');
+    // 2.3 Try KSoft.Si (Priority 3 - has synced lyrics via singalong)
+    if (_ksoft.isConfigured) {
+      debugPrint('[LyricsService] Trying KSoft.Si...');
+      final ksoftCandidate = await _ksoft.getLyrics(
+        trackName: trackName,
+        artistName: artistName,
+        duration: duration,
+      );
+      if (ksoftCandidate != null) {
+        if (ksoftCandidate.isSynced) {
+          debugPrint('[LyricsService] 🟢 Found synced lyrics from KSoft.Si');
+        } else {
+          debugPrint('[LyricsService] 🟡 Found plain lyrics from KSoft.Si');
+        }
+        _cache[key] = ksoftCandidate;
+        return ksoftCandidate;
+      }
+    }
+
+    // 2.4 Fallback to Genius (Priority 4 for Plain)
+    debugPrint('[LyricsService] Fallback to Genius (Priority 4 for Plain)...');
     final genius = await _fetchFromGenius(trackName, artistName);
     if (genius != null) {
       _cache[key] = genius;

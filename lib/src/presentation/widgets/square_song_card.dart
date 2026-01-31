@@ -6,6 +6,7 @@ import 'package:get_it/get_it.dart';
 import '../../core/services/favorites_service.dart';
 import '../../core/utils/localization.dart';
 import '../utils/track_actions.dart';
+import '../../core/theme/app_theme.dart';
 
 class SquareSongCard extends StatelessWidget {
   final YouTubeSong song;
@@ -56,9 +57,10 @@ class SquareSongCard extends StatelessWidget {
                           .isLikedStream(song.videoId),
                       builder: (context, snapshot) {
                         final isLiked = snapshot.data ?? false;
+                        final colors = context.appColors;
                         return Container(
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.3),
+                            color: colors.overlay.withValues(alpha: 0.3),
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
@@ -67,7 +69,7 @@ class SquareSongCard extends StatelessWidget {
                             padding: const EdgeInsets.all(5),
                             icon: Icon(
                               isLiked ? Icons.favorite : Icons.favorite_border,
-                              color: isLiked ? Colors.red : Colors.white,
+                              color: isLiked ? colors.error : colors.textPrimary,
                             ),
                             onPressed: () {
                               TrackActions.handleLikeButton(
@@ -128,7 +130,7 @@ class SquareSongCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[400],
+                      color: context.appColors.textSecondary,
                     ),
               );
             }),

@@ -8,7 +8,9 @@ import '../../data/datasources/app_database.dart';
 import '../../domain/services/hierarchy_service.dart';
 import '../../core/services/audio_handler.dart';
 import '../widgets/common_artwork.dart';
+import '../../domain/entities/local_track.dart';
 import '../../core/utils/media_item_adapter.dart';
+import '../../core/theme/app_theme.dart';
 
 /// Folder browser screen with track artwork thumbnails.
 class FolderScreen extends StatelessWidget {
@@ -38,20 +40,24 @@ class FolderScreen extends StatelessWidget {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          final allTracks = snapshot.data!;
+          // Convert Drift Track to domain LocalTrack
+          final allTracks = snapshot.data!
+              .map(MediaItemAdapter.trackToLocalTrack)
+              .toList();
           final entries = _hierarchyService.getEntriesForPath(allTracks, path);
 
           if (entries.isEmpty) {
+            final colors = context.appColors;
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.folder_off_outlined,
-                      size: 64, color: Colors.grey[600]),
+                      size: 64, color: colors.textSecondary),
                   const SizedBox(height: 16),
                   Text(
                     'This folder is empty',
-                    style: TextStyle(color: Colors.grey[500]),
+                    style: TextStyle(color: colors.textSecondary),
                   ),
                 ],
               ),
@@ -100,9 +106,9 @@ class FolderScreen extends StatelessWidget {
   }
 
   Future<void> _playQueue(
-      MyAudioHandler audioHandler, List<Track> tracks, Track startTrack) async {
+      MyAudioHandler audioHandler, List<LocalTrack> tracks, LocalTrack startTrack) async {
     final mediaItems =
-        tracks.map((track) => MediaItemAdapter.fromTrack(track)).toList();
+        tracks.map((track) => MediaItemAdapter.fromLocalTrack(track)).toList();
 
     final startIndex = tracks.indexOf(startTrack);
 
@@ -149,7 +155,7 @@ class _FolderListTile extends StatelessWidget {
 }
 
 class _TrackListTile extends StatelessWidget {
-  final Track track;
+  final LocalTrack track;
   final bool isCurrentTrack;
   final VoidCallback onTap;
 
@@ -162,6 +168,7 @@ class _TrackListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colors = context.appColors;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -191,14 +198,14 @@ class _TrackListTile extends StatelessWidget {
           fontSize: 12,
           color: isCurrentTrack
               ? colorScheme.primary.withValues(alpha: 0.7)
-              : Colors.grey[500],
+              : colors.textSecondary,
         ),
       ),
       trailing: Text(
         _formatDuration(Duration(milliseconds: track.duration)),
         style: TextStyle(
           fontSize: 12,
-          color: Colors.grey[500],
+          color: colors.textSecondary,
         ),
       ),
       onTap: onTap,
