@@ -36,7 +36,10 @@ class MediaItemAdapter {
   static MediaItem fromTrack(Track track, [TrackOverride? override]) {
     // Default values from track
     String title = track.title;
-    String artist = track.artist ?? 'Unknown Artist';
+    // Handle empty string as null
+    String artist = (track.artist == null || track.artist!.trim().isEmpty)
+        ? 'Unknown Artist'
+        : track.artist!;
     String? artUri = track.artworkUri;
 
     // Apply override if available
@@ -79,11 +82,16 @@ class MediaItemAdapter {
       artwork = Uri.parse(track.artworkUri!);
     }
 
+    // Handle empty string as null for artist
+    String artist = (track.artist == null || track.artist!.trim().isEmpty)
+        ? 'Unknown Artist'
+        : track.artist!;
+
     return MediaItem(
       id: track.path,
       album: track.album ?? 'Unknown Album',
       title: track.title,
-      artist: track.artist ?? 'Unknown Artist',
+      artist: artist,
       duration: Duration(milliseconds: track.duration),
       artUri: artwork,
       extras: {

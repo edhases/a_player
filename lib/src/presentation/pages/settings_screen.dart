@@ -644,7 +644,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             );
           }),
-            ListTile(
+          ListTile(
               key: const Key('settings_clear_cache'),
               title: Text(loc.clearCache),
               subtitle: Text(loc.clearCacheDesc),
@@ -911,8 +911,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (!GetIt.I.isRegistered<LogService>()) return;
               final file = await GetIt.I<LogService>().getLogFile();
               if (file != null && context.mounted) {
-                await Share.shareXFiles([XFile(file.path)],
-                    text: 'Oxide Player Logs');
+                await SharePlus.instance.share(ShareParams(
+                  files: [XFile(file.path)],
+                  text: 'Oxide Player Logs',
+                ));
               }
             },
           ),
@@ -1295,10 +1297,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Navigator.pop(dialogContext);
 
                           if (file != null && context.mounted) {
-                            await Share.shareXFiles(
-                              [XFile(file.path)],
+                            await SharePlus.instance.share(ShareParams(
+                              files: [XFile(file.path)],
                               text: 'Oxide Player Backup',
-                            );
+                            ));
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(

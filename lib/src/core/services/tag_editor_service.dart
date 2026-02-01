@@ -24,8 +24,9 @@ class TagEditorService {
 
       // Ensure storage permissions
       if (!await _hasPermission(requestPermission)) {
-        if (requestPermission)
+        if (requestPermission) {
           debugPrint('[TagEditorService] Permission denied');
+        }
         return false;
       }
 

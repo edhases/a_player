@@ -1,7 +1,7 @@
 name: oxide_player
 description: "A new Flutter project."
 publish_to: 'none'
-version: 20260131.0.0
+version: 20260201.0.0+20260201
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -83,3 +83,4 @@ flutter:
   assets:
     - assets/audio/
     - assets/lang/
+    - assets/google_fonts/

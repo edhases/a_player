@@ -31,6 +31,30 @@ class CacheService {
     if (settings != null) {
       _maxCacheSize = settings.loadMaxCacheSize();
     }
+
+    // Clean up incomplete downloads (.tmp files) from previous sessions
+    await _cleanupTempFiles();
+  }
+
+  /// Remove incomplete download files left from interrupted caching
+  Future<void> _cleanupTempFiles() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final cacheDir = Directory(p.join(dir.path, 'songs_cache'));
+      if (await cacheDir.exists()) {
+        final tempFiles = cacheDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.tmp'));
+        for (final file in tempFiles) {
+          await file.delete();
+          debugPrint(
+              '[CacheService] Deleted incomplete temp file: ${file.path}');
+        }
+      }
+    } catch (e) {
+      debugPrint('[CacheService] Error cleaning temp files: $e');
+    }
   }
 
   Future<void> setMaxCacheSize(int bytes) {
@@ -280,7 +304,7 @@ class CacheService {
     } catch (e) {
       debugPrint('[CacheService] Error getting cache from disk: $e');
     }
-    
+
     // Fallback to DB records
     final allTracks = await (_db.select(_db.youTubeTracks)
           ..where((t) => t.downloadPath.isNotNull()))

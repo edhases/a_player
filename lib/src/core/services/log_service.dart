@@ -18,13 +18,13 @@ enum LogLevel {
 
 /// Error categories for structured logging
 enum ErrorCategory {
-  playback,    // Audio playback issues
-  network,     // Network/API errors
-  cache,       // Cache/storage issues
-  auth,        // Authentication errors
-  ui,          // UI/rendering errors
-  database,    // Database errors
-  general,     // Uncategorized errors
+  playback, // Audio playback issues
+  network, // Network/API errors
+  cache, // Cache/storage issues
+  auth, // Authentication errors
+  ui, // UI/rendering errors
+  database, // Database errors
+  general, // Uncategorized errors
 }
 
 /// Aggregated error entry for batching
@@ -38,9 +38,9 @@ class _AggregatedError {
   _AggregatedError({
     required this.category,
     required this.message,
-    this.count = 1,
     DateTime? time,
-  })  : firstOccurrence = time ?? DateTime.now(),
+  })  : count = 1,
+        firstOccurrence = time ?? DateTime.now(),
         lastOccurrence = time ?? DateTime.now();
 
   void increment() {
@@ -344,7 +344,8 @@ class LogService {
   /// Add error to aggregation buffer
   void _aggregateError(ErrorCategory category, String message) {
     // Create a simplified key (first 100 chars of message)
-    final shortMessage = message.length > 100 ? message.substring(0, 100) : message;
+    final shortMessage =
+        message.length > 100 ? message.substring(0, 100) : message;
     final key = '${category.name}:${shortMessage.hashCode}';
 
     if (_errorBuffer.containsKey(key)) {
@@ -379,7 +380,8 @@ class LogService {
       buffer.writeln('📱 <i>$deviceInfo</i>');
       buffer.writeln('🏷️ v$_appVersion+$_buildNumber');
       buffer.writeln('⏱️ Session: ${analytics.sessionDuration.inMinutes}min');
-      buffer.writeln('🎵 Songs: ${analytics.songsPlayed} | Errors: ${analytics.playbackErrors}');
+      buffer.writeln(
+          '🎵 Songs: ${analytics.songsPlayed} | Errors: ${analytics.playbackErrors}');
       buffer.writeln('');
 
       for (final category in byCategory.keys) {

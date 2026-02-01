@@ -6,8 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:intl/intl.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,9 +72,12 @@ class TestFile {
     this.duration,
   }) : tests = tests ?? [];
 
-  int get passedCount => tests.where((t) => t.status == TestStatus.passed).length;
-  int get failedCount => tests.where((t) => t.status == TestStatus.failed).length;
-  int get skippedCount => tests.where((t) => t.status == TestStatus.skipped).length;
+  int get passedCount =>
+      tests.where((t) => t.status == TestStatus.passed).length;
+  int get failedCount =>
+      tests.where((t) => t.status == TestStatus.failed).length;
+  int get skippedCount =>
+      tests.where((t) => t.status == TestStatus.skipped).length;
 }
 
 class TestCase {
@@ -116,13 +117,14 @@ class TestRunnerState extends ChangeNotifier {
   Future<void> _findProjectPath() async {
     // Find the project root (2 levels up from tools/test_runner_gui)
     var dir = Directory.current;
-    
+
     // Try to find pubspec.yaml of main project
     for (var i = 0; i < 5; i++) {
       final pubspec = File('${dir.path}/pubspec.yaml');
       if (pubspec.existsSync()) {
         final content = pubspec.readAsStringSync();
-        if (content.contains('oxide_player') || content.contains('name: a_player')) {
+        if (content.contains('oxide_player') ||
+            content.contains('name: a_player')) {
           projectPath = dir.path;
           await discoverTests();
           return;
@@ -130,7 +132,7 @@ class TestRunnerState extends ChangeNotifier {
       }
       dir = dir.parent;
     }
-    
+
     // Fallback to manual path
     projectPath = r'E:\Github\a_player';
     await discoverTests();
@@ -153,7 +155,7 @@ class TestRunnerState extends ChangeNotifier {
       }
 
       await _scanDirectory(testDir);
-      
+
       output += 'Found ${testFiles.length} test files\n';
       for (final file in testFiles) {
         output += '  - ${file.name}\n';
@@ -173,7 +175,7 @@ class TestRunnerState extends ChangeNotifier {
             .replaceAll(projectPath, '')
             .replaceAll('\\', '/')
             .replaceFirst('/', '');
-        
+
         testFiles.add(TestFile(
           name: entity.path.split(Platform.pathSeparator).last,
           path: relativePath,
@@ -184,14 +186,14 @@ class TestRunnerState extends ChangeNotifier {
 
   Future<void> runAllTests() async {
     if (isRunning) return;
-    
+
     isRunning = true;
     totalPassed = 0;
     totalFailed = 0;
     totalSkipped = 0;
     totalDuration = Duration.zero;
     output = '';
-    
+
     for (final file in testFiles) {
       file.status = TestStatus.pending;
       file.tests.clear();
@@ -206,14 +208,15 @@ class TestRunnerState extends ChangeNotifier {
 
     isRunning = false;
     output += '\n${'=' * 50}\n';
-    output += 'SUMMARY: ${totalPassed} passed, ${totalFailed} failed, ${totalSkipped} skipped\n';
+    output +=
+        'SUMMARY: $totalPassed passed, $totalFailed failed, $totalSkipped skipped\n';
     output += 'Total time: ${_formatDuration(totalDuration)}\n';
     notifyListeners();
   }
 
   Future<void> runSingleTest(TestFile file) async {
     if (isRunning) return;
-    
+
     isRunning = true;
     file.status = TestStatus.pending;
     file.tests.clear();
@@ -251,16 +254,17 @@ class TestRunnerState extends ChangeNotifier {
 
       if (file.failedCount > 0) {
         file.status = TestStatus.failed;
-        output += '❌ ${file.name}: ${file.passedCount} passed, ${file.failedCount} failed\n';
+        output +=
+            '❌ ${file.name}: ${file.passedCount} passed, ${file.failedCount} failed\n';
       } else {
         file.status = TestStatus.passed;
-        output += '✅ ${file.name}: ${file.passedCount} passed (${_formatDuration(file.duration!)})\n';
+        output +=
+            '✅ ${file.name}: ${file.passedCount} passed (${_formatDuration(file.duration!)})\n';
       }
 
       totalPassed += file.passedCount;
       totalFailed += file.failedCount;
       totalSkipped += file.skippedCount;
-
     } catch (e) {
       stopwatch.stop();
       file.status = TestStatus.failed;
@@ -273,20 +277,20 @@ class TestRunnerState extends ChangeNotifier {
 
   void _parseJsonOutput(String jsonOutput, TestFile file) {
     final lines = jsonOutput.split('\n');
-    
+
     for (final line in lines) {
       if (line.trim().isEmpty) continue;
-      
+
       try {
         final event = json.decode(line) as Map<String, dynamic>;
         final type = event['type'] as String?;
-        
+
         if (type == 'testStart') {
           final test = event['test'] as Map<String, dynamic>?;
           if (test != null) {
             final name = test['name'] as String? ?? 'Unknown';
             final groupIDs = test['groupIDs'] as List?;
-            
+
             file.tests.add(TestCase(
               name: name,
               status: TestStatus.running,
@@ -295,7 +299,7 @@ class TestRunnerState extends ChangeNotifier {
         } else if (type == 'testDone') {
           final result = event['result'] as String?;
           final testID = event['testID'] as int?;
-          
+
           if (file.tests.isNotEmpty) {
             final test = file.tests.last;
             if (result == 'success') {
@@ -360,7 +364,7 @@ class TestRunnerScreen extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     final state = context.watch<TestRunnerState>();
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -389,8 +393,8 @@ class TestRunnerScreen extends StatelessWidget {
               Text(
                 state.projectPath,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
               ),
             ],
           ),
@@ -451,7 +455,7 @@ class TestRunnerScreen extends StatelessWidget {
         const SizedBox(width: 8),
         IconButton(
           onPressed: state.isRunning ? null : state.discoverTests,
-          icon: state.isDiscovering 
+          icon: state.isDiscovering
               ? const SizedBox(
                   width: 20,
                   height: 20,
@@ -511,7 +515,7 @@ class TestFilesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<TestRunnerState>();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -553,7 +557,7 @@ class _TestFileItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<TestRunnerState>();
-    
+
     return ExpansionTile(
       leading: _buildStatusIcon(),
       title: Text(
@@ -657,7 +661,7 @@ class OutputPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<TestRunnerState>();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -696,7 +700,9 @@ class OutputPanel extends StatelessWidget {
             color: Colors.black87,
             padding: const EdgeInsets.all(12),
             child: SelectableText(
-              state.output.isEmpty ? 'Click "Run All" to start tests...' : state.output,
+              state.output.isEmpty
+                  ? 'Click "Run All" to start tests...'
+                  : state.output,
               style: const TextStyle(
                 fontFamily: 'Consolas',
                 fontSize: 12,

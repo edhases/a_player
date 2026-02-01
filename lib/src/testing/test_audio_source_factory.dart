@@ -2,12 +2,9 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../core/services/audio_source_factory.dart';
-import '../core/services/cache_service.dart';
-import '../core/services/youtube_helper.dart';
 
 class TestAudioSourceFactory extends AudioSourceFactory {
-  TestAudioSourceFactory(YouTubeHelper ytHelper, CacheService cacheService)
-      : super(ytHelper, cacheService);
+  TestAudioSourceFactory(super.ytHelper, super.cacheService);
 
   @override
   Future<AudioSource> createSource(MediaItem item) async {

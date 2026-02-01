@@ -29,7 +29,8 @@ class Tracks extends Table {
   BoolColumn get isExcluded => boolean().withDefault(const Constant(false))();
 
   @override
-  Set<Column> get primaryKey => {path}; // Use proper PRIMARY KEY instead of uniqueKeys
+  Set<Column> get primaryKey =>
+      {path}; // Use proper PRIMARY KEY instead of uniqueKeys
 }
 
 // YouTube track table for caching metadata and offline support
@@ -38,6 +39,7 @@ class Tracks extends Table {
 @TableIndex(name: 'idx_yt_downloaded', columns: {#downloadPath})
 @TableIndex(name: 'idx_yt_lastPlayed', columns: {#lastPlayed})
 @TableIndex(name: 'idx_yt_cachedAt', columns: {#cachedAt})
+@TableIndex(name: 'idx_yt_pendingCache', columns: {#pendingCache})
 class YouTubeTracks extends Table {
   TextColumn get videoId => text()();
   TextColumn get title => text()();
@@ -51,6 +53,8 @@ class YouTubeTracks extends Table {
   DateTimeColumn get cachedAt => dateTime()(); // When metadata was cached
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
   DateTimeColumn get likedAt => dateTime().nullable()();
+  // Track if this song is pending caching (survives app restart)
+  BoolColumn get pendingCache => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {videoId};
@@ -137,7 +141,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -179,17 +183,41 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 13) {
             // Add indices for better query performance
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks (folder_path)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks (album)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks (artist)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_favorite ON tracks (is_favorite, last_played)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_tracks_excluded ON tracks (is_excluded)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_favorite ON you_tube_tracks (is_favorite, liked_at)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_downloaded ON you_tube_tracks (download_path)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_lastPlayed ON you_tube_tracks (last_played)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_yt_cachedAt ON you_tube_tracks (cached_at)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_playback_video ON playback_log (video_id)');
-            await customStatement('CREATE INDEX IF NOT EXISTS idx_playback_playedAt ON playback_log (played_at)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks (folder_path)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks (album)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks (artist)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_tracks_favorite ON tracks (is_favorite, last_played)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_tracks_excluded ON tracks (is_excluded)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_yt_favorite ON you_tube_tracks (is_favorite, liked_at)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_yt_downloaded ON you_tube_tracks (download_path)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_yt_lastPlayed ON you_tube_tracks (last_played)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_yt_cachedAt ON you_tube_tracks (cached_at)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_playback_video ON playback_log (video_id)');
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_playback_playedAt ON playback_log (played_at)');
+          }
+          if (from < 14) {
+            // Add pendingCache column for reliable cache queue persistence
+            await m.addColumn(youTubeTracks, youTubeTracks.pendingCache);
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_yt_pendingCache ON you_tube_tracks (pending_cache)');
+          }
+          if (from < 15) {
+            // Fix empty string artist/album in existing tracks - convert to NULL
+            await customStatement(
+                'UPDATE tracks SET artist = NULL WHERE artist = \'\'');
+            await customStatement(
+                'UPDATE tracks SET album = NULL WHERE album = \'\'');
           }
         },
       );
@@ -460,6 +488,7 @@ LazyDatabase _openConnection() {
     final dbFolder = await getApplicationDocumentsDirectory();
     final file = File(p.join(dbFolder.path, 'db.sqlite'));
     return NativeDatabase(file, setup: (db) {
+      db.execute('PRAGMA journal_mode=WAL'); // Better concurrency
       db.execute('PRAGMA foreign_keys = ON');
     });
   });

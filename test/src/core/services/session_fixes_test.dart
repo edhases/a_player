@@ -206,14 +206,14 @@ void main() {
     test('webm container is detected correctly', () {
       // Simulates the logic from cacheTrack method
       String? container = 'webm';
-      final extension = (container?.toLowerCase() == 'webm') ? 'webm' : 'm4a';
+      final extension = (container.toLowerCase() == 'webm') ? 'webm' : 'm4a';
 
       expect(extension, 'webm');
     });
 
     test('mp4 container maps to m4a extension', () {
       String? container = 'mp4';
-      final extension = (container?.toLowerCase() == 'webm') ? 'webm' : 'm4a';
+      final extension = (container.toLowerCase() == 'webm') ? 'webm' : 'm4a';
 
       expect(extension, 'm4a');
     });

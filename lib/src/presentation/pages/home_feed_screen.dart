@@ -243,7 +243,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         final db = GetIt.I<AppDatabase>();
         final track = await (db.select(
           db.tracks,
-        )..where((t) => t.path.equals(path))).getSingleOrNull();
+        )..where((t) => t.path.equals(path)))
+            .getSingleOrNull();
 
         if (track != null) {
           final audioHandler = GetIt.I<MyAudioHandler>();
@@ -450,18 +451,22 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     final slivers = <Widget>[];
 
     final rawTitle = section.title;
-    final sectionKey = 'home_section_${rawTitle.toLowerCase().replaceAll(RegExp(r'\s+'), '_')}'
-        .replaceAll(RegExp(r'[^a-z0-9_]+'), '');
+    final sectionKey =
+        'home_section_${rawTitle.toLowerCase().replaceAll(RegExp(r'\s+'), '_')}'
+            .replaceAll(RegExp(r'[^a-z0-9_]+'), '');
 
     // Localize Title
     String title = section.title;
     final loc = AppLocalizations.of(context);
-    if (title == 'liked_songs')
-      title = loc.likedSongs;
-    else if (title == 'your_local_music')
-      title = loc.yourLocalMusic;
-    else if (title == 'radio_stations')
-      title = loc.radio; // Or 'radio_stations' key
+    // Локалізація назв секцій
+    switch (title) {
+      case 'liked_songs':
+        title = loc.likedSongs;
+      case 'your_local_music':
+        title = loc.yourLocalMusic;
+      case 'radio_stations':
+        title = loc.radio;
+    }
     // else, assume it's "Made For You" or other dynamic title, or simple string.
 
     // Section Header
@@ -477,9 +482,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   title,
                   key: ValueKey(sectionKey),
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 22,
-                  ),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                      ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

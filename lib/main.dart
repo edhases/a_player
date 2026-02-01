@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'src/app.dart';
 import 'src/core/services/app_initializer.dart';
@@ -12,6 +13,10 @@ import 'src/core/utils/test_overrides.dart';
 void main() async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+
+    // Disable Google Fonts HTTP fetching to prevent network errors
+    // This makes the app use bundled fonts or system fallback
+    GoogleFonts.config.allowRuntimeFetching = false;
 
     // Set system UI overlay style
     SystemChrome.setSystemUIOverlayStyle(

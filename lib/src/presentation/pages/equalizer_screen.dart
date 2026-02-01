@@ -130,7 +130,7 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
       valueListenable: eq.currentPreset,
       builder: (context, currentPreset, child) {
         return DropdownButtonFormField<String>(
-          value: eq.presetNames.contains(currentPreset)
+          initialValue: eq.presetNames.contains(currentPreset)
               ? currentPreset
               : eq.presetNames.first,
           decoration: InputDecoration(

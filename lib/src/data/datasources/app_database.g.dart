@@ -642,6 +642,16 @@ class $YouTubeTracksTable extends YouTubeTracks
   late final GeneratedColumn<DateTime> likedAt = GeneratedColumn<DateTime>(
       'liked_at', aliasedName, true,
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _pendingCacheMeta =
+      const VerificationMeta('pendingCache');
+  @override
+  late final GeneratedColumn<bool> pendingCache = GeneratedColumn<bool>(
+      'pending_cache', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("pending_cache" IN (0, 1))'),
+      defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns => [
         videoId,
@@ -654,7 +664,8 @@ class $YouTubeTracksTable extends YouTubeTracks
         lastPlayed,
         cachedAt,
         isFavorite,
-        likedAt
+        likedAt,
+        pendingCache
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -730,6 +741,12 @@ class $YouTubeTracksTable extends YouTubeTracks
       context.handle(_likedAtMeta,
           likedAt.isAcceptableOrUnknown(data['liked_at']!, _likedAtMeta));
     }
+    if (data.containsKey('pending_cache')) {
+      context.handle(
+          _pendingCacheMeta,
+          pendingCache.isAcceptableOrUnknown(
+              data['pending_cache']!, _pendingCacheMeta));
+    }
     return context;
   }
 
@@ -761,6 +778,8 @@ class $YouTubeTracksTable extends YouTubeTracks
           .read(DriftSqlType.bool, data['${effectivePrefix}is_favorite'])!,
       likedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}liked_at']),
+      pendingCache: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}pending_cache'])!,
     );
   }
 
@@ -782,6 +801,7 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
   final DateTime cachedAt;
   final bool isFavorite;
   final DateTime? likedAt;
+  final bool pendingCache;
   const YouTubeTrack(
       {required this.videoId,
       required this.title,
@@ -793,7 +813,8 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       this.lastPlayed,
       required this.cachedAt,
       required this.isFavorite,
-      this.likedAt});
+      this.likedAt,
+      required this.pendingCache});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -816,6 +837,7 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
     if (!nullToAbsent || likedAt != null) {
       map['liked_at'] = Variable<DateTime>(likedAt);
     }
+    map['pending_cache'] = Variable<bool>(pendingCache);
     return map;
   }
 
@@ -840,6 +862,7 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       likedAt: likedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(likedAt),
+      pendingCache: Value(pendingCache),
     );
   }
 
@@ -858,6 +881,7 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
       isFavorite: serializer.fromJson<bool>(json['isFavorite']),
       likedAt: serializer.fromJson<DateTime?>(json['likedAt']),
+      pendingCache: serializer.fromJson<bool>(json['pendingCache']),
     );
   }
   @override
@@ -875,6 +899,7 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       'cachedAt': serializer.toJson<DateTime>(cachedAt),
       'isFavorite': serializer.toJson<bool>(isFavorite),
       'likedAt': serializer.toJson<DateTime?>(likedAt),
+      'pendingCache': serializer.toJson<bool>(pendingCache),
     };
   }
 
@@ -889,7 +914,8 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
           Value<DateTime?> lastPlayed = const Value.absent(),
           DateTime? cachedAt,
           bool? isFavorite,
-          Value<DateTime?> likedAt = const Value.absent()}) =>
+          Value<DateTime?> likedAt = const Value.absent(),
+          bool? pendingCache}) =>
       YouTubeTrack(
         videoId: videoId ?? this.videoId,
         title: title ?? this.title,
@@ -903,6 +929,7 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
         cachedAt: cachedAt ?? this.cachedAt,
         isFavorite: isFavorite ?? this.isFavorite,
         likedAt: likedAt.present ? likedAt.value : this.likedAt,
+        pendingCache: pendingCache ?? this.pendingCache,
       );
   YouTubeTrack copyWithCompanion(YouTubeTracksCompanion data) {
     return YouTubeTrack(
@@ -923,6 +950,9 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       isFavorite:
           data.isFavorite.present ? data.isFavorite.value : this.isFavorite,
       likedAt: data.likedAt.present ? data.likedAt.value : this.likedAt,
+      pendingCache: data.pendingCache.present
+          ? data.pendingCache.value
+          : this.pendingCache,
     );
   }
 
@@ -939,7 +969,8 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
           ..write('lastPlayed: $lastPlayed, ')
           ..write('cachedAt: $cachedAt, ')
           ..write('isFavorite: $isFavorite, ')
-          ..write('likedAt: $likedAt')
+          ..write('likedAt: $likedAt, ')
+          ..write('pendingCache: $pendingCache')
           ..write(')'))
         .toString();
   }
@@ -956,7 +987,8 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
       lastPlayed,
       cachedAt,
       isFavorite,
-      likedAt);
+      likedAt,
+      pendingCache);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -971,7 +1003,8 @@ class YouTubeTrack extends DataClass implements Insertable<YouTubeTrack> {
           other.lastPlayed == this.lastPlayed &&
           other.cachedAt == this.cachedAt &&
           other.isFavorite == this.isFavorite &&
-          other.likedAt == this.likedAt);
+          other.likedAt == this.likedAt &&
+          other.pendingCache == this.pendingCache);
 }
 
 class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
@@ -986,6 +1019,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
   final Value<DateTime> cachedAt;
   final Value<bool> isFavorite;
   final Value<DateTime?> likedAt;
+  final Value<bool> pendingCache;
   final Value<int> rowid;
   const YouTubeTracksCompanion({
     this.videoId = const Value.absent(),
@@ -999,6 +1033,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     this.cachedAt = const Value.absent(),
     this.isFavorite = const Value.absent(),
     this.likedAt = const Value.absent(),
+    this.pendingCache = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   YouTubeTracksCompanion.insert({
@@ -1013,6 +1048,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     required DateTime cachedAt,
     this.isFavorite = const Value.absent(),
     this.likedAt = const Value.absent(),
+    this.pendingCache = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : videoId = Value(videoId),
         title = Value(title),
@@ -1032,6 +1068,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     Expression<DateTime>? cachedAt,
     Expression<bool>? isFavorite,
     Expression<DateTime>? likedAt,
+    Expression<bool>? pendingCache,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1046,6 +1083,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
       if (cachedAt != null) 'cached_at': cachedAt,
       if (isFavorite != null) 'is_favorite': isFavorite,
       if (likedAt != null) 'liked_at': likedAt,
+      if (pendingCache != null) 'pending_cache': pendingCache,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1062,6 +1100,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
       Value<DateTime>? cachedAt,
       Value<bool>? isFavorite,
       Value<DateTime?>? likedAt,
+      Value<bool>? pendingCache,
       Value<int>? rowid}) {
     return YouTubeTracksCompanion(
       videoId: videoId ?? this.videoId,
@@ -1075,6 +1114,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
       cachedAt: cachedAt ?? this.cachedAt,
       isFavorite: isFavorite ?? this.isFavorite,
       likedAt: likedAt ?? this.likedAt,
+      pendingCache: pendingCache ?? this.pendingCache,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1115,6 +1155,9 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
     if (likedAt.present) {
       map['liked_at'] = Variable<DateTime>(likedAt.value);
     }
+    if (pendingCache.present) {
+      map['pending_cache'] = Variable<bool>(pendingCache.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1135,6 +1178,7 @@ class YouTubeTracksCompanion extends UpdateCompanion<YouTubeTrack> {
           ..write('cachedAt: $cachedAt, ')
           ..write('isFavorite: $isFavorite, ')
           ..write('likedAt: $likedAt, ')
+          ..write('pendingCache: $pendingCache, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2236,6 +2280,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       'CREATE INDEX idx_yt_lastPlayed ON you_tube_tracks (last_played)');
   late final Index idxYtCachedAt = Index('idx_yt_cachedAt',
       'CREATE INDEX idx_yt_cachedAt ON you_tube_tracks (cached_at)');
+  late final Index idxYtPendingCache = Index('idx_yt_pendingCache',
+      'CREATE INDEX idx_yt_pendingCache ON you_tube_tracks (pending_cache)');
   late final Index idxPlaybackVideo = Index('idx_playback_video',
       'CREATE INDEX idx_playback_video ON playback_log (video_id)');
   late final Index idxPlaybackPlayedAt = Index('idx_playback_playedAt',
@@ -2260,6 +2306,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         idxYtDownloaded,
         idxYtLastPlayed,
         idxYtCachedAt,
+        idxYtPendingCache,
         idxPlaybackVideo,
         idxPlaybackPlayedAt
       ];

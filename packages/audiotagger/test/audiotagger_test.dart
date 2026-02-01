@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:audiotagger/models/audiofile.dart';
 import 'package:audiotagger/models/tag.dart';
 import 'package:flutter/services.dart';

@@ -261,7 +261,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 key: const Key('player_like_button'),
                 icon: Icon(
                   isLiked ? Icons.favorite : Icons.favorite_border,
-                  color: isLiked ? context.appColors.error : context.appColors.textSecondary,
+                  color: isLiked
+                      ? context.appColors.error
+                      : context.appColors.textSecondary,
                   size: 28,
                 ),
                 onPressed: () {
@@ -288,7 +290,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
           return IconButton(
             icon: Icon(
               isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: isFavorite ? context.appColors.error : context.appColors.textSecondary,
+              color: isFavorite
+                  ? context.appColors.error
+                  : context.appColors.textSecondary,
               size: 28,
             ),
             onPressed: () => db.toggleFavorite(mediaItem.id),
@@ -305,7 +309,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         Text(
           mediaItem.title,
           style: TextStyle(
-              fontSize: 24, fontWeight: FontWeight.bold, color: context.appColors.textPrimary),
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: context.appColors.textPrimary),
           textAlign: TextAlign.start,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -314,91 +320,75 @@ class _PlayerScreenState extends State<PlayerScreen> {
         GestureDetector(
           key: const Key('player_artist_link'),
           onTap: () async {
-            // Handle Artist Tap
+            // Handle Artist Tap - always search on YouTube regardless of track source
             debugPrint(
                 '[PlayerScreen] Artist tapped. Extras: ${mediaItem.extras}');
-            
-            // Check if it's a YouTube track (online or from liked songs)
-            final isOnline = mediaItem.extras?['isOnline'] == true;
-            final isYouTube = mediaItem.extras?['isYouTube'] == true;
-            final videoId = mediaItem.extras?['videoId'] as String?;
-            final hasValidVideoId = videoId != null && videoId.length == 11;
-            
-            // Consider it as YouTube content if any of these are true
-            final isYouTubeContent = isOnline || isYouTube || hasValidVideoId;
-            debugPrint('[PlayerScreen] isOnline: $isOnline, isYouTube: $isYouTube, hasValidVideoId: $hasValidVideoId');
-            
-            if (isYouTubeContent) {
-              var artistId = mediaItem.extras?['artistId'] as String?;
-              debugPrint('[PlayerScreen] artistId from extras: $artistId');
-              
-              // If no artistId, try to find it by searching
-              if (artistId == null && mediaItem.artist != null) {
-                debugPrint('[PlayerScreen] Searching for artist: ${mediaItem.artist}');
-                
-                // Show loading indicator
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(AppLocalizations.of(context).translate('searching_artist')),
-                        ],
-                      ),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                }
-                
-                try {
-                  final innerTube = GetIt.I<InnerTubeService>();
-                  artistId = await innerTube.findArtistId(mediaItem.artist!);
-                  debugPrint('[PlayerScreen] Found artistId: $artistId');
-                } catch (e) {
-                  debugPrint('[PlayerScreen] Artist search error: $e');
-                }
-                
-                // Hide loading snackbar
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                }
-              }
-              
-              if (artistId != null && context.mounted) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PlaylistTracksScreen(
-                      playlistId: artistId!,
-                      title: mediaItem.artist ?? 'Artist',
-                      knownArtist: mediaItem.artist,
-                      isArtistPage: true,
-                    ),
-                  ),
-                );
-              } else if (context.mounted) {
+
+            if (mediaItem.artist == null || mediaItem.artist!.isEmpty) {
+              return;
+            }
+
+            // Get artistId from extras if available (for YouTube tracks)
+            var artistId = mediaItem.extras?['artistId'] as String?;
+            debugPrint('[PlayerScreen] artistId from extras: $artistId');
+
+            // If no artistId, search for it on YouTube
+            if (artistId == null) {
+              debugPrint(
+                  '[PlayerScreen] Searching for artist: ${mediaItem.artist}');
+
+              // Show loading indicator
+              if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                      content: Text(
-                          AppLocalizations.of(context).artistPageUnavailable)),
+                    content: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(AppLocalizations.of(context)
+                            .translate('searching_artist')),
+                      ],
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
                 );
               }
-            } else {
-              // Local Artist
+
+              try {
+                final innerTube = GetIt.I<InnerTubeService>();
+                artistId = await innerTube.findArtistId(mediaItem.artist!);
+                debugPrint('[PlayerScreen] Found artistId: $artistId');
+              } catch (e) {
+                debugPrint('[PlayerScreen] Artist search error: $e');
+              }
+
+              // Hide loading snackbar
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              }
+            }
+
+            if (artistId != null && context.mounted) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => DetailScreen(
-                    type: DetailScreenType.artist,
-                    title: mediaItem.artist ?? 'Unknown',
+                  builder: (context) => PlaylistTracksScreen(
+                    playlistId: artistId!,
+                    title: mediaItem.artist ?? 'Artist',
+                    knownArtist: mediaItem.artist,
+                    isArtistPage: true,
                   ),
                 ),
+              );
+            } else if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(
+                        AppLocalizations.of(context).artistPageUnavailable)),
               );
             }
           },
@@ -529,7 +519,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
             ),
             IconButton(
               key: const Key('player_next_button'),
-              icon: Icon(Icons.skip_next, color: context.appColors.textPrimary, size: 45),
+              icon: Icon(Icons.skip_next,
+                  color: context.appColors.textPrimary, size: 45),
               onPressed: () => playerBloc.add(PlayerSkipNext()),
             ),
             IconButton(
@@ -559,13 +550,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             IconButton(
-                icon: Icon(Icons.equalizer, color: context.appColors.textSecondary),
+                icon: Icon(Icons.equalizer,
+                    color: context.appColors.textSecondary),
                 onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
                         builder: (context) => const EqualizerScreen()))),
             IconButton(
-                icon: Icon(Icons.lyrics_outlined, color: context.appColors.textSecondary),
+                icon: Icon(Icons.lyrics_outlined,
+                    color: context.appColors.textSecondary),
                 tooltip: AppLocalizations.of(context).lyrics,
                 onPressed: () {
                   final mediaItem = state.mediaItem;
@@ -574,10 +567,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   }
                 }),
             IconButton(
-                icon: Icon(Icons.playlist_play, color: context.appColors.textSecondary),
+                icon: Icon(Icons.playlist_play,
+                    color: context.appColors.textSecondary),
                 onPressed: () => QueueSheet.show(context)),
             IconButton(
-                icon: Icon(Icons.info_outline, color: context.appColors.textSecondary),
+                icon: Icon(Icons.info_outline,
+                    color: context.appColors.textSecondary),
                 onPressed: () {
                   _showDetailsSheet(context, state.mediaItem);
                 }),
@@ -597,92 +592,96 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (context) {
         final colors = context.appColors;
         return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            key: const Key('player_download_action'),
-            leading: Icon(Icons.download, color: colors.textPrimary),
-            title:
-                Text(loc.download, style: TextStyle(color: colors.textPrimary)),
-            onTap: () async {
-              Navigator.pop(context); // Close sheet
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('player_download_action'),
+              leading: Icon(Icons.download, color: colors.textPrimary),
+              title: Text(loc.download,
+                  style: TextStyle(color: colors.textPrimary)),
+              onTap: () async {
+                Navigator.pop(context); // Close sheet
 
-              if (mediaItem == null || mediaItem.extras?['videoId'] == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(loc.cannotDownload)),
-                );
-                return;
-              }
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(loc.startingDownload)),
-              );
-
-              try {
-                final videoId = mediaItem.extras!['videoId'] as String;
-                final ytHelper = GetIt.I<YouTubeHelper>();
-                final audioData = await ytHelper.getAudioUrlWithAgent(videoId);
-
-                if (audioData != null) {
-                  await GetIt.I<CacheService>().cacheTrack(
-                    videoId: videoId,
-                    url: audioData['url']!,
-                    title: mediaItem.title,
-                    artist: mediaItem.artist ?? 'Unknown',
-                    thumbnailUrl: mediaItem.artUri?.toString() ?? '',
-                    container: audioData['container'],
+                if (mediaItem == null || mediaItem.extras?['videoId'] == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(loc.cannotDownload)),
                   );
+                  return;
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(loc.startingDownload)),
+                );
+
+                try {
+                  final videoId = mediaItem.extras!['videoId'] as String;
+                  final ytHelper = GetIt.I<YouTubeHelper>();
+                  final audioData =
+                      await ytHelper.getAudioUrlWithAgent(videoId);
+
+                  if (audioData != null) {
+                    await GetIt.I<CacheService>().cacheTrack(
+                      videoId: videoId,
+                      url: audioData['url']!,
+                      title: mediaItem.title,
+                      artist: mediaItem.artist ?? 'Unknown',
+                      thumbnailUrl: mediaItem.artUri?.toString() ?? '',
+                      container: audioData['container'],
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text(loc.translate('downloaded',
+                                args: {'title': mediaItem.title}))),
+                      );
+                    }
+                  } else {
+                    throw Exception('Could not get audio URL');
+                  }
+                } catch (e) {
+                  debugPrint('Download error: $e');
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                          content: Text(loc.translate('downloaded',
-                              args: {'title': mediaItem.title}))),
+                          content: Text(loc.translate('download_error',
+                              args: {'error': e}))),
                     );
                   }
+                }
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.timer, color: colors.textPrimary),
+              title: Text(loc.sleepTimer,
+                  style: TextStyle(color: colors.textPrimary)),
+              onTap: () {
+                Navigator.pop(context); // Close options sheet first
+                _showSleepTimerDialog(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.share, color: colors.textPrimary),
+              title: Text(loc.shareTrack,
+                  style: TextStyle(color: colors.textPrimary)),
+              onTap: () async {
+                Navigator.pop(context);
+                final videoId = mediaItem?.extras?['videoId'] as String?;
+                if (videoId != null && videoId.length == 11) {
+                  final url = 'https://music.youtube.com/watch?v=$videoId';
+                  await SharePlus.instance.share(ShareParams(
+                      text: url, title: mediaItem?.title ?? 'Track'));
                 } else {
-                  throw Exception('Could not get audio URL');
+                  // For local tracks, share title/artist info
+                  final title = mediaItem?.title ?? 'Unknown';
+                  final artist = mediaItem?.artist ?? 'Unknown';
+                  await SharePlus.instance
+                      .share(ShareParams(text: '$title - $artist'));
                 }
-              } catch (e) {
-                debugPrint('Download error: $e');
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(loc
-                            .translate('download_error', args: {'error': e}))),
-                  );
-                }
-              }
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.timer, color: colors.textPrimary),
-            title: Text(loc.sleepTimer,
-                style: TextStyle(color: colors.textPrimary)),
-            onTap: () {
-              Navigator.pop(context); // Close options sheet first
-              _showSleepTimerDialog(context);
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.share, color: colors.textPrimary),
-            title: Text(loc.shareTrack,
-                style: TextStyle(color: colors.textPrimary)),
-            onTap: () async {
-              Navigator.pop(context);
-              final videoId = mediaItem?.extras?['videoId'] as String?;
-              if (videoId != null && videoId.length == 11) {
-                final url = 'https://music.youtube.com/watch?v=$videoId';
-                await Share.share(url, subject: mediaItem?.title ?? 'Track');
-              } else {
-                // For local tracks, share title/artist info
-                final title = mediaItem?.title ?? 'Unknown';
-                final artist = mediaItem?.artist ?? 'Unknown';
-                await Share.share('$title - $artist');
-              }
-            },
-          ),
-        ],
-      );},
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -706,10 +705,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
           children: [
             _detailRow(context, AppLocalizations.of(context).trackDetails,
                 item.title), // Title is title
-            _detailRow(context,
-                AppLocalizations.of(context).artists, item.artist ?? 'Unknown'),
-            _detailRow(context,
-                AppLocalizations.of(context).albums, item.album ?? 'Unknown'),
+            _detailRow(context, AppLocalizations.of(context).artists,
+                item.artist ?? 'Unknown'),
+            _detailRow(context, AppLocalizations.of(context).albums,
+                item.album ?? 'Unknown'),
             _detailRow(context, AppLocalizations.of(context).path, item.id),
           ],
         ),

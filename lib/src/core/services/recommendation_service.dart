@@ -184,8 +184,8 @@ class RecommendationService {
             }
           }
 
-          sections.add(
-              HomeSection(title: displayTitle, songs: songs, type: type));
+          sections
+              .add(HomeSection(title: displayTitle, songs: songs, type: type));
         }
 
         return sections;
@@ -301,13 +301,13 @@ class RecommendationService {
   Future<List<YouTubeSong>> _fetchTrendingMusic() async {
     try {
       // Search for "Global Top Songs" instead of generic hits to get more tracks
-      // Fetch more items to ensure we have enough of both
-      final search = await _yt.search.getVideos("Global Top Songs");
+      // Uses the new SearchClient.search() API instead of deprecated getVideos()
+      final searchResults = await _yt.search.search("Global Top Songs");
 
       final List<YouTubeSong> songs = [];
 
       int count = 0;
-      for (final video in search) {
+      for (final video in searchResults) {
         if (count >= 50) break; // Limit processing
         count++;
 

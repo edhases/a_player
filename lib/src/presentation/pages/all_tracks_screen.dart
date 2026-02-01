@@ -116,8 +116,20 @@ Future<void> _playQueue(
   final subset = tracks.sublist(start, end);
   final relativeIndex = startIndex - start;
 
+  // Get overrides for the subset
+  final db = GetIt.I<AppDatabase>();
+  final paths = subset.map((t) => t.path).toList();
+  final overridesQuery = await (db.select(db.trackOverrides)
+        ..where((tbl) => tbl.filePath.isIn(paths)))
+      .get();
+
+  final overridesMap = <String, TrackOverride>{
+    for (var o in overridesQuery) o.filePath: o
+  };
+
   final mediaItems = subset.map((track) {
-    return MediaItemAdapter.fromTrack(track);
+    final override = overridesMap[track.path];
+    return MediaItemAdapter.fromTrack(track, override);
   }).toList();
 
   await audioHandler.setShuffleMode(AudioServiceShuffleMode.none);

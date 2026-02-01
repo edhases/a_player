@@ -156,6 +156,7 @@
     "need_playlists": "• Möglichkeit, Ihre Wiedergabelisten zu laden",
     "need_cookies": "• Sichere Cookie-Speicherung für Offline-Zugriff",
     "lyrics": "Liedtext",
+    "loading_lyrics": "Liedtext wird geladen...",
     "no_lyrics_found": "Kein Liedtext gefunden",
     "error_loading_lyrics": "Fehler beim Laden des Textes",
     "manual_title": "Benutzerhandbuch",

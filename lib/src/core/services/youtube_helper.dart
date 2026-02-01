@@ -26,13 +26,13 @@ class YouTubeHelper {
     if (_urlCache.containsKey(videoId)) {
       _cacheOrder.remove(videoId);
     }
-    
+
     // Evict oldest entries if cache is full
     while (_urlCache.length >= _maxCacheSize && _cacheOrder.isNotEmpty) {
       final oldest = _cacheOrder.removeAt(0);
       _urlCache.remove(oldest);
     }
-    
+
     _urlCache[videoId] = cached;
     _cacheOrder.add(videoId);
   }
@@ -90,11 +90,13 @@ class YouTubeHelper {
           '[YouTubeHelper] Selected: ${audioStream.codec.subtype} @ ${audioStream.bitrate.kiloBitsPerSecond.toStringAsFixed(0)} kbps');
 
       // Save to LRU cache (default TTL 45 min)
-      _addToCache(videoId, _CachedUrl(
-        url: url,
-        expiry: now
-            .add(const Duration(minutes: 45)), // slightly less than typical 1h
-      ));
+      _addToCache(
+          videoId,
+          _CachedUrl(
+            url: url,
+            expiry: now.add(
+                const Duration(minutes: 45)), // slightly less than typical 1h
+          ));
 
       return url;
     } catch (e) {
@@ -157,10 +159,12 @@ class YouTubeHelper {
           'container: $container, size: ${audioStream.size.totalMegaBytes.toStringAsFixed(1)} MB');
 
       // Add to LRU cache
-      _addToCache(videoId, _CachedUrl(
-        url: url,
-        expiry: now.add(const Duration(minutes: 45)),
-      ));
+      _addToCache(
+          videoId,
+          _CachedUrl(
+            url: url,
+            expiry: now.add(const Duration(minutes: 45)),
+          ));
 
       return {
         'url': url,
@@ -393,7 +397,8 @@ class YouTubeHelper {
         downloadPath: null,
         lastPlayed: null,
         cachedAt: DateTime.now(),
-        isFavorite: false, // Added missing required parameter
+        isFavorite: false,
+        pendingCache: false,
       ));
 
       debugPrint('[YouTubeHelper] Metadata cached successfully');

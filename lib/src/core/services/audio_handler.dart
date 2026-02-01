@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:get_it/get_it.dart';
-import 'package:rxdart/rxdart.dart';
 import 'package:collection/collection.dart';
 import 'package:audio_session/audio_session.dart';
 import '../../data/datasources/app_database.dart';
@@ -16,21 +15,79 @@ import 'log_service.dart';
 import '../../domain/entities/youtube_song.dart';
 import '../utils/media_item_adapter.dart';
 import 'audio_source_factory.dart';
+import 'youtube_audio_source.dart';
 import '../../core/services/recommendation_service.dart';
 import '../../core/services/metadata_matching_service.dart';
 import '../../core/services/innertube/innertube.dart';
 import 'prefetch_manager.dart';
 import 'audio/audio.dart';
 
-/// The main audio handler that bridges just_audio with audio_service.
+/// Головний аудіо-хендлер, що поєднує just_audio з audio_service.
+///
+/// ## Архітектура
+///
+/// `MyAudioHandler` є центральним сервісом для управління відтворенням аудіо.
+/// Він реалізує шаблон [BaseAudioHandler] з audio_service та інтегрує:
+///
+/// - **just_audio** — низькорівневе відтворення аудіо
+/// - **audio_service** — системні медіа-контролі (notification, lock screen)
+/// - **audio_session** — управління аудіо-сесією Android/iOS
+///
+/// ## Залежності (DI)
+///
+/// Всі залежності інжектуються через конструктор для тестування:
+///
+/// | Сервіс | Призначення |
+/// |--------|-------------|
+/// | [AppDatabase] | Збереження історії відтворення |
+/// | [SettingsService] | Налаштування користувача |
+/// | [AudioSourceFactory] | Створення аудіо-джерел |
+/// | [RecommendationService] | Рекомендації треків |
+/// | [InnerTubeService] | YouTube API |
+/// | [MetadataMatchingService]? | Пошук метаданих (опційно) |
+/// | [PrefetchManager]? | Попередня буферизація (опційно) |
+/// | [WidgetService]? | Віджет головного екрану (опційно) |
+/// | [TagEditorService]? | Редагування тегів (опційно) |
+///
+/// ## Підсистеми
+///
+/// Аудіо-хендлер розділений на три виділені підсистеми:
+///
+/// - [PlaybackHistoryReporter] — звітування історії в YouTube
+/// - [RadioQueueLoader] — завантаження радіо-черги
+/// - [PlaybackStatePersistence] — збереження/відновлення стану
+///
+/// ## Приклад використання
+///
+/// ```dart
+/// final handler = await AudioService.init(
+///   builder: () => MyAudioHandler(
+///     db: getIt<AppDatabase>(),
+///     settingsService: getIt<SettingsService>(),
+///     audioSourceFactory: getIt<AudioSourceFactory>(),
+///     // ...
+///   ),
+/// );
+///
+/// await handler.addQueueItems([mediaItem1, mediaItem2]);
+/// await handler.play();
+/// ```
+///
+/// ## Потоки даних
+///
+/// - [playbackState] — стан відтворення (playing, paused, etc.)
+/// - [mediaItem] — поточний трек
+/// - [queue] — черга треків
+/// - [player.positionStream] — позиція в треку
+///
+/// @see [BaseAudioHandler] для базових методів
+/// @see [audio/audio.dart] для підсистем
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final _equalizer = AndroidEqualizer();
   late final AudioPlayer player;
 
   // Note: We use the player's session ID if needed, but internal equalizer logic handles itself.
   int? get audioSessionId => player.androidAudioSessionId;
-
-  final _playlist = ConcatenatingAudioSource(children: []);
 
   final AppDatabase _db;
   final SettingsService _settingsService;
@@ -100,6 +157,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _init();
   }
 
+  /// Ініціалізує аудіо-хендлер.
+  ///
+  /// Цей метод викликається автоматично після створення і:
+  /// 1. Налаштовує аудіо-сесію для музичного режиму
+  /// 2. Підписується на зміни черги для prefetch
+  /// 3. Ініціалізує віджет головного екрану
+  /// 4. Налаштовує обробку помилок відтворення
+  /// 5. Відновлює попередній стан, якщо увімкнено
   Future<void> _init() async {
     if (_isInitialized) return;
     _isInitialized = true;
@@ -143,7 +208,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _broadcastState(event);
     }, onError: (Object e, StackTrace st) {
       debugPrint('[AudioHandler] PLAYER ERROR: $e. Skipping to the next item.');
-      
+
       // Log to analytics
       if (GetIt.I.isRegistered<LogService>()) {
         GetIt.I<LogService>().errorWithCategory(
@@ -153,7 +218,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           stackTrace: st,
         );
       }
-      
+
       // If an error occurs (e.g., 403 Forbidden on a YouTube link),
       // automatically skip to the next track in the queue.
       if (player.hasNext) {
@@ -202,7 +267,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Auto-load more radio tracks if approaching end of queue
       if (index != null && player.loopMode == LoopMode.off) {
         final effectiveIndices = player.effectiveIndices;
-        if (effectiveIndices != null && effectiveIndices.isNotEmpty) {
+        if (effectiveIndices.isNotEmpty) {
           final currentPos = effectiveIndices.indexOf(index);
           if (currentPos != -1 && currentPos >= effectiveIndices.length - 3) {
             _checkAndLoadMoreRadio();
@@ -280,11 +345,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       positionStream: player.positionStream,
     );
 
-    try {
-      await player.setAudioSource(_playlist, preload: false);
-    } catch (e) {
-      // ignore: empty_catches
-    }
+    // Player is initialized without any audio source
+    // Sources will be added via setAudioSources/addAudioSource methods
 
     await _loadInitialState();
     debugPrint(
@@ -362,15 +424,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     ));
   }
 
+  // ============================================================
+  // БАЗОВІ МЕТОДИ УПРАВЛІННЯ ВІДТВОРЕННЯМ
+  // ============================================================
+
+  /// Починає або продовжує відтворення.
   @override
   Future<void> play() => player.play();
 
+  /// Призупиняє відтворення.
   @override
   Future<void> pause() => player.pause();
 
+  /// Переміщує позицію відтворення до вказаної [position].
   @override
   Future<void> seek(Duration position) => player.seek(position);
 
+  /// Повністю зупиняє відтворення та звільняє ресурси.
+  ///
+  /// Також зберігає поточний стан для відновлення пізніше,
+  /// якщо це увімкнено в налаштуваннях.
   @override
   Future<void> stop() async {
     if (GetIt.I.isRegistered<EqualizerService>()) {
@@ -384,12 +457,32 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await super.stop();
   }
 
+  /// Викликається коли додаток видаляється з recent apps.
+  /// Повністю звільняє всі ресурси плеєра.
+  @override
+  Future<void> onTaskRemoved() async {
+    debugPrint('[AudioHandler] onTaskRemoved - cleaning up resources');
+    _audioSessionIdSubscription?.cancel();
+    _currentOverrideSubscription?.cancel();
+    _historyReporter.reset();
+
+    // Properly dispose the player to release MediaCodec resources
+    await player.dispose();
+    await super.onTaskRemoved();
+  }
+
+  /// Переходить до наступного треку в черзі.
   @override
   Future<void> skipToNext() => player.seekToNext();
 
+  /// Переходить до попереднього треку в черзі.
   @override
   Future<void> skipToPrevious() => player.seekToPrevious();
 
+  /// Переходить до треку за вказаним індексом [index] в черзі.
+  ///
+  /// Використовується при натисканні на трек у списку.
+  /// Не блокує UI для кращої реакції на емуляторах.
   @override
   Future<void> skipToQueueItem(int index) async {
     if (index < 0 || index >= queue.value.length) return;
@@ -399,6 +492,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     player.play();
   }
 
+  // ============================================================
+  // РЕЖИМИ ВІДТВОРЕННЯ
+  // ============================================================
+
+  /// Встановлює режим повтору.
+  ///
+  /// - [AudioServiceRepeatMode.none] — без повтору
+  /// - [AudioServiceRepeatMode.one] — повтор одного треку
+  /// - [AudioServiceRepeatMode.all] — повтор усієї черги
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
     final loopMode = const {
@@ -411,6 +513,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await player.setLoopMode(loopMode);
   }
 
+  /// Встановлює режим перемішування.
+  ///
+  /// При увімкненні спочатку перемішує чергу, потім активує режим.
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
     final enabled = shuffleMode != AudioServiceShuffleMode.none;
@@ -420,6 +525,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await player.setShuffleModeEnabled(enabled);
   }
 
+  // ============================================================
+  // УПРАВЛІННЯ ЧЕРГОЮ
+  // ============================================================
+
+  /// Оновлює чергу відтворення.
+  ///
+  /// Важливо: оновлення [queue] відбувається ПЕРЕД модифікацією плейлиста,
+  /// щоб уникнути race condition при автоматичному переході на індекс 0.
   @override
   Future<void> updateQueue(List<MediaItem> queue) async {
     debugPrint('[AudioHandler] updateQueue called with ${queue.length} items');
@@ -440,11 +553,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // auto-seeks to index 0 after playlist clear/add.
       this.queue.add(queue);
 
-      // 3. Update Playlist
-      await _playlist.clear();
-      await _playlist.addAll(sources);
+      // 3. Update Playlist using new API (just_audio 0.10.x)
+      await player.setAudioSources(sources, preload: false);
 
-      debugPrint('[AudioHandler] updateQueue: queue and _playlist updated');
+      debugPrint(
+          '[AudioHandler] updateQueue: queue and player sources updated');
     } catch (e) {
       debugPrint('[AudioHandler] updateQueue error: $e');
       // Rollback queue on failure
@@ -452,8 +565,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
-  /// Atomically set queue and start playing from a specific index.
-  /// This prevents the ExoPlayer init race condition where index resets to 0.
+  /// Атомарно встановлює чергу та починає відтворення з вказаного індексу.
+  ///
+  /// Цей метод запобігає race condition в ExoPlayer, коли індекс
+  /// скидається до 0 при модифікації плейлиста.
+  ///
+  /// [newQueue] — нова черга треків
+  /// [startIndex] — індекс треку для початку відтворення
   Future<void> playQueueFromIndex(
       List<MediaItem> newQueue, int startIndex) async {
     debugPrint(
@@ -473,22 +591,50 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final sources = await Future.wait(
           newQueue.map((item) => _audioSourceFactory.createSource(item)));
 
-      // 3. Clear and rebuild playlist
-      await _playlist.clear();
-      await _playlist.addAll(sources);
+      // 3. Prefetch initial track URL to prevent "Loading interrupted" error
+      if (sources.isNotEmpty &&
+          safeIndex < sources.length &&
+          sources[safeIndex] is YoutubeAudioSource) {
+        final ytSource = sources[safeIndex] as YoutubeAudioSource;
+        debugPrint(
+            '[AudioHandler] Prefetching initial track at index $safeIndex');
+        await ytSource.prefetch();
+      }
 
-      // 4. Set audio source with initial index - THIS IS THE KEY!
-      // Using setAudioSource instead of just seek ensures ExoPlayer
-      // initializes with the correct starting position.
-      await player.setAudioSource(_playlist, initialIndex: safeIndex);
+      // 4. Set audio sources with initial index using new API (just_audio 0.10.x)
+      await player.setAudioSources(sources, initialIndex: safeIndex);
 
       // 5. Start playback
-      player.play();
+      await player.play();
 
       debugPrint(
           '[AudioHandler] playQueueFromIndex: started at index $safeIndex');
     } catch (e) {
       debugPrint('[AudioHandler] playQueueFromIndex error: $e');
+
+      // Log error for analytics
+      if (GetIt.I.isRegistered<LogService>()) {
+        GetIt.I<LogService>().errorWithCategory(
+          ErrorCategory.playback,
+          'playQueueFromIndex error at index $safeIndex: $e',
+          error: e,
+        );
+      }
+
+      // Try to recover by skipping to next track if available
+      if (newQueue.length > 1 && safeIndex < newQueue.length - 1) {
+        debugPrint(
+            '[AudioHandler] playQueueFromIndex: Attempting recovery, skipping to next track');
+        try {
+          await player.seek(Duration.zero, index: safeIndex + 1);
+          await player.play();
+          debugPrint(
+              '[AudioHandler] playQueueFromIndex: Recovery successful, now playing index ${safeIndex + 1}');
+        } catch (recoveryError) {
+          debugPrint(
+              '[AudioHandler] playQueueFromIndex: Recovery failed: $recoveryError');
+        }
+      }
     }
   }
 
@@ -511,19 +657,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // 1. Create source
       final source = await _audioSourceFactory.createSource(mediaItem);
 
-      // 2. Add to Playlist
-      await _playlist.add(source);
+      // 2. Add to Playlist using new API (just_audio 0.10.x)
+      await player.addAudioSource(source);
 
       // 3. Update Queue
       await super.addQueueItem(mediaItem);
 
       debugPrint(
-          '[AudioHandler] addQueueItem: Added ${mediaItem.title} to _playlist and queue');
+          '[AudioHandler] addQueueItem: Added ${mediaItem.title} to player and queue');
     } catch (e) {
       debugPrint('[AudioHandler] addQueueItem error: $e');
     }
   }
 
+  @override
   Future<void> addQueueItems(List<MediaItem> mediaItems) async {
     debugPrint(
         '[AudioHandler] addQueueItems: Adding ${mediaItems.length} items');
@@ -532,35 +679,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final sources = await Future.wait(
           mediaItems.map((item) => _audioSourceFactory.createSource(item)));
 
-      // 2. Batch add to Playlist (SAFE)
-      try {
-        await _playlist.addAll(sources);
-      } catch (playlistError) {
-        debugPrint(
-            '[AudioHandler] Critical Error adding to playlist: $playlistError');
-        // RECOVERY: If playlist is broken (NPE or cleared natively), reset it.
-        try {
-          debugPrint('[AudioHandler] Attempting playlist recovery...');
-          await _playlist.clear();
-          await _playlist.addAll(sources);
-          debugPrint('[AudioHandler] Playlist recovery successful.');
-        } catch (retryError) {
-          debugPrint('[AudioHandler] Playlist recovery failed: $retryError');
-
-          // ROLLBACK: If recovery fails, we must restore the previous queue to avoid DESYNC.
-          debugPrint(
-              '[AudioHandler] Rolling back queue state due to playlist failure...');
-          // Since we haven't updated 'queue' yet (step 3 is below),
-          // we just need to NOT proceed to step 3.
-          // However, if we modified playlist partially in step 2 (addAll threw after adding some),
-          // we are in a bad state. Ideally we clear playlist again?
-          try {
-            await _playlist.clear();
-          } catch (_) {}
-
-          // Abort functionality to protect state
-          return;
-        }
+      // 2. Batch add to Player using new API (just_audio 0.10.x)
+      for (final source in sources) {
+        await player.addAudioSource(source);
       }
 
       // 3. Update Queue (Batch)
@@ -580,8 +701,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // 1. Create source
       final source = await _audioSourceFactory.createSource(mediaItem);
 
-      // 2. Insert into Playlist
-      await _playlist.insert(index, source);
+      // 2. Insert into Player using new API (just_audio 0.10.x)
+      await player.insertAudioSource(index, source);
 
       // 3. Update Queue
       await super.insertQueueItem(index, mediaItem);
@@ -598,7 +719,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (index != -1) {
       try {
-        await _playlist.removeAt(index);
+        // Use new API (just_audio 0.10.x)
+        await player.removeAudioSourceAt(index);
       } catch (e) {
         debugPrint('[AudioHandler] removeQueueItem error: $e');
       }
@@ -619,18 +741,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     newQueue.removeAt(index);
     queue.add(newQueue);
 
-    // 2. Update Playlist (Player)
+    // 2. Update Player using new API (just_audio 0.10.x)
     try {
-      await _playlist.removeAt(index);
+      await player.removeAudioSourceAt(index);
     } catch (e) {
       debugPrint('[AudioHandler] removeQueueItemAt error: $e');
-      // If playlist fails, we might technically be out of sync.
+      // If player fails, we might technically be out of sync.
       // But since queue is source of truth for UI, we accept this risk regarding phantom tracks.
     }
   }
 
   /// Efficiently move a queue item from oldIndex to newIndex.
-  /// Uses ConcatenatingAudioSource.move() for O(1) playlist reordering
+  /// Uses player.moveAudioSource() for O(1) playlist reordering (just_audio 0.10.x)
   /// instead of rebuilding the entire queue.
   Future<void> moveQueueItem(int oldIndex, int newIndex) async {
     final currentQueue = queue.value;
@@ -661,13 +783,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       newQueue.insert(insertIndex, item);
       queue.add(newQueue);
 
-      // 3. Move in playlist (O(1) operation!)
-      await _playlist.move(oldIndex, insertIndex);
+      // 3. Move in player using new API (just_audio 0.10.x) - O(1) operation!
+      await player.moveAudioSource(oldIndex, insertIndex);
 
       debugPrint('[AudioHandler] moveQueueItem: completed successfully');
     } catch (e) {
       debugPrint('[AudioHandler] moveQueueItem error: $e');
-      // Revert UI if playlist move fails
+      // Revert UI if player move fails
       queue.add(currentQueue);
     }
   }
@@ -702,9 +824,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await updateFileTags(mediaItem, requestPermission: true);
 
     try {
-      await _playlist.clear();
       final source = await _audioSourceFactory.createSource(mediaItem);
-      await _playlist.add(source);
+
+      // Set single audio source using new API (just_audio 0.10.x)
+      await player.setAudioSources([source]);
 
       // Seek to beginning and play
       await player.seek(Duration.zero, index: 0);
@@ -803,13 +926,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
   }
 
-  Future<void> _loadRadioQueue(String videoId) async {
-    await _radioLoader.loadRadioQueue(
-      videoId: videoId,
-      currentQueue: queue.value,
-    );
-  }
-
   void _setupOverrideWatcher(String trackPath) {
     _currentOverrideSubscription?.cancel();
 
@@ -862,12 +978,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     try {
       if (restored.sources != null && restored.sources!.isNotEmpty) {
-        await _playlist.addAll(restored.sources!);
+        // Use new API (just_audio 0.10.x)
+        await player.setAudioSources(restored.sources!, preload: false);
       } else if (restored.mediaItems.isNotEmpty) {
         // Fallback: create sources if not pre-created
-        final sources = await Future.wait(
-            restored.mediaItems.map((item) => _audioSourceFactory.createSource(item)));
-        await _playlist.addAll(sources);
+        final sources = await Future.wait(restored.mediaItems
+            .map((item) => _audioSourceFactory.createSource(item)));
+        // Use new API (just_audio 0.10.x)
+        await player.setAudioSources(sources, preload: false);
       }
     } catch (e) {
       debugPrint('[AudioHandler] Error loading initial playlist: $e');
@@ -885,12 +1003,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   void _recordSongPlayAnalytics(MediaItem item) {
     try {
       if (!GetIt.I.isRegistered<LogService>()) return;
-      
+
       final logService = GetIt.I<LogService>();
       final extras = item.extras ?? {};
       final isOnline = extras['isOnline'] == true;
       final isCached = !isOnline && item.id.contains('/');
-      
+
       logService.recordSongPlayed(fromCache: isCached);
     } catch (e) {
       // Ignore analytics errors

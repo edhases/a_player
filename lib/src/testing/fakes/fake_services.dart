@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:drift/drift.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:get_it/get_it.dart';
 
@@ -11,7 +10,6 @@ import '../../core/services/cache_service.dart';
 import '../../core/services/innertube/innertube.dart';
 import '../../core/services/music_finder.dart';
 import '../../core/services/recommendation_service.dart';
-import '../../core/services/settings_service.dart';
 import '../../core/services/youtube_helper.dart';
 import '../../data/datasources/app_database.dart';
 import '../../domain/entities/home_section.dart';
@@ -69,8 +67,7 @@ class TestTracker {
 }
 
 class FakeInnerTubeService extends InnerTubeService {
-  FakeInnerTubeService({required SettingsService settingsService})
-      : super(settingsService: settingsService);
+  FakeInnerTubeService({required super.settingsService});
 
   static const _artistId = 'ARTIST_1';
   static const _artistIdUa = 'ARTIST_UA';
@@ -353,7 +350,8 @@ class FakeInnerTubeService extends InnerTubeService {
   ];
 
   @override
-  Future<List<YouTubeSong>> search(String query, {String filter = 'songs', int limit = 20}) async {
+  Future<List<YouTubeSong>> search(String query,
+      {String filter = 'songs', int limit = 20}) async {
     searchHistory.add(query);
     TestTracker.recordSearch(query);
     await Future<void>.delayed(searchDelay);
@@ -618,6 +616,7 @@ class FakeYouTubeHelper extends YouTubeHelper {
 
 class FakeCacheService extends CacheService {
   final Map<String, YouTubeTrack> _cached = {};
+  // ignore: unused_field - kept for future test scenarios
   int _maxSize = 500 * 1024 * 1024;
 
   // Simulate download progress for testing
@@ -628,8 +627,7 @@ class FakeCacheService extends CacheService {
   bool simulateCacheFailure = false;
   bool simulateNoSpace = false;
 
-  FakeCacheService({required AppDatabase db, SettingsService? settingsService})
-      : super(db: db, settingsService: settingsService);
+  FakeCacheService({required super.db, super.settingsService});
 
   @override
   Future<void> init() async {}
@@ -682,6 +680,7 @@ class FakeCacheService extends CacheService {
       cachedAt: DateTime.now(),
       isFavorite: false,
       likedAt: null,
+      pendingCache: false,
     );
 
     _cached[videoId] = track;

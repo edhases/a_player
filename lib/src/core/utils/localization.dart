@@ -250,6 +250,7 @@ class AppLocalizations {
 
   // Lyrics
   String get lyrics => translate('lyrics');
+  String get loadingLyrics => translate('loading_lyrics');
   String get noLyricsFound => translate('no_lyrics_found');
   String get errorLoadingLyrics => translate('error_loading_lyrics');
   // User Manual

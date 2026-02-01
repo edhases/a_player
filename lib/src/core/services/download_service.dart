@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:path_provider/path_provider.dart';
@@ -121,7 +120,8 @@ class DownloadService {
           debugPrint('[DownloadService] Tag embedding failed (non-fatal): $e');
         }
       } else {
-        debugPrint('[DownloadService] Saved as $extension (tags not supported for webm)');
+        debugPrint(
+            '[DownloadService] Saved as $extension (tags not supported for webm)');
       }
 
       // Notify MediaStore so the file appears in library after scan

@@ -32,7 +32,10 @@ class UpdateService {
   /// Get current app version code
   Future<int> getCurrentVersionCode() async {
     final packageInfo = await PackageInfo.fromPlatform();
-    return int.tryParse(packageInfo.buildNumber) ?? 0;
+    final versionCode = int.tryParse(packageInfo.buildNumber) ?? 0;
+    debugPrint(
+        '[UpdateService] Current app: ${packageInfo.version}+${packageInfo.buildNumber} (code: $versionCode)');
+    return versionCode;
   }
 
   /// Get current app version name
@@ -79,16 +82,22 @@ class UpdateService {
       final updateInfo = UpdateInfo.fromJson(data as Map<String, dynamic>);
       final currentVersionCode = await getCurrentVersionCode();
 
+      debugPrint(
+          '[UpdateService] Current version: $currentVersionCode, Remote version: ${updateInfo.versionCode}');
+
       // Check if forced update is required
       if (updateInfo.isForcedUpdate(currentVersionCode)) {
+        debugPrint('[UpdateService] Forced update required');
         return (UpdateCheckResult.forcedUpdate, updateInfo);
       }
 
       // Check if newer version available
       if (updateInfo.isNewerThan(currentVersionCode)) {
+        debugPrint('[UpdateService] Update available');
         return (UpdateCheckResult.updateAvailable, updateInfo);
       }
 
+      debugPrint('[UpdateService] App is up to date');
       return (UpdateCheckResult.upToDate, null);
     } catch (e) {
       debugPrint('[UpdateService] Error checking for updates: $e');
@@ -120,12 +129,14 @@ class UpdateService {
         final expectedHash = updateInfo.apkSha256.toLowerCase();
 
         if (computedHash == expectedHash) {
-          debugPrint('[UpdateService] Existing APK verified, skipping download');
+          debugPrint(
+              '[UpdateService] Existing APK verified, skipping download');
           // Report progress as complete
           onProgress?.call(bytes.length, bytes.length);
           return apkFile;
         } else {
-          debugPrint('[UpdateService] Existing APK corrupted, re-downloading...');
+          debugPrint(
+              '[UpdateService] Existing APK corrupted, re-downloading...');
           await apkFile.delete();
         }
       }
@@ -187,7 +198,8 @@ class UpdateService {
         }
       }
 
-      debugPrint('[UpdateService] Opening APK for installation: ${apkFile.path}');
+      debugPrint(
+          '[UpdateService] Opening APK for installation: ${apkFile.path}');
 
       // Use open_filex which properly handles FileProvider and APK installation
       final result = await OpenFilex.open(
@@ -195,7 +207,8 @@ class UpdateService {
         type: 'application/vnd.android.package-archive',
       );
 
-      debugPrint('[UpdateService] OpenFilex result: ${result.type}, message: ${result.message}');
+      debugPrint(
+          '[UpdateService] OpenFilex result: ${result.type}, message: ${result.message}');
 
       return result.type == ResultType.done;
     } catch (e) {

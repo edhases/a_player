@@ -156,6 +156,7 @@
     "need_playlists": "• プレイリストの読み込み機能",
     "need_cookies": "• オフラインアクセスのための安全なCookie保存",
     "lyrics": "歌詞",
+    "loading_lyrics": "歌詞を読み込み中...",
     "no_lyrics_found": "歌詞が見つかりません",
     "error_loading_lyrics": "歌詞の読み込みエラー",
     "manual_title": "ユーザーマニュアル",

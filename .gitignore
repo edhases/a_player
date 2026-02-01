@@ -59,20 +59,20 @@ build_output.txt
 # Generated Flutter environment files
 **/flutter_export_environment.sh
 
-
+# Audit file (local documentation)
 audite.md
-lib/src/core/config/app_secrets.dart
-
-# Old InnerTube service (deprecated, kept for reference)
-lib/src/core/services/innertube_service.dart
 
 # Secrets
 lib/src/core/config/app_secrets.dart
+
+# Old/unused files archive
+old_files/
+
+# Old InnerTube service (deprecated, kept for reference)
+lib/src/core/services/innertube_service.dart
 
 # Scripts
 scripts/build_release.dart
 
 # Tools
-tools/release_manager
-
 tools/release_manager/

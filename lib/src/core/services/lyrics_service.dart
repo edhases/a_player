@@ -108,7 +108,8 @@ class LyricsService {
 
     // 2.1 Return YouTube Music if we found plain lyrics (Priority 1 for Plain)
     if (ytmCandidate != null && ytmCandidate.plainLyrics.isNotEmpty) {
-      debugPrint('[LyricsService] 🟡 Returning plain lyrics from YouTube Music');
+      debugPrint(
+          '[LyricsService] 🟡 Returning plain lyrics from YouTube Music');
       _cache[key] = ytmCandidate;
       return ytmCandidate;
     }
@@ -233,6 +234,21 @@ class LyricsService {
 
   Future<LyricsModel?> _searchLrclib(
       String trackName, String artistName, double duration) async {
+    // Try with original artist name first, then with cleaned artist
+    final artistVariants = {
+      artistName,
+      _cleanArtistForSearch(artistName),
+    }.toList(); // Set removes duplicates
+
+    for (final artist in artistVariants) {
+      final result = await _searchLrclibWithArtist(trackName, artist, duration);
+      if (result != null) return result;
+    }
+    return null;
+  }
+
+  Future<LyricsModel?> _searchLrclibWithArtist(
+      String trackName, String artistName, double duration) async {
     try {
       final uri = Uri.parse('$_lrclibUrl/search').replace(queryParameters: {
         'track_name': trackName,
@@ -291,6 +307,11 @@ class LyricsService {
       final songId = await _searchGeniusSong(trackName, artistName);
       if (songId == null) {
         debugPrint('[Genius] No song found for: $trackName - $artistName');
+
+        // Last resort: Try direct URL scraping if song not found via API
+        final directLyrics = await _tryDirectGeniusUrl(trackName, artistName);
+        if (directLyrics != null) return directLyrics;
+
         return null;
       }
 
@@ -329,13 +350,105 @@ class LyricsService {
     }
   }
 
-  Future<int?> _searchGeniusSong(String trackName, String artistName) async {
+  /// Try to construct Genius URL directly and scrape (for very new songs)
+  Future<LyricsModel?> _tryDirectGeniusUrl(
+      String trackName, String artistName) async {
     try {
-      // 1. Clean up query (remove 'feat.', brackets, etc for better search results)
-      final cleanTrack = _cleanString(trackName);
-      final cleanArtist = _cleanString(artistName);
+      // Try multiple URL patterns
+      final patterns = _generateGeniusUrlPatterns(trackName, artistName);
 
-      final query = '$cleanArtist $cleanTrack';
+      for (final url in patterns) {
+        debugPrint('[Genius] Trying direct URL: $url');
+        final plainLyrics = await _scrapeGeniusLyrics(url);
+        if (plainLyrics != null && plainLyrics.isNotEmpty) {
+          debugPrint('[Genius] ✅ Direct URL worked: $url');
+          return LyricsModel(
+            id: 0,
+            trackName: trackName,
+            artistName: artistName,
+            albumName: '',
+            duration: 0,
+            instrumental: false,
+            plainLyrics: plainLyrics,
+            syncedLyrics: '',
+            source: 'Genius (Direct)',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[Genius] Direct URL attempt failed: $e');
+    }
+    return null;
+  }
+
+  /// Generate possible Genius URL patterns
+  List<String> _generateGeniusUrlPatterns(String track, String artist) {
+    final urls = <String>[];
+
+    // Clean inputs
+    final cleanTrack = _cleanString(track).toLowerCase();
+    final cleanArtist =
+        _cleanArtistForSearch(_cleanString(artist)).toLowerCase();
+    final fullArtist = artist.toLowerCase();
+
+    // Pattern 1: cleaned artist + track
+    final slug1 = '$cleanArtist-$cleanTrack'
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .trim();
+    if (slug1.isNotEmpty) {
+      urls.add('https://genius.com/$slug1-lyrics');
+    }
+
+    // Pattern 2: full artist (with collabs) + track
+    final slug2 = '$fullArtist-$cleanTrack'
+        .replaceAll('&', 'and')
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .trim();
+    if (slug2.isNotEmpty && slug2 != slug1) {
+      urls.add('https://genius.com/$slug2-lyrics');
+    }
+
+    // Pattern 3: just track name (sometimes Genius uses this)
+    final slug3 = cleanTrack
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .trim();
+    if (slug3.isNotEmpty) {
+      urls.add('https://genius.com/$slug3-lyrics');
+    }
+
+    return urls;
+  }
+
+  Future<int?> _searchGeniusSong(String trackName, String artistName) async {
+    // Try multiple search strategies
+    final cleanTrack = _cleanString(trackName);
+    final cleanArtist = _cleanArtistForSearch(_cleanString(artistName));
+
+    // Different query variants to try
+    final queries = <String>{
+      '$cleanArtist $cleanTrack', // "Сусіди Стерплять Забудуться жалі"
+      '$artistName $trackName', // Original full names
+      cleanTrack, // Just track name
+      '$cleanTrack $cleanArtist', // Reversed order
+    }.toList();
+
+    for (final query in queries) {
+      final songId = await _searchGeniusWithQuery(query, trackName, artistName);
+      if (songId != null) return songId;
+    }
+
+    return null;
+  }
+
+  Future<int?> _searchGeniusWithQuery(
+      String query, String targetTrack, String targetArtist) async {
+    try {
       final uri = Uri.parse('$_geniusUrl/search').replace(queryParameters: {
         'q': query,
       });
@@ -361,7 +474,7 @@ class LyricsService {
 
             debugPrint('[Genius] Checking: "$hitTitle" by "$hitArtist"');
 
-            if (_isValidMatch(trackName, artistName, hitTitle, hitArtist)) {
+            if (_isValidMatch(targetTrack, targetArtist, hitTitle, hitArtist)) {
               final songId = result['id'] as int?;
               debugPrint('[Genius] ✅ Valid match found: ID $songId');
               return songId;
@@ -440,7 +553,37 @@ class LyricsService {
   }
 
   String _cleanString(String s) {
-    return s.replaceAll(RegExp(r'\(.*?\)'), '').trim();
+    // Remove content in parentheses and brackets
+    String result = s.replaceAll(RegExp(r'\(.*?\)'), '').trim();
+    result = result.replaceAll(RegExp(r'\[.*?\]'), '').trim();
+    return result;
+  }
+
+  /// Clean artist name for better search results
+  /// Removes featuring artists, collab markers like "& Artist", "feat. Artist", "x Artist"
+  String _cleanArtistForSearch(String artist) {
+    String clean = artist;
+
+    // Remove content after common collab markers
+    // "Artist & Other" -> "Artist"
+    // "Artist feat. Other" -> "Artist"
+    // "Artist x Other" -> "Artist"
+    final collabPatterns = [
+      RegExp(r'\s*&\s+\w.*$', caseSensitive: false), // & Artist
+      RegExp(r'\s+feat\.?\s+\w.*$', caseSensitive: false), // feat. Artist
+      RegExp(r'\s+ft\.?\s+\w.*$', caseSensitive: false), // ft. Artist
+      RegExp(r'\s+x\s+\w.*$', caseSensitive: false), // x Artist (collab)
+      RegExp(r'\s+і\s+\w.*$',
+          caseSensitive: false), // і Artist (Ukrainian "and")
+      RegExp(r'\s+та\s+\w.*$',
+          caseSensitive: false), // та Artist (Ukrainian "and")
+    ];
+
+    for (final pattern in collabPatterns) {
+      clean = clean.replaceAll(pattern, '');
+    }
+
+    return clean.trim();
   }
 
   String _normalize(String s) {

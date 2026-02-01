@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:path_provider/path_provider.dart';
@@ -25,7 +24,9 @@ class DataManagementService {
     this._db, {
     CacheService? cacheService,
   }) : _cacheService = cacheService ??
-            (GetIt.I.isRegistered<CacheService>() ? GetIt.I<CacheService>() : null);
+            (GetIt.I.isRegistered<CacheService>()
+                ? GetIt.I<CacheService>()
+                : null);
 
   static const int kBackupVersion = 1;
 
@@ -110,7 +111,7 @@ class DataManagementService {
 
       // For Tracks (local files), we just reset 'isFavorite' and 'isExcluded'.
       // We don't want to delete the tracks themselves as they represent files.
-      await (_db.update(_db.tracks)
+      (_db.update(_db.tracks)
         ..write(const TracksCompanion(
           isFavorite: drift.Value(false),
           isExcluded: drift.Value(false),

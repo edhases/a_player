@@ -44,16 +44,12 @@ class PlayerSetRepeatMode extends PlayerEvent {
 class _PlayerStateChanged extends PlayerEvent {
   final PlaybackState? playbackState;
   final MediaItem? mediaItem;
-  final Duration? position;
-  final Duration? duration;
 
   const _PlayerStateChanged({
     this.playbackState,
     this.mediaItem,
-    this.position,
-    this.duration,
   });
 
   @override
-  List<Object?> get props => [playbackState, mediaItem, position, duration];
+  List<Object?> get props => [playbackState, mediaItem];
 }

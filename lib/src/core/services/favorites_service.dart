@@ -7,6 +7,7 @@ import '../services/recommendation_service.dart';
 import '../services/innertube/innertube.dart';
 
 class FavoritesService {
+  // ignore: unused_field - kept for potential future use
   final RecommendationService _recommendationService;
   final AppDatabase _db;
   final InnerTubeService? _innerTubeService;
@@ -16,9 +17,9 @@ class FavoritesService {
     required AppDatabase db,
     InnerTubeService? innerTubeService,
   })  : _db = db,
-        _innerTubeService = innerTubeService ?? 
-            (GetIt.I.isRegistered<InnerTubeService>() 
-                ? GetIt.I<InnerTubeService>() 
+        _innerTubeService = innerTubeService ??
+            (GetIt.I.isRegistered<InnerTubeService>()
+                ? GetIt.I<InnerTubeService>()
                 : null);
 
   Future<void> toggleFavorite({
@@ -133,12 +134,14 @@ class FavoritesService {
       return [];
     }
 
-    debugPrint('[FavoritesService] Fetching new liked songs from YouTube Music...');
-    
+    debugPrint(
+        '[FavoritesService] Fetching new liked songs from YouTube Music...');
+
     try {
       // Fetch liked songs from YouTube Music
       final youTubeLiked = await _innerTubeService!.getYouTubeLikedSongs();
-      debugPrint('[FavoritesService] Fetched ${youTubeLiked.length} liked songs from YouTube');
+      debugPrint(
+          '[FavoritesService] Fetched ${youTubeLiked.length} liked songs from YouTube');
 
       if (youTubeLiked.isEmpty) {
         debugPrint('[FavoritesService] No liked songs found on YouTube');
@@ -150,9 +153,12 @@ class FavoritesService {
       final localLikedIds = localLiked.map((t) => t.videoId).toSet();
 
       // Filter only new songs
-      final newSongs = youTubeLiked.where((song) => !localLikedIds.contains(song.videoId)).toList();
-      debugPrint('[FavoritesService] Found ${newSongs.length} new songs to import');
-      
+      final newSongs = youTubeLiked
+          .where((song) => !localLikedIds.contains(song.videoId))
+          .toList();
+      debugPrint(
+          '[FavoritesService] Found ${newSongs.length} new songs to import');
+
       return newSongs;
     } catch (e) {
       debugPrint('[FavoritesService] Fetch error: $e');
@@ -165,28 +171,29 @@ class FavoritesService {
   /// Returns the number of imported songs
   Future<int> importLikedSongs(List<YouTubeSong> songs) async {
     int imported = 0;
-    
+
     for (final song in songs) {
       try {
         await _db.into(_db.youTubeTracks).insertOnConflictUpdate(
-          YouTubeTracksCompanion(
-            videoId: Value(song.videoId),
-            title: Value(song.title),
-            artist: Value(song.artist),
-            thumbnailUrl: Value(song.thumbnailUrl),
-            isFavorite: const Value(true),
-            likedAt: Value(DateTime.now()),
-            duration: const Value(0),
-            cachedAt: Value(DateTime.now()),
-          ),
-        );
+              YouTubeTracksCompanion(
+                videoId: Value(song.videoId),
+                title: Value(song.title),
+                artist: Value(song.artist),
+                thumbnailUrl: Value(song.thumbnailUrl),
+                isFavorite: const Value(true),
+                likedAt: Value(DateTime.now()),
+                duration: const Value(0),
+                cachedAt: Value(DateTime.now()),
+              ),
+            );
         imported++;
-        debugPrint('[FavoritesService] Imported: ${song.title} - ${song.artist}');
+        debugPrint(
+            '[FavoritesService] Imported: ${song.title} - ${song.artist}');
       } catch (e) {
         debugPrint('[FavoritesService] Failed to import ${song.title}: $e');
       }
     }
-    
+
     debugPrint('[FavoritesService] Import complete. Imported $imported songs.');
     return imported;
   }

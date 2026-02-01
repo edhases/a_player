@@ -54,11 +54,10 @@ class SmartPlayResult {
 class SmartPlayService {
   final InnerTubeService _innerTube;
   final MyAudioHandler _audioHandler;
-  
+
   // Debounce and duplicate prevention
   String? _currentlyLoadingPlaylistId;
   Timer? _debounceTimer;
-  static const _debounceDuration = Duration(milliseconds: 300);
 
   SmartPlayService({
     InnerTubeService? innerTube,
@@ -78,13 +77,13 @@ class SmartPlayService {
   bool needsPlaylistResolution(YouTubeSong song) {
     // If explicitly marked as playlist, resolve it
     if (song.isPlaylist) return true;
-    
+
     // If videoId is 11 chars, it's a regular YouTube video - play directly
     if (song.videoId.length == 11) return false;
-    
+
     // If videoId is not 11 chars and not empty, it's likely a playlist/album ID
     if (song.videoId.isNotEmpty) return true;
-    
+
     return false;
   }
 
@@ -92,12 +91,12 @@ class SmartPlayService {
   String? getPlaylistId(YouTubeSong song) {
     // If explicitly a playlist and has playlistId, use it
     if (song.isPlaylist && song.playlistId != null) return song.playlistId;
-    
+
     // If videoId is not a standard 11-char ID, it's likely a playlist/album ID
     if (song.videoId.length != 11 && song.videoId.isNotEmpty) {
       return song.videoId;
     }
-    
+
     // For regular songs with playlistId, this is just context, not for resolution
     return null;
   }
@@ -121,7 +120,8 @@ class SmartPlayService {
         '[SmartPlay] videoId: ${song.videoId}, length: ${song.videoId.length}');
     debugPrint(
         '[SmartPlay] isPlaylist: ${song.isPlaylist}, playlistId: ${song.playlistId}');
-    debugPrint('[SmartPlay] artistId: ${song.artistId}, artist: ${song.artist}');
+    debugPrint(
+        '[SmartPlay] artistId: ${song.artistId}, artist: ${song.artist}');
 
     // Check if it needs playlist resolution
     if (!needsPlaylistResolution(song)) {
@@ -149,7 +149,8 @@ class SmartPlayService {
 
     // Prevent duplicate requests for the same playlist
     if (_currentlyLoadingPlaylistId == playlistId) {
-      debugPrint('[SmartPlay] Already loading $playlistId, skipping duplicate request');
+      debugPrint(
+          '[SmartPlay] Already loading $playlistId, skipping duplicate request');
       return SmartPlayResult.error('Already loading this playlist');
     }
 
@@ -169,7 +170,7 @@ class SmartPlayService {
     try {
       final tracks = await _innerTube.getPlaylistTracks(playlistId);
       debugPrint('[SmartPlay] Fetched ${tracks.length} tracks');
-      
+
       // Clear loading state
       _currentlyLoadingPlaylistId = null;
 
@@ -257,7 +258,7 @@ class SmartPlayService {
   Future<void> playDirectly(YouTubeSong song) async {
     await _audioHandler.playYouTubeSong(song);
   }
-  
+
   /// Dispose resources
   void dispose() {
     _debounceTimer?.cancel();

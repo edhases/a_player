@@ -37,10 +37,10 @@ class TrackActions {
 
     // Check new status
     final isLiked = await favoritesService.isLiked(videoId);
-    final loc = AppLocalizations.of(context);
 
     // Show SnackBar
     if (context.mounted) {
+      final loc = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).removeCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -70,7 +70,9 @@ class TrackActions {
 
       if (hasSpace) {
         // Cache silently
-        _performCache(context, videoId, title, artist, thumbnailUrl);
+        if (context.mounted) {
+          _performCache(context, videoId, title, artist, thumbnailUrl);
+        }
       } else {
         if (context.mounted) {
           _showCacheFullDialog(context, videoId, title, artist, thumbnailUrl);

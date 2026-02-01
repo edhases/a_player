@@ -53,17 +53,15 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
       // Let's subscribe to radio stations separately?
       // For now, let's just fetch them or rely on stream if we implement stream subscription (recommended for reactive).
-      if (_radioSubscription == null) {
-        _radioSubscription = _db.watchRadioStations().listen((stations) {
-          // We might need a separate event for stream update,
-          // but since this is Bloc internal, we can't emit from here easily without adding event
-          // Or we assume this Bloc handles static lists mostly, and radio is small.
-          // However, to be reactive, we should enable list update.
-          // Let's skip stream for now to match other tabs paradigm, or re-fetch on view mode change?
-          // Actually, radio adds/deletes need UI update.
-          // Let's just fetch here.
-        });
-      }
+      _radioSubscription ??= _db.watchRadioStations().listen((stations) {
+        // We might need a separate event for stream update,
+        // but since this is Bloc internal, we can't emit from here easily without adding event
+        // Or we assume this Bloc handles static lists mostly, and radio is small.
+        // However, to be reactive, we should enable list update.
+        // Let's skip stream for now to match other tabs paradigm, or re-fetch on view mode change?
+        // Actually, radio adds/deletes need UI update.
+        // Let's just fetch here.
+      });
       final radioStations = await _db
           .getAllRadioStations(); // Need to implement getAll if not exists, or take first element of stream.
 

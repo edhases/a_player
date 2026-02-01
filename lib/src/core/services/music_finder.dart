@@ -114,8 +114,13 @@ class MusicFinder {
         title: song.title.isNotEmpty
             ? song.title
             : p.basenameWithoutExtension(song.data),
-        artist: Value(song.artist != '<unknown>' ? song.artist : null),
-        album: Value(song.album != '<unknown>' ? song.album : null),
+        artist: Value(
+            song.artist != '<unknown>' && song.artist!.trim().isNotEmpty
+                ? song.artist
+                : null),
+        album: Value(song.album != '<unknown>' && song.album!.trim().isNotEmpty
+            ? song.album
+            : null),
         duration: song.duration ?? 0,
         folderPath: p.dirname(song.data),
         mediaStoreId: Value(song.id),

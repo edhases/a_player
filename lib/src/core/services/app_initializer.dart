@@ -107,7 +107,8 @@ class AppInitializer {
     final youtubeHelper = FakeYouTubeHelper(db);
     GetIt.I.registerSingleton<YouTubeHelper>(youtubeHelper);
 
-    final cacheService = FakeCacheService(db: db, settingsService: settingsService);
+    final cacheService =
+        FakeCacheService(db: db, settingsService: settingsService);
     await cacheService.init();
     GetIt.I.registerSingleton<CacheService>(cacheService);
 
@@ -218,8 +219,7 @@ class AppInitializer {
 
     // DataManagementService
     final settingsService = GetIt.I<SettingsService>();
-    final dataManagementService =
-        DataManagementService(settingsService, db);
+    final dataManagementService = DataManagementService(settingsService, db);
     GetIt.I.registerSingleton<DataManagementService>(dataManagementService);
 
     // CacheService
@@ -231,13 +231,18 @@ class AppInitializer {
     GetIt.I.registerSingleton<CacheService>(cacheService);
 
     // BackgroundCacheService
+    final backgroundCacheService = BackgroundCacheService(
+      cacheService: cacheService,
+      ytHelper: youtubeHelper,
+      db: db,
+    );
     GetIt.I.registerSingleton<BackgroundCacheService>(
-      BackgroundCacheService(
-        cacheService: cacheService,
-        ytHelper: youtubeHelper,
-      ),
+      backgroundCacheService,
       dispose: (service) => service.dispose(),
     );
+
+    // Resume any pending caching from previous session
+    backgroundCacheService.resumePendingCaching();
 
     // UpdateService
     final updateService = UpdateService(GetIt.I<SettingsService>());

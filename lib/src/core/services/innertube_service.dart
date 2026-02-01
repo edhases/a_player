@@ -9,7 +9,6 @@ import 'google_auth_service.dart';
 import 'rate_limiter.dart';
 import 'package:logger/logger.dart';
 import '../utils/result.dart';
-import '../utils/json_path.dart';
 import '../exceptions/youtube_exceptions.dart';
 import 'settings_service.dart';
 import 'youtube_helper.dart';
@@ -651,16 +650,11 @@ class InnerTubeService {
           ?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'];
 
       // Path 2: Two Column (Desktop structure)
-      if (contents == null) {
-        contents = data['contents']?['twoColumnBrowseResultsRenderer']?['tabs']
-                ?[0]?['tabRenderer']?['content']?['sectionListRenderer']
-            ?['contents'];
-      }
+      contents ??= data['contents']?['twoColumnBrowseResultsRenderer']?['tabs']
+          ?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'];
 
       // Path 3: Direct Section List (Rare but possible)
-      if (contents == null) {
-        contents = data['contents']?['sectionListRenderer']?['contents'];
-      }
+      contents ??= data['contents']?['sectionListRenderer']?['contents'];
 
       if (contents == null || contents is! List) {
         debugPrint(
@@ -843,24 +837,39 @@ class InnerTubeService {
             final title = tabs[i]['tabRenderer']?['title'];
             debugPrint('[InnerTube] Tab $i: $title');
           }
-          
+
           // First, try to find and load the "Songs" tab directly for full list
           // Localized "Songs" tab names: English, Ukrainian, German, Spanish, Japanese, Polish
-          const songsTabNames = ['songs', 'пісні', 'titel', 'canciones', '曲', 'utwory', 'músicas', 'chansons', 'brani', '노래'];
+          const songsTabNames = [
+            'songs',
+            'пісні',
+            'titel',
+            'canciones',
+            '曲',
+            'utwory',
+            'músicas',
+            'chansons',
+            'brani',
+            '노래'
+          ];
           for (final tab in tabs) {
             final tabTitle = tab['tabRenderer']?['title'];
             if (tabTitle != null) {
               final titleLower = tabTitle.toLowerCase();
               if (songsTabNames.contains(titleLower)) {
-                final tabEndpoint = tab['tabRenderer']?['endpoint']?['browseEndpoint'];
+                final tabEndpoint =
+                    tab['tabRenderer']?['endpoint']?['browseEndpoint'];
                 if (tabEndpoint != null) {
                   final browseId = tabEndpoint['browseId'];
                   final params = tabEndpoint['params'];
                   if (browseId != null) {
-                    debugPrint('[InnerTube] Found "Songs" tab. Fetching full list from $browseId...');
-                    final fullList = await _fetchFullTracks(browseId, params: params);
+                    debugPrint(
+                        '[InnerTube] Found "Songs" tab. Fetching full list from $browseId...');
+                    final fullList =
+                        await _fetchFullTracks(browseId, params: params);
                     if (fullList.isNotEmpty) {
-                      debugPrint('[InnerTube] Loaded ${fullList.length} tracks from Songs tab');
+                      debugPrint(
+                          '[InnerTube] Loaded ${fullList.length} tracks from Songs tab');
                       return fullList;
                     }
                   }
@@ -886,10 +895,8 @@ class InnerTubeService {
               var browseEndpoint = shelf['bottomEndpoint']?['browseEndpoint'];
 
               // Fallback: Check title navigation (e.g. clickable "Top Songs" header)
-              if (browseEndpoint == null) {
-                browseEndpoint = shelf['title']?['runs']?[0]
-                    ?['navigationEndpoint']?['browseEndpoint'];
-              }
+              browseEndpoint ??= shelf['title']?['runs']?[0]
+                  ?['navigationEndpoint']?['browseEndpoint'];
 
               // Scan tabs for "Songs" or "Videos" as a backup if we don't find a direct "See All" link
               // or to ensure we can get the full list.
@@ -985,10 +992,8 @@ class InnerTubeService {
               var browseEndpoint = header?['moreContentButton']
                   ?['buttonRenderer']?['navigationEndpoint']?['browseEndpoint'];
 
-              if (browseEndpoint == null) {
-                browseEndpoint = header?['title']?['runs']?[0]
-                    ?['navigationEndpoint']?['browseEndpoint'];
-              }
+              browseEndpoint ??= header?['title']?['runs']?[0]
+                  ?['navigationEndpoint']?['browseEndpoint'];
 
               // Special check for "Top Songs" / "Songs" title to allow fallback logic if explicit endpoint missing
               // but we might want to trigger the "Songs" tab search if we suspect this is the songs list.
@@ -1156,7 +1161,8 @@ class InnerTubeService {
       // Artist from second column if available
       if (flexColumns.length > 1) {
         final col1Runs = flexColumns[1]
-            ['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;
+                ['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']
+            as List?;
         if (col1Runs != null && col1Runs.isNotEmpty) {
           final artistInfo = _extractArtistInfo(col1Runs);
           artist = artistInfo['name'] ?? fallbackArtist;
@@ -1165,9 +1171,7 @@ class InnerTubeService {
       }
 
       // Fallback: Recursive search for artistId
-      if (artistId == null) {
-        artistId = _findArtistBrowseIdRecursive(renderer);
-      }
+      artistId ??= _findArtistBrowseIdRecursive(renderer);
 
       // Thumbnail
       final thumbs = renderer['thumbnail']?['musicThumbnailRenderer']
@@ -1205,7 +1209,7 @@ class InnerTubeService {
         title = renderer['title']?['runs']?[0]?['text'] ?? '';
         videoId =
             renderer['navigationEndpoint']?['watchEndpoint']?['videoId'] ?? '';
-        
+
         // Extract artist with artistId
         final subtitleRuns = renderer['subtitle']?['runs'] as List?;
         if (subtitleRuns != null && subtitleRuns.isNotEmpty) {
@@ -1222,9 +1226,7 @@ class InnerTubeService {
       }
 
       // Fallback: Recursive search for artistId
-      if (artistId == null) {
-        artistId = _findArtistBrowseIdRecursive(renderer);
-      }
+      artistId ??= _findArtistBrowseIdRecursive(renderer);
 
       if (title.isEmpty || videoId.isEmpty) return null;
 
@@ -1252,8 +1254,9 @@ class InnerTubeService {
       // "LM" is the special playlist ID for liked songs in YouTube Music
       // We need to prepend "VL" to make it a valid browse ID
       final tracks = await _fetchFullTracks('VLLM');
-      debugPrint('[InnerTube] Fetched ${tracks.length} liked songs from YouTube');
-      
+      debugPrint(
+          '[InnerTube] Fetched ${tracks.length} liked songs from YouTube');
+
       // Limit the results if specified
       if (limit > 0 && tracks.length > limit) {
         return tracks.sublist(0, limit);
@@ -1488,10 +1491,8 @@ class InnerTubeService {
           ?['contents'];
 
       // Secondary path (Desktop/Web): twoColumn -> secondaryContents
-      if (sectionList == null) {
-        sectionList = data['contents']?['twoColumnBrowseResultsRenderer']
-            ?['secondaryContents']?['sectionListRenderer']?['contents'];
-      }
+      sectionList ??= data['contents']?['twoColumnBrowseResultsRenderer']
+          ?['secondaryContents']?['sectionListRenderer']?['contents'];
 
       List<dynamic> items = [];
       bool foundStructured = false;
@@ -1761,9 +1762,21 @@ class InnerTubeService {
 
         // Category labels that should NOT be treated as artist names
         const categoryLabels = {
-          'Single', 'Album', 'EP', 'Playlist', 'Song', 'Video',
-          'Сингл', 'Альбом', 'Плейлист', 'Пісня', 'Відео',
-          'Artist', 'Виконавець', 'Channel', 'Канал',
+          'Single',
+          'Album',
+          'EP',
+          'Playlist',
+          'Song',
+          'Video',
+          'Сингл',
+          'Альбом',
+          'Плейлист',
+          'Пісня',
+          'Відео',
+          'Artist',
+          'Виконавець',
+          'Channel',
+          'Канал',
         };
 
         // Extract Artist (Smart Check using Navigation Endpoints)
@@ -1779,12 +1792,12 @@ class InnerTubeService {
               pageType == 'MUSIC_PAGE_TYPE_USER_CHANNEL') {
             final text = run['text']?.toString().trim();
             // Skip category labels - they are not artist names even if marked as ARTIST pageType
-            if (text != null && text.isNotEmpty && !categoryLabels.contains(text)) {
+            if (text != null &&
+                text.isNotEmpty &&
+                !categoryLabels.contains(text)) {
               artistNames.add(text);
               // Capture the first valid browseId as artistId
-              if (artistId == null) {
-                artistId = nav?['browseEndpoint']?['browseId'];
-              }
+              artistId ??= nav?['browseEndpoint']?['browseId'];
             }
           }
         }
@@ -1877,14 +1890,13 @@ class InnerTubeService {
       String? browseId;
       if (videoId == null) {
         browseId = mrlir['navigationEndpoint']?['browseEndpoint']?['browseId'];
-        if (browseId == null) {
-          browseId = mrlir['onTap']?['browseEndpoint']?['browseId'];
-        }
+        browseId ??= mrlir['onTap']?['browseEndpoint']?['browseId'];
       }
 
       // If we have no videoId and no browseId/playlistId, we can't do anything
-      if (videoId == null && playlistId == null && browseId == null)
+      if (videoId == null && playlistId == null && browseId == null) {
         return null;
+      }
 
       // Extract thumbnail with multiple paths
       final thumbnails = (mrlir['thumbnail']?['musicThumbnailRenderer'] ??
@@ -2018,7 +2030,7 @@ class InnerTubeService {
 
   /// Extract artist info from runs.
   /// Returns {'name': String, 'id': String?}
-  /// 
+  ///
   /// YouTube Music subtitle format is typically: "Category • Artist • Duration"
   /// or "Artist • Album • Duration" or just "Artist"
   Map<String, String?> _extractArtistInfo(List runs) {
@@ -2026,22 +2038,32 @@ class InnerTubeService {
 
     final artistParts = <String>[];
     String? artistId;
-    int separatorCount = 0;
 
     // Category labels that should be skipped when extracting artist name
     const categoryLabels = {
-      'Single', 'Album', 'EP', 'Playlist', 'Song', 'Video',
-      'Сингл', 'Альбом', 'Плейлист', 'Пісня', 'Відео',
-      'Artist', 'Виконавець', 'Channel', 'Канал',
+      'Single',
+      'Album',
+      'EP',
+      'Playlist',
+      'Song',
+      'Video',
+      'Сингл',
+      'Альбом',
+      'Плейлист',
+      'Пісня',
+      'Відео',
+      'Artist',
+      'Виконавець',
+      'Channel',
+      'Канал',
     };
 
     for (var run in runs) {
       final text = run['text']?.toString() ?? '';
       if (text.isEmpty) continue;
 
-      // Count separators - artist is usually before or after first separator
+      // Separators indicate section boundaries - artist is usually before first separator
       if (text == ' • ' || text == '•') {
-        separatorCount++;
         // If we already found artist parts, we can stop
         if (artistParts.isNotEmpty) {
           break;
@@ -2062,7 +2084,7 @@ class InnerTubeService {
           text.contains(' переглядів')) {
         break;
       }
-      
+
       // Stop if we hit duration pattern (e.g., "3:45", "1:23:45")
       if (RegExp(r'^\d+:\d+').hasMatch(text)) {
         break;
@@ -2185,9 +2207,7 @@ class InnerTubeService {
       }
 
       // Fallback: Recursive search for artistId if not found
-      if (artistId == null) {
-        artistId = _findArtistBrowseIdRecursive(renderer);
-      }
+      artistId ??= _findArtistBrowseIdRecursive(renderer);
 
       // Get thumbnail
       String thumbnail = '';
@@ -2394,7 +2414,7 @@ class InnerTubeService {
             if (bylineRuns != null) {
               final artistInfo = _extractArtistInfo(bylineRuns);
               final artist = artistInfo['name'] ?? 'Unknown';
-              final artistId = artistInfo['id'];
+              // artistId available in artistInfo['id'] if needed
               fallbackArtist =
                   artist; // Update fallbackArtist with the extracted artist
               debugPrint('[InnerTube] Found artist in byline: $fallbackArtist');

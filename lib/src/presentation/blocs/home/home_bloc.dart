@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drift/drift.dart';
 import 'package:get_it/get_it.dart';
@@ -32,7 +33,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeRefreshFeed>(_onLoadFeed);
 
     // Watch for changes in YouTubeTracks (likes/history)
-    _youtubeTracksSubscription = _db.select(_db.youTubeTracks).watch().listen((_) {
+    _youtubeTracksSubscription =
+        _db.select(_db.youTubeTracks).watch().listen((_) {
       add(HomeRefreshFeed());
     });
 
@@ -187,7 +189,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           ));
         }
       } catch (e) {
-        print('Error loading local/favorite tracks: $e');
+        debugPrint('Error loading local/favorite tracks: $e');
       }
 
       emit(state.copyWith(

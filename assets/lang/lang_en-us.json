@@ -257,6 +257,7 @@
     "reset_confirm_message": "Are you sure you want to delete all data and reset settings? This cannot be undone.",
     "reset_confirm_action": "Reset Everything",
     "lyrics": "Lyrics",
+    "loading_lyrics": "Loading lyrics...",
     "no_lyrics_found": "No lyrics found",
     "error_loading_lyrics": "Error loading lyrics",
     "manual_title": "User Manual",

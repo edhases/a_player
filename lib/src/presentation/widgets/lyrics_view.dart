@@ -117,7 +117,28 @@ class _LyricsViewState extends State<LyricsView> {
     return BlocBuilder<LyricsBloc, LyricsState>(
       builder: (context, state) {
         if (state is LyricsLoading) {
-          return const Center(child: CircularProgressIndicator());
+          // Show music note icon while loading instead of spinner
+          final colors = context.appColors;
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.music_note,
+                  size: 64,
+                  color: colors.textMuted.withOpacity(0.3),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  AppLocalizations.of(context).loadingLyrics,
+                  style: TextStyle(
+                    color: colors.textMuted,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
         } else if (state is LyricsNotFound) {
           final loc = AppLocalizations.of(context);
           final colors = context.appColors;
@@ -233,6 +254,11 @@ class _LyricsViewState extends State<LyricsView> {
           }
           final isCurrent = index == _currentIndex;
           final colors = context.appColors;
+          final lineText = lines[index].text;
+
+          // Show placeholder for empty lines
+          final displayText = lineText.trim().isEmpty ? '♪' : lineText;
+
           return Center(
             child: SizedBox(
               height: 60.0,
@@ -241,12 +267,14 @@ class _LyricsViewState extends State<LyricsView> {
                 style: TextStyle(
                   color: isCurrent
                       ? colors.textPrimary
-                      : colors.textSecondary,
+                      : (lineText.trim().isEmpty
+                          ? colors.textMuted.withOpacity(0.4)
+                          : colors.textSecondary),
                   fontSize: isCurrent ? 24 : 18,
                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                 ),
                 child: Text(
-                  lines[index].text,
+                  displayText,
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
