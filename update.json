@@ -1,8 +1,8 @@
 {
-    "versionName": "20260131.0.0",
-    "versionCode": 20260131,
-    "apkUrl": "https://github.com/edhases/a_player/releases/download/20260131/oxide_player_v20260131.apk",
-    "apkSha256": "D6FDB4D0EEA283939B8B00D1E2BB18DA2C2E6EC75D8777C38194713EC29D66BD",
-    "changelog": "- Use secrets for InnerTube keys and bump versions\n- Refactor audio handler and add audio subsystems",
+    "versionName": "20260201.0.0",
+    "versionCode": 20260201,
+    "apkUrl": "https://github.com/edhases/a_player/releases/download/20260201/oxide_player_v20260201.apk",
+    "apkSha256": "794DFDA4F450839456539ED184A9BCD2A85EEAEB0F2263CCA1C2C723D47F4B20",
+    "changelog": "- Refactor audio handler and background caching",
     "minSupportedVersionCode": 1
 }
