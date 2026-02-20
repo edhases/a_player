@@ -9,63 +9,70 @@ import 'src/app.dart';
 import 'src/core/services/app_initializer.dart';
 import 'src/core/services/log_service.dart';
 import 'src/core/utils/test_overrides.dart';
+import 'src/core/services/version_service.dart';
 
 void main() async {
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-    // Disable Google Fonts HTTP fetching to prevent network errors
-    // This makes the app use bundled fonts or system fallback
-    GoogleFonts.config.allowRuntimeFetching = false;
+      // Initialize version service early
+      await VersionService.init();
 
-    // Set system UI overlay style
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-      ),
-    );
+      // Disable Google Fonts HTTP fetching to prevent network errors
+      // This makes the app use bundled fonts or system fallback
+      GoogleFonts.config.allowRuntimeFetching = false;
 
-    // Initialize all services
-    if (TestOverrides.enabled) {
-      await AppInitializer.initForTest();
-    } else {
-      await AppInitializer.init();
-    }
+      // Set system UI overlay style
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+        ),
+      );
 
-    // Setup global error handling
-    FlutterError.onError = (FlutterErrorDetails details) {
-      FlutterError.presentError(details);
-      if (GetIt.I.isRegistered<LogService>()) {
-        GetIt.I<LogService>().error(
-          'Flutter Error: ${details.exception}',
-          error: details.exception,
-          stackTrace: details.stack,
-        );
+      // Initialize all services
+      if (TestOverrides.enabled) {
+        await AppInitializer.initForTest();
+      } else {
+        await AppInitializer.init();
       }
-    };
 
-    PlatformDispatcher.instance.onError = (error, stack) {
+      // Setup global error handling
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        if (GetIt.I.isRegistered<LogService>()) {
+          GetIt.I<LogService>().error(
+            'Flutter Error: ${details.exception}',
+            error: details.exception,
+            stackTrace: details.stack,
+          );
+        }
+      };
+
+      PlatformDispatcher.instance.onError = (error, stack) {
+        if (GetIt.I.isRegistered<LogService>()) {
+          GetIt.I<LogService>().error(
+            'Platform Error: $error',
+            error: error,
+            stackTrace: stack,
+          );
+        }
+        return true;
+      };
+
+      runApp(const OxidePlayerApp());
+    },
+    (error, stack) {
       if (GetIt.I.isRegistered<LogService>()) {
         GetIt.I<LogService>().error(
-          'Platform Error: $error',
+          'Uncaught Error: $error',
           error: error,
           stackTrace: stack,
         );
+      } else {
+        debugPrint('Uncaught Error (LogService not ready): $error\n$stack');
       }
-      return true;
-    };
-
-    runApp(const OxidePlayerApp());
-  }, (error, stack) {
-    if (GetIt.I.isRegistered<LogService>()) {
-      GetIt.I<LogService>().error(
-        'Uncaught Error: $error',
-        error: error,
-        stackTrace: stack,
-      );
-    } else {
-      debugPrint('Uncaught Error (LogService not ready): $error\n$stack');
-    }
-  });
+    },
+  );
 }

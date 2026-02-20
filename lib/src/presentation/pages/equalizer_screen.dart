@@ -224,8 +224,9 @@ class _EqualizerScreenState extends State<EqualizerScreen> {
                   const SizedBox(height: 8),
                   Text(freqLabel, style: const TextStyle(fontSize: 10)),
                   Text('${level.toStringAsFixed(1)}dB',
-                      style:
-                          TextStyle(fontSize: 10, color: context.appColors.textSecondary)),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: context.appColors.textSecondary)),
                 ],
               ),
             );

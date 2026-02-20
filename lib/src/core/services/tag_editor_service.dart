@@ -42,16 +42,17 @@ class TagEditorService {
       debugPrint('[TagEditorService] Detected format: $realFormat');
 
       final extension = p.extension(path).toLowerCase();
-      
+
       // Check for format mismatches
       final isMislabeled = _isMislabeledFile(extension, realFormat);
       if (isMislabeled != null) {
         debugPrint('[TagEditorService] WARNING: $isMislabeled');
       }
-      
+
       // WebM/Matroska doesn't support standard audio tags via MetadataGod
       if (realFormat == 'WebM/Matroska') {
-        debugPrint('[TagEditorService] Skipping tag write: WebM/Matroska format does not support embedded tags via MetadataGod');
+        debugPrint(
+            '[TagEditorService] Skipping tag write: WebM/Matroska format does not support embedded tags via MetadataGod');
         return false;
       }
 

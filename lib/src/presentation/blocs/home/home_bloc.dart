@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drift/drift.dart';
 import 'package:get_it/get_it.dart';
 
+import '../bloc_status.dart';
 import '../../../core/services/recommendation_service.dart';
 import '../../../core/services/metadata_matching_service.dart';
 import '../../../data/datasources/app_database.dart';

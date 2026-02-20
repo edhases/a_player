@@ -21,21 +21,22 @@ part of 'home_bloc.dart';
 // EXCEPT: generic type alias or something?
 // Let's re-read home_bloc.dart to be sure.
 
-enum HomeStatus { initial, loading, success, failure }
+/// @deprecated Use [BlocStatus] instead
+typedef HomeStatus = BlocStatus;
 
 class HomeState extends Equatable {
-  final HomeStatus status;
+  final BlocStatus status;
   final List<HomeSection> sections;
   final String? errorMessage;
 
   const HomeState({
-    this.status = HomeStatus.initial,
+    this.status = BlocStatus.initial,
     this.sections = const [],
     this.errorMessage,
   });
 
   HomeState copyWith({
-    HomeStatus? status,
+    BlocStatus? status,
     List<HomeSection>? sections,
     String? errorMessage,
   }) {

@@ -1,120 +1,127 @@
 # Oxide Player
 
-Cross‑platform music player built with Flutter for Android, iOS, Windows, Linux, and Web. Oxide Player combines local playback with YouTube Music streaming and offline caching.
+![Oxide Music Banner](https://raw.githubusercontent.com/edhases/a_player/main/assets/extra/banner.png)
 
-## Table of Contents
+**[English](#english) | [Українська](#українська)**
 
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Run](#run)
-- [Build](#build)
-- [Configuration](#configuration)
-- [Project Structure](#project-structure)
-- [Localization](#localization)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+---
 
-## Features
+<a name="english"></a>
+## 🇬🇧 English
 
-- 🎵 Hybrid playback: local files + YouTube Music
-- 💾 Offline cache (download for offline listening)
-- 🎚️ Equalizer, crossfade, and sleep timer
-- 🧭 Smart Play for albums/playlists
-- 📌 Queue management with reordering
-- ❤️ Favorites, history, and recommendations
-- 📄 Lyrics (when available)
-- 📡 Custom radio stations
-- 🌍 Multi‑language UI
+**Oxide Player** is a cross-platform music player built with Flutter for Android, iOS, Windows, Linux, and Web. It combines local file playback with YouTube Music streaming and offline caching capabilities, offering a unified music experience.
 
-## Tech Stack
+### ✨ Features
 
-- **Framework:** Flutter (Dart)
-- **Audio:** just_audio, audio_service
-- **Database:** Drift (SQLite)
-- **Networking:** Dio + InnerTube API
-- **DI/State:** GetIt + Bloc
-- **Code Gen:** build_runner
+- 🎵 **Hybrid Playback**: Seamlessly mix local files and YouTube Music tracks.
+- 💾 **Offline Cache**: Download tracks for offline listening.
+- 🎚️ **Audio Control**: Built-in equalizer, crossfade, and sleep timer.
+- 🧭 **Smart Play**: Intelligent playback for albums and playlists.
+- 📌 **Queue Management**: Drag-and-drop queue reordering.
+- ❤️ **Library**: Favorites, history, and personalized recommendations.
+- 📄 **Lyrics**: Automatic lyrics fetching (synced where available).
+- 📡 **Radio**: Custom radio stations support.
+- 🌍 **Multi-language**: Fully localized interface.
 
-## Getting Started
+### 🚀 Getting Started
 
-### Prerequisites
+#### Prerequisites
 
 - Flutter SDK (stable)
-- Dart (bundled with Flutter)
-- Platform SDKs (Android Studio / Xcode / Windows / Linux tooling as needed)
+- Dart SDK
+- Platform-specific build tools (Android Studio / Xcode / Visual Studio / etc.)
 
-### Install
+#### Installation
 
-1) Install dependencies:
+1. **Install dependencies:**
+   ```bash
+   flutter pub get
+   ```
 
-```bash
-flutter pub get
-```
+2. **Generate code:**
+   ```bash
+   dart run build_runner build --delete-conflicting-outputs
+   ```
 
-2) Generate code:
+3. **Run the app:**
+   ```bash
+   flutter run
+   ```
 
-```bash
-dart run build_runner build --delete-conflicting-outputs
-```
-
-## Run
-
-```bash
-flutter run
-```
-
-## Build
+### 🏗 Build
 
 ```bash
 # Android
 flutter build apk
 
-# iOS
-flutter build ios
-
 # Windows
 flutter build windows
-
-# Linux
-flutter build linux
 
 # Web
 flutter build web
 ```
 
-## Configuration
+### 🤝 Contributing
 
-- **Permissions:** grant storage/audio permissions for local library scanning.
-- **YouTube Music:** sign in to access personalized recommendations and playlists.
-- **Cache:** configure max cache size and optionally enable Wi‑Fi‑only downloads.
-- **Logs:** share or send logs from Settings for debugging.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Project Structure
+---
 
+<a name="українська"></a>
+## 🇺🇦 Українська
+
+**Oxide Player** — це сучасний кросплатформний музичний плеєр, створений на Flutter для Android, iOS, Windows, Linux та Web. Він поєднує відтворення локальних файлів з потоковим сервісом YouTube Music та можливостями офлайн-кешування.
+
+### ✨ Можливості
+
+- 🎵 **Гібридне відтворення**: Мікс локальних треків та музики з YouTube.
+- 💾 **Офлайн кеш**: Завантаження треків для прослуховування без інтернету.
+- 🎚️ **Аудіо ефекти**: Вбудований еквалайзер, кросфейд та таймер сну.
+- 🧭 **Smart Play**: Розумне відтворення альбомів та плейлистів.
+- 📌 **Керування чергою**: Зміна порядку треків перетягуванням.
+- ❤️ **Бібліотека**: Обране, історія прослуховування та рекомендації.
+- 📄 **Тексти пісень**: Автоматичний пошук текстів (синхронізовані, якщо доступні).
+- 📡 **Радіо**: Підтримка власних радіостанцій.
+- 🌍 **Багатомовність**: Повністю локалізований інтерфейс.
+
+### 🚀 Початок роботи
+
+#### Вимоги
+
+- Flutter SDK (stable)
+- Dart SDK
+- Інструменти збірки для платформ (Android Studio / Xcode / Visual Studio тощо)
+
+#### Встановлення
+
+1. **Встановіть залежності:**
+   ```bash
+   flutter pub get
+   ```
+
+2. **Згенеруйте код:**
+   ```bash
+   dart run build_runner build --delete-conflicting-outputs
+   ```
+
+3. **Запустіть додаток:**
+   ```bash
+   flutter run
+   ```
+
+### 🏗 Збірка
+
+```bash
+# Android
+flutter build apk
+
+# Windows
+flutter build windows
+
+# Web
+flutter build web
 ```
-lib/src/
-├── core/           # Services, utilities, constants
-├── data/           # Database, models, repositories
-├── domain/         # Entities, repository interfaces
-└── presentation/   # UI, screens, widgets
-```
 
-## Localization
+### 🤝 Участь у розробці
 
-Localization files are in [assets/lang](assets/lang). Add or update strings per locale to extend translations.
-
-## Troubleshooting
-
-- **No music found:** grant permissions and run **Scan Library** in Settings.
-- **YouTube not loading:** check network and sign in again.
-- **Downloads fail:** verify Wi‑Fi‑only mode and cache limits.
-
-## Contributing
-
-Issues and pull requests are welcome. Please describe the problem clearly and include logs if possible.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+Ми вітаємо будь-яку допомогу! Будь ласка, створюйте Pull Request з вашими покращеннями.

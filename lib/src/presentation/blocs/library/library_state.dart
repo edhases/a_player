@@ -45,10 +45,11 @@ part of 'library_bloc.dart';
 // Let's assume it's moved or redefined here to be self-contained in Bloc state if it's UI state.
 enum LibraryViewMode { folders, albums, artists, radio }
 
-enum LibraryStatus { initial, loading, success, failure }
+/// @deprecated Use [BlocStatus] instead
+typedef LibraryStatus = BlocStatus;
 
 class LibraryState extends Equatable {
-  final LibraryStatus status;
+  final BlocStatus status;
   final LibraryViewMode viewMode;
   final List<String> folders;
   final List<AlbumWithArtwork> albums;
@@ -58,7 +59,7 @@ class LibraryState extends Equatable {
   final String? errorMessage;
 
   const LibraryState({
-    this.status = LibraryStatus.initial,
+    this.status = BlocStatus.initial,
     this.viewMode = LibraryViewMode.folders,
     this.folders = const [],
     this.albums = const [],
@@ -69,7 +70,7 @@ class LibraryState extends Equatable {
   });
 
   LibraryState copyWith({
-    LibraryStatus? status,
+    BlocStatus? status,
     LibraryViewMode? viewMode,
     List<String>? folders,
     List<AlbumWithArtwork>? albums,

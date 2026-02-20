@@ -16,7 +16,7 @@ import '../../core/services/cache_service.dart';
 import '../../core/services/log_service.dart';
 import '../../core/services/telegram_service.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import '../../core/services/version_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'webview_login_screen.dart';
 import 'cached_tracks_screen.dart';
@@ -66,9 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       sdkInt = androidInfo.version.sdkInt;
     }
 
-    final List<Permission> permissions = [
-      Permission.notification,
-    ];
+    final List<Permission> permissions = [Permission.notification];
 
     if (Platform.isAndroid) {
       if (sdkInt >= 26) {
@@ -109,8 +107,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(loc.allPermissionsGranted),
-              backgroundColor: Colors.green),
+            content: Text(loc.allPermissionsGranted),
+            backgroundColor: Colors.green,
+          ),
         );
       }
       return;
@@ -118,9 +117,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (requestNeeded) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(loc.requestingPermissions)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(loc.requestingPermissions)));
       }
 
       Map<Permission, PermissionStatus> result = await permissions.request();
@@ -135,8 +134,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (nowGranted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(loc.permissionsGranted),
-                backgroundColor: Colors.green),
+              content: Text(loc.permissionsGranted),
+              backgroundColor: Colors.green,
+            ),
           );
         } else {
           final denied = result.entries
@@ -146,8 +146,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content:
-                  Text(loc.translate('denied', args: {'permissions': denied})),
+              content: Text(
+                loc.translate('denied', args: {'permissions': denied}),
+              ),
               backgroundColor: Colors.orange,
               action: SnackBarAction(
                 label: loc.settingsBtn,
@@ -161,22 +162,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else {
       if (context.mounted) {
         showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-                  title: Text(loc.permissionsRequired),
-                  content: Text(loc.permissionsPermanentlyDenied),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text(loc.cancel)),
-                    TextButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          openAppSettings();
-                        },
-                        child: Text(loc.openSettings)),
-                  ],
-                ));
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(loc.permissionsRequired),
+            content: Text(loc.permissionsPermanentlyDenied),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(loc.cancel),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  openAppSettings();
+                },
+                child: Text(loc.openSettings),
+              ),
+            ],
+          ),
+        );
       }
     }
   }
@@ -200,9 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(loc.settings),
-      ),
+      appBar: AppBar(title: Text(loc.settings)),
       body: ListView(
         children: [
           // Library Section
@@ -315,8 +317,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     title: Text(loc.skipShortTracks),
-                    subtitle: Text(loc.translate('skip_short_tracks_desc',
-                        args: {'min': min})),
+                    subtitle: Text(
+                      loc.translate(
+                        'skip_short_tracks_desc',
+                        args: {'min': min},
+                      ),
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -339,41 +345,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           // Max Duration
-          StatefulBuilder(builder: (context, setState) {
-            final max = settingsService.loadMaxTrackDuration();
-            return Column(
-              children: [
-                ListTile(
-                  title: Text(loc.skipLongTracks),
-                  subtitle: Text(max == 0
-                      ? loc.noLimit
-                      : loc.translate('skip_long_tracks_desc',
-                          args: {'max': max ~/ 60})),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Slider(
-                    value: max.toDouble(),
-                    min: 0,
-                    max: 3600, // 1 hour max for slider
-                    divisions: 60,
-                    label: max == 0 ? loc.off : '${max ~/ 60}m',
-                    onChanged: (val) {
-                      setState(() {
-                        settingsService.saveMaxTrackDuration(val.toInt());
-                      });
-                    },
+          StatefulBuilder(
+            builder: (context, setState) {
+              final max = settingsService.loadMaxTrackDuration();
+              return Column(
+                children: [
+                  ListTile(
+                    title: Text(loc.skipLongTracks),
+                    subtitle: Text(
+                      max == 0
+                          ? loc.noLimit
+                          : loc.translate(
+                              'skip_long_tracks_desc',
+                              args: {'max': max ~/ 60},
+                            ),
+                    ),
                   ),
-                ),
-              ],
-            );
-          }),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Slider(
+                      value: max.toDouble(),
+                      min: 0,
+                      max: 3600, // 1 hour max for slider
+                      divisions: 60,
+                      label: max == 0 ? loc.off : '${max ~/ 60}m',
+                      onChanged: (val) {
+                        setState(() {
+                          settingsService.saveMaxTrackDuration(val.toInt());
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
 
           // Excluded Folders
           ListTile(
             title: Text(loc.excludedFolders),
-            subtitle: Text(loc.translate('folders_hidden',
-                args: {'count': settingsService.loadExcludedFolders().length})),
+            subtitle: Text(
+              loc.translate(
+                'folders_hidden',
+                args: {'count': settingsService.loadExcludedFolders().length},
+              ),
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               _showExcludedFoldersDialog(context, settingsService);
@@ -474,9 +490,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                       onChanged: (val) {
                         if (val != null) {
-                          context
-                              .read<SettingsBloc>()
-                              .add(ChangeThemeMode(val));
+                          context.read<SettingsBloc>().add(
+                                ChangeThemeMode(val),
+                              );
                         }
                       },
                       underline: const SizedBox(),
@@ -496,7 +512,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.format_size),
                     title: Text(
-                        '${loc.translate('font_size')} (${(state.fontScale * 100).toInt()}%)'),
+                      '${loc.translate('font_size')} (${(state.fontScale * 100).toInt()}%)',
+                    ),
                     subtitle: Slider(
                       value: state.fontScale,
                       min: 0.8,
@@ -516,22 +533,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
-                          _buildColorOption(context, null,
-                              state.accentColor), // Dynamic/Default
-                          _buildColorOption(context, Colors.blue.toARGB32(),
-                              state.accentColor),
-                          _buildColorOption(context, Colors.red.toARGB32(),
-                              state.accentColor),
-                          _buildColorOption(context, Colors.green.toARGB32(),
-                              state.accentColor),
-                          _buildColorOption(context, Colors.orange.toARGB32(),
-                              state.accentColor),
-                          _buildColorOption(context, Colors.purple.toARGB32(),
-                              state.accentColor),
-                          _buildColorOption(context, Colors.teal.toARGB32(),
-                              state.accentColor),
-                          _buildColorOption(context, Colors.pink.toARGB32(),
-                              state.accentColor),
+                          _buildColorOption(
+                            context,
+                            null,
+                            state.accentColor,
+                          ), // Dynamic/Default
+                          _buildColorOption(
+                            context,
+                            Colors.blue.toARGB32(),
+                            state.accentColor,
+                          ),
+                          _buildColorOption(
+                            context,
+                            Colors.red.toARGB32(),
+                            state.accentColor,
+                          ),
+                          _buildColorOption(
+                            context,
+                            Colors.green.toARGB32(),
+                            state.accentColor,
+                          ),
+                          _buildColorOption(
+                            context,
+                            Colors.orange.toARGB32(),
+                            state.accentColor,
+                          ),
+                          _buildColorOption(
+                            context,
+                            Colors.purple.toARGB32(),
+                            state.accentColor,
+                          ),
+                          _buildColorOption(
+                            context,
+                            Colors.teal.toARGB32(),
+                            state.accentColor,
+                          ),
+                          _buildColorOption(
+                            context,
+                            Colors.pink.toARGB32(),
+                            state.accentColor,
+                          ),
                         ],
                       ),
                     ),
@@ -562,9 +603,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                   onChanged: (value) {
                     if (value != null) {
-                      context
-                          .read<SettingsBloc>()
-                          .add(ChangeLocale(Locale(value)));
+                      context.read<SettingsBloc>().add(
+                            ChangeLocale(Locale(value)),
+                          );
                     }
                   },
                   underline: const SizedBox(),
@@ -597,92 +638,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Cache Section
           _buildSectionHeader(context, loc.cache),
-          StatefulBuilder(builder: (context, setState) {
-            final currentSize = settingsService.loadMaxCacheSize();
-            return Column(
-              children: [
-                ListTile(
-                  title: Text(loc.maxCacheSize),
-                  subtitle: Text(loc.translate('cache_usage', args: {
-                    'used': _formatBytes(_cacheUsage),
-                    'total': _formatBytes(currentSize)
-                  })),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Slider(
-                    value: currentSize
-                        .toDouble()
-                        .clamp(128 * 1024 * 1024, 24 * 1024 * 1024 * 1024),
-                    min: 128 * 1024 * 1024,
-                    max: 24 * 1024 * 1024 * 1024,
-                    divisions: 47,
-                    label: _formatBytes(currentSize),
-                    onChanged: (val) {
-                      final newSize = val.toInt();
-                      settingsService.saveMaxCacheSize(newSize);
-                      if (GetIt.I.isRegistered<CacheService>()) {
-                        GetIt.I<CacheService>().setMaxCacheSize(newSize);
-                      }
-                      setState(() {});
+          StatefulBuilder(
+            builder: (context, setState) {
+              final currentSize = settingsService.loadMaxCacheSize();
+              return Column(
+                children: [
+                  ListTile(
+                    title: Text(loc.maxCacheSize),
+                    subtitle: Text(
+                      loc.translate(
+                        'cache_usage',
+                        args: {
+                          'used': _formatBytes(_cacheUsage),
+                          'total': _formatBytes(currentSize),
+                        },
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Slider(
+                      value: currentSize.toDouble().clamp(
+                            128 * 1024 * 1024,
+                            24 * 1024 * 1024 * 1024,
+                          ),
+                      min: 128 * 1024 * 1024,
+                      max: 24 * 1024 * 1024 * 1024,
+                      divisions: 47,
+                      label: _formatBytes(currentSize),
+                      onChanged: (val) {
+                        final newSize = val.toInt();
+                        settingsService.saveMaxCacheSize(newSize);
+                        if (GetIt.I.isRegistered<CacheService>()) {
+                          GetIt.I<CacheService>().setMaxCacheSize(newSize);
+                        }
+                        setState(() {});
+                      },
+                      onChangeEnd: (_) => _loadCacheUsage(),
+                    ),
+                  ),
+                  ListTile(
+                    key: const Key('settings_view_cached_tracks'),
+                    title: Text(loc.viewCachedTracks),
+                    subtitle: Text(loc.showDownloadedSongs),
+                    trailing: const Icon(Icons.queue_music),
+                    onTap: () {
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute(
+                              builder: (_) => const CachedTracksScreen(),
+                            ),
+                          )
+                          .then((_) => _loadCacheUsage());
                     },
-                    onChangeEnd: (_) => _loadCacheUsage(),
                   ),
-                ),
-                ListTile(
-                  key: const Key('settings_view_cached_tracks'),
-                  title: Text(loc.viewCachedTracks),
-                  subtitle: Text(loc.showDownloadedSongs),
-                  trailing: const Icon(Icons.queue_music),
-                  onTap: () {
-                    Navigator.of(context)
-                        .push(MaterialPageRoute(
-                            builder: (_) => const CachedTracksScreen()))
-                        .then((_) => _loadCacheUsage());
-                  },
-                ),
-              ],
-            );
-          }),
+                ],
+              );
+            },
+          ),
           ListTile(
-              key: const Key('settings_clear_cache'),
-              title: Text(loc.clearCache),
-              subtitle: Text(loc.clearCacheDesc),
-              trailing: const Icon(Icons.delete_forever),
-              onTap: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(loc.clearCache),
-                    content: Text(loc.clearCacheConfirm),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(loc.cancel),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(loc.clear),
-                      ),
-                    ],
-                  ),
-                );
+            key: const Key('settings_clear_cache'),
+            title: Text(loc.clearCache),
+            subtitle: Text(loc.clearCacheDesc),
+            trailing: const Icon(Icons.delete_forever),
+            onTap: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(loc.clearCache),
+                  content: Text(loc.clearCacheConfirm),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: Text(loc.cancel),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: Text(loc.clear),
+                    ),
+                  ],
+                ),
+              );
 
-                if (confirmed == true && context.mounted) {
-                  if (GetIt.I.isRegistered<CacheService>()) {
-                    await GetIt.I<CacheService>().clearCache();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(loc.cacheCleared)),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(loc.cacheServiceUnavailable)),
-                    );
+              if (confirmed == true && context.mounted) {
+                if (GetIt.I.isRegistered<CacheService>()) {
+                  await GetIt.I<CacheService>().clearCache();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(loc.cacheCleared)));
                   }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(loc.cacheServiceUnavailable)),
+                  );
                 }
-              }),
+              }
+            },
+          ),
 
           const Divider(),
 
@@ -780,13 +833,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
 
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(success
-                            ? loc.translate('restore_success_restart')
-                            : loc.translate('error',
-                                args: {'error': 'Restore failed'})),
-                        backgroundColor: success ? Colors.green : Colors.red,
-                      ));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            success
+                                ? loc.translate('restore_success_restart')
+                                : loc.translate(
+                                    'error',
+                                    args: {'error': 'Restore failed'},
+                                  ),
+                          ),
+                          backgroundColor: success ? Colors.green : Colors.red,
+                        ),
+                      );
                     }
                   }
                 }
@@ -797,8 +856,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.delete_forever, color: Colors.red),
-            title: Text(loc.translate('factory_reset'),
-                style: const TextStyle(color: Colors.red)),
+            title: Text(
+              loc.translate('factory_reset'),
+              style: const TextStyle(color: Colors.red),
+            ),
             subtitle: Text(loc.translate('reset_desc')),
             onTap: () async {
               final confirmed = await showDialog<bool>(
@@ -808,12 +869,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   content: Text(loc.translate('reset_confirm_message')),
                   actions: [
                     TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(loc.cancel)),
+                      onPressed: () => Navigator.pop(context, false),
+                      child: Text(loc.cancel),
+                    ),
                     TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(loc.translate('reset_confirm_action'),
-                            style: const TextStyle(color: Colors.red))),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: Text(
+                        loc.translate('reset_confirm_action'),
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -822,8 +887,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   GetIt.I.isRegistered<DataManagementService>()) {
                 await GetIt.I<DataManagementService>().factoryReset();
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Reset complete. Exiting...')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Reset complete. Exiting...')),
+                  );
                   await Future.delayed(const Duration(seconds: 2));
                   exit(0);
                 }
@@ -840,9 +906,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   ListTile(
                     title: Text(loc.translate('log_history_size')),
-                    subtitle: Text(state.maxLogSize == 0
-                        ? loc.translate('disabled_not_recommended')
-                        : _formatBytes(state.maxLogSize)),
+                    subtitle: Text(
+                      state.maxLogSize == 0
+                          ? loc.translate('disabled_not_recommended')
+                          : _formatBytes(state.maxLogSize),
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -855,9 +923,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? loc.off
                           : _formatBytes(state.maxLogSize),
                       onChanged: (val) {
-                        context
-                            .read<SettingsBloc>()
-                            .add(ChangeMaxLogSize(val.toInt()));
+                        context.read<SettingsBloc>().add(
+                              ChangeMaxLogSize(val.toInt()),
+                            );
                       },
                       onChangeEnd: (val) {
                         final sizeMB = val / (1024 * 1024);
@@ -865,10 +933,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
-                              title:
-                                  Text(loc.translate('logging_disabled_title')),
-                              content:
-                                  Text(loc.translate('logging_disabled_desc')),
+                              title: Text(
+                                loc.translate('logging_disabled_title'),
+                              ),
+                              content: Text(
+                                loc.translate('logging_disabled_desc'),
+                              ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(context),
@@ -911,10 +981,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (!GetIt.I.isRegistered<LogService>()) return;
               final file = await GetIt.I<LogService>().getLogFile();
               if (file != null && context.mounted) {
-                await SharePlus.instance.share(ShareParams(
-                  files: [XFile(file.path)],
-                  text: 'Oxide Player Logs',
-                ));
+                await SharePlus.instance.share(
+                  ShareParams(
+                    files: [XFile(file.path)],
+                    text: 'Oxide Player Logs',
+                  ),
+                );
               }
             },
           ),
@@ -926,9 +998,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (!GetIt.I.isRegistered<LogService>()) return;
               await GetIt.I<LogService>().clearLogs();
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(loc.logsCleared)),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(loc.logsCleared)));
               }
             },
           ),
@@ -943,25 +1015,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(loc.detailedGuide),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ManualScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ManualScreen()));
             },
           ),
-          FutureBuilder<PackageInfo>(
-            future: PackageInfo.fromPlatform(),
-            builder: (context, snapshot) {
-              final version = snapshot.data?.version ?? '';
-              final build = snapshot.data?.buildNumber ?? '';
-              final displayVersion =
-                  version.isEmpty ? 'Debug Build' : '$version ($build)';
-              return ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('Oxide Player'),
-                subtitle: Text(loc
-                    .translate('version', args: {'version': displayVersion})),
-              );
-            },
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Oxide Player'),
+            subtitle: Text(
+              loc.translate(
+                'version',
+                args: {
+                  'version':
+                      '${VersionService.versionName} (${VersionService.versionCode})',
+                },
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
@@ -969,7 +1039,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: ElevatedButton.icon(
                 onPressed: () async {
                   final url = Uri.parse(
-                      'https://www.paypal.com/donate/?hosted_button_id=MUGPMK7UPCYUW');
+                    'https://www.paypal.com/donate/?hosted_button_id=MUGPMK7UPCYUW',
+                  );
                   await launchUrl(url, mode: LaunchMode.externalApplication);
                 },
                 icon: const Icon(Icons.favorite, color: Colors.pink),
@@ -1015,8 +1086,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     final updateService = GetIt.I<UpdateService>();
-    final (result, updateInfo) =
-        await updateService.checkForUpdate(force: true);
+    final (result, updateInfo) = await updateService.checkForUpdate(
+      force: true,
+    );
 
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -1052,8 +1124,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case UpdateCheckResult.error:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text(loc.translate('error', args: {'error': 'Network error'})),
+            content: Text(
+              loc.translate('error', args: {'error': 'Network error'}),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -1108,17 +1181,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: ListTile(
-                        leading: Icon(Icons.settings,
-                            color: theme.colorScheme.primary),
+                        leading: Icon(
+                          Icons.settings,
+                          color: theme.colorScheme.primary,
+                        ),
                         title: Text(loc.translate('backup_settings_db')),
                         subtitle: Text(
                           loc.translate('backup_settings_db_desc'),
                           style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurfaceVariant),
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                        trailing:
-                            Icon(Icons.check_circle, color: Colors.green[700]),
+                        trailing: Icon(
+                          Icons.check_circle,
+                          color: Colors.green[700],
+                        ),
                         dense: true,
                       ),
                     ),
@@ -1144,8 +1222,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                     // Cached Songs
                     CheckboxListTile(
-                      title: Text(loc.translate('include_cache_size',
-                          args: {'size': _formatBytes(sizes['cache'] ?? 0)})),
+                      title: Text(
+                        loc.translate(
+                          'include_cache_size',
+                          args: {'size': _formatBytes(sizes['cache'] ?? 0)},
+                        ),
+                      ),
                       subtitle: sizes['cache'] != null && sizes['cache']! > 0
                           ? Text(
                               loc.translate('backup_cache_desc'),
@@ -1154,8 +1236,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : Text(
                               loc.translate('no_cached_tracks'),
                               style: TextStyle(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurfaceVariant),
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
                       value: includeCache,
                       onChanged: sizes['cache'] != null && sizes['cache']! > 0
@@ -1171,25 +1254,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         (sizes['cache'] ?? 0) > 100 * 1024 * 1024)
                       Padding(
                         padding: const EdgeInsets.only(
-                            left: 16, right: 16, bottom: 8),
+                          left: 16,
+                          right: 16,
+                          bottom: 8,
+                        ),
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: Colors.orange.withValues(alpha: 0.3)),
+                              color: Colors.orange.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.warning_amber,
-                                  color: Colors.orange, size: 18),
+                              const Icon(
+                                Icons.warning_amber,
+                                color: Colors.orange,
+                                size: 18,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   loc.translate('backup_large_cache_warning'),
                                   style: TextStyle(
-                                      fontSize: 11, color: Colors.orange[800]),
+                                    fontSize: 11,
+                                    color: Colors.orange[800],
+                                  ),
                                 ),
                               ),
                             ],
@@ -1218,22 +1310,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (includeCookies)
                       Padding(
                         padding: const EdgeInsets.only(
-                            left: 16, right: 16, bottom: 8),
+                          left: 16,
+                          right: 16,
+                          bottom: 8,
+                        ),
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: Colors.red.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: Colors.red.withValues(alpha: 0.3)),
+                              color: Colors.red.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.security,
-                                      color: Colors.red, size: 18),
+                                  const Icon(
+                                    Icons.security,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
                                     loc.translate('security_warning'),
@@ -1249,7 +1348,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Text(
                                 loc.translate('backup_cookies_warning'),
                                 style: TextStyle(
-                                    fontSize: 11, color: Colors.red[700]),
+                                  fontSize: 11,
+                                  color: Colors.red[700],
+                                ),
                               ),
                             ],
                           ),
@@ -1297,15 +1398,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Navigator.pop(dialogContext);
 
                           if (file != null && context.mounted) {
-                            await SharePlus.instance.share(ShareParams(
-                              files: [XFile(file.path)],
-                              text: 'Oxide Player Backup',
-                            ));
+                            await SharePlus.instance.share(
+                              ShareParams(
+                                files: [XFile(file.path)],
+                                text: 'Oxide Player Backup',
+                              ),
+                            );
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content:
-                                      Text(loc.translate('backup_success')),
+                                  content: Text(
+                                    loc.translate('backup_success'),
+                                  ),
                                   backgroundColor: Colors.green,
                                 ),
                               );
@@ -1395,8 +1499,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content:
-                            Text('Please fill in Problem and Description')),
+                      content: Text('Please fill in Problem and Description'),
+                    ),
                   );
                 }
                 return;
@@ -1413,14 +1517,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     '<b>Description:</b> $description\n'
                     '<b>Device:</b> $deviceInfo';
 
-                final success =
-                    await GetIt.I<TelegramService>().sendLogs(caption: caption);
+                final success = await GetIt.I<TelegramService>().sendLogs(
+                  caption: caption,
+                );
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                        content:
-                            Text(success ? loc.logsSent : loc.logsSendFailed)),
+                      content: Text(
+                        success ? loc.logsSent : loc.logsSendFailed,
+                      ),
+                    ),
                   );
                 }
               }
@@ -1433,7 +1540,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showExcludedFoldersDialog(
-      BuildContext context, SettingsService settings) {
+    BuildContext context,
+    SettingsService settings,
+  ) {
     final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
@@ -1453,8 +1562,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           final folder = folders[index];
                           return ListTile(
                             title: Text(_basename(folder)),
-                            subtitle: Text(folder,
-                                style: const TextStyle(fontSize: 10)),
+                            subtitle: Text(
+                              folder,
+                              style: const TextStyle(fontSize: 10),
+                            ),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete),
                               onPressed: () {
@@ -1498,7 +1609,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Text(
-                    loc.translate('error', args: {'error': snapshot.error}));
+                  loc.translate('error', args: {'error': snapshot.error}),
+                );
               }
               final status = snapshot.data ?? loc.scanStarting;
 
@@ -1550,7 +1662,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildColorOption(
-      BuildContext context, int? colorValue, int? selectedValue) {
+    BuildContext context,
+    int? colorValue,
+    int? selectedValue,
+  ) {
     // If colorValue is null, it represents "System/Default"
     final isSelected = colorValue == selectedValue;
     final color = colorValue != null
@@ -1566,17 +1681,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: isSelected
-                ? Border.all(
-                    color: Theme.of(context).colorScheme.onSurface, width: 2)
-                : null,
-            boxShadow: [
-              if (colorValue == null) // Special style for dynamic/default
-                BoxShadow(
-                    color: Colors.grey.withValues(alpha: 0.5), blurRadius: 2)
-            ]),
+          color: color,
+          shape: BoxShape.circle,
+          border: isSelected
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  width: 2,
+                )
+              : null,
+          boxShadow: [
+            if (colorValue == null) // Special style for dynamic/default
+              BoxShadow(
+                color: Colors.grey.withValues(alpha: 0.5),
+                blurRadius: 2,
+              ),
+          ],
+        ),
         child: colorValue == null
             ? const Icon(Icons.auto_awesome, size: 16, color: Colors.white)
             : (isSelected

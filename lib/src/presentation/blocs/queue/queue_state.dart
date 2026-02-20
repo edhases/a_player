@@ -1,13 +1,14 @@
 part of 'queue_bloc.dart';
 
-enum QueueStatus { initial, loading, success, failure }
+/// @deprecated Use [BlocStatus] instead
+typedef QueueStatus = BlocStatus;
 
 class QueueState extends Equatable {
-  final QueueStatus status;
+  final BlocStatus status;
   final List<MediaItem> queue;
 
   const QueueState({
-    this.status = QueueStatus.initial,
+    this.status = BlocStatus.initial,
     this.queue = const [],
   });
 

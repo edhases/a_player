@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import 'telegram_service.dart';
+import 'version_service.dart';
 
 /// Log levels for categorizing messages
 enum LogLevel {
@@ -170,12 +170,11 @@ class LogService {
     }
   }
 
-  /// Load app version from package info
+  /// Load app version from VersionService
   Future<void> _loadAppVersion() async {
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      _appVersion = packageInfo.version;
-      _buildNumber = packageInfo.buildNumber;
+      _appVersion = VersionService.versionName;
+      _buildNumber = VersionService.versionCode.toString();
     } catch (e) {
       debugPrint('[LogService] Failed to load app version: $e');
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../utils/duration_formatter.dart';
 import 'innertube_base.dart';
 
 /// Lyrics result with optional sync data
@@ -60,9 +61,9 @@ class InnerTubeLyricsService extends InnerTubeBase {
       final data = await postRequest('/next', body);
 
       // Navigate to tabs
-      final tabs = data['contents']?['singleColumnMusicWatchNextResultsRenderer']
-          ?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs']
-          as List?;
+      final tabs = data['contents']
+              ?['singleColumnMusicWatchNextResultsRenderer']?['tabbedRenderer']
+          ?['watchNextTabbedResultsRenderer']?['tabs'] as List?;
 
       if (tabs == null) return null;
 
@@ -76,8 +77,8 @@ class InnerTubeLyricsService extends InnerTubeBase {
 
         // Match lyrics tab in various languages
         if (_isLyricsTab(title)) {
-          final browseId =
-              tabRenderer['endpoint']?['browseEndpoint']?['browseId'] as String?;
+          final browseId = tabRenderer['endpoint']?['browseEndpoint']
+              ?['browseId'] as String?;
           debugPrint('[InnerTubeLyrics] Found lyrics browseId: $browseId');
           return browseId;
         }
@@ -177,7 +178,8 @@ class InnerTubeLyricsService extends InnerTubeBase {
         final startMsStr = line['startTimeMs']?.toString() ?? '0';
         final startMs = int.tryParse(startMsStr) ?? 0;
 
-        final timestamp = _formatLrcTimestamp(startMs);
+        final timestamp =
+            DurationFormatter.formatLrc(Duration(milliseconds: startMs));
         buffer.writeln('$timestamp $text');
       }
 
@@ -188,16 +190,6 @@ class InnerTubeLyricsService extends InnerTubeBase {
     } catch (e) {
       return '';
     }
-  }
-
-  /// Format milliseconds to LRC timestamp [mm:ss.xx]
-  String _formatLrcTimestamp(int milliseconds) {
-    final duration = Duration(milliseconds: milliseconds);
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
-    final hundredths = (duration.inMilliseconds % 1000) ~/ 10;
-
-    return '[${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${hundredths.toString().padLeft(2, '0')}]';
   }
 
   /// Check if lyrics are available for a video (without fetching full lyrics)

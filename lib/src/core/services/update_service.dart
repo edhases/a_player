@@ -4,7 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'version_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -12,12 +12,7 @@ import '../models/update_info.dart';
 import 'settings_service.dart';
 
 /// Result of an update check
-enum UpdateCheckResult {
-  upToDate,
-  updateAvailable,
-  forcedUpdate,
-  error,
-}
+enum UpdateCheckResult { upToDate, updateAvailable, forcedUpdate, error }
 
 /// Service for handling OTA updates via GitHub Releases
 class UpdateService {
@@ -31,17 +26,16 @@ class UpdateService {
 
   /// Get current app version code
   Future<int> getCurrentVersionCode() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    final versionCode = int.tryParse(packageInfo.buildNumber) ?? 0;
+    final versionCode = VersionService.versionCode;
     debugPrint(
-        '[UpdateService] Current app: ${packageInfo.version}+${packageInfo.buildNumber} (code: $versionCode)');
+      '[UpdateService] Current app: ${VersionService.versionName}+${VersionService.versionCode} (code: $versionCode)',
+    );
     return versionCode;
   }
 
   /// Get current app version name
   Future<String> getCurrentVersionName() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    return packageInfo.version;
+    return VersionService.versionName;
   }
 
   /// Check for available updates
@@ -70,7 +64,8 @@ class UpdateService {
 
       if (response.statusCode != 200) {
         debugPrint(
-            '[UpdateService] Failed to fetch update.json: ${response.statusCode}');
+          '[UpdateService] Failed to fetch update.json: ${response.statusCode}',
+        );
         return (UpdateCheckResult.error, null);
       }
 
@@ -83,7 +78,8 @@ class UpdateService {
       final currentVersionCode = await getCurrentVersionCode();
 
       debugPrint(
-          '[UpdateService] Current version: $currentVersionCode, Remote version: ${updateInfo.versionCode}');
+        '[UpdateService] Current version: $currentVersionCode, Remote version: ${updateInfo.versionCode}',
+      );
 
       // Check if forced update is required
       if (updateInfo.isForcedUpdate(currentVersionCode)) {
@@ -130,13 +126,15 @@ class UpdateService {
 
         if (computedHash == expectedHash) {
           debugPrint(
-              '[UpdateService] Existing APK verified, skipping download');
+            '[UpdateService] Existing APK verified, skipping download',
+          );
           // Report progress as complete
           onProgress?.call(bytes.length, bytes.length);
           return apkFile;
         } else {
           debugPrint(
-              '[UpdateService] Existing APK corrupted, re-downloading...');
+            '[UpdateService] Existing APK corrupted, re-downloading...',
+          );
           await apkFile.delete();
         }
       }
@@ -146,9 +144,7 @@ class UpdateService {
         updateInfo.apkUrl,
         apkPath,
         onReceiveProgress: onProgress,
-        options: Options(
-          receiveTimeout: const Duration(minutes: 10),
-        ),
+        options: Options(receiveTimeout: const Duration(minutes: 10)),
       );
 
       // Verify SHA-256 if provided
@@ -189,7 +185,8 @@ class UpdateService {
         final status = await Permission.requestInstallPackages.status;
         if (!status.isGranted) {
           debugPrint(
-              '[UpdateService] Requesting install packages permission...');
+            '[UpdateService] Requesting install packages permission...',
+          );
           final result = await Permission.requestInstallPackages.request();
           if (!result.isGranted) {
             debugPrint('[UpdateService] Install permission denied');
@@ -199,7 +196,8 @@ class UpdateService {
       }
 
       debugPrint(
-          '[UpdateService] Opening APK for installation: ${apkFile.path}');
+        '[UpdateService] Opening APK for installation: ${apkFile.path}',
+      );
 
       // Use open_filex which properly handles FileProvider and APK installation
       final result = await OpenFilex.open(
@@ -208,7 +206,8 @@ class UpdateService {
       );
 
       debugPrint(
-          '[UpdateService] OpenFilex result: ${result.type}, message: ${result.message}');
+        '[UpdateService] OpenFilex result: ${result.type}, message: ${result.message}',
+      );
 
       return result.type == ResultType.done;
     } catch (e) {

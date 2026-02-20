@@ -29,7 +29,8 @@ void main() {
       );
     });
 
-    test('needsPlaylistResolution returns false for regular video (11 chars)', () {
+    test('needsPlaylistResolution returns false for regular video (11 chars)',
+        () {
       final song = YouTubeSong(
         videoId: 'dQw4w9WgXcQ', // 11 chars - regular YouTube video ID
         title: 'Test Song',
@@ -102,7 +103,8 @@ void main() {
       expect(smartPlayService.getPlaylistId(album), 'MPREb_album_id');
     });
 
-    test('getPlaylistId returns null for regular song with context playlistId', () {
+    test('getPlaylistId returns null for regular song with context playlistId',
+        () {
       // Songs from "Listen Again" have playlistId for context but are still songs
       final song = YouTubeSong(
         videoId: 'dQw4w9WgXcQ', // 11 chars - regular video
@@ -236,24 +238,21 @@ void main() {
   group('Artist ID validation', () {
     test('valid artist ID starts with UC', () {
       final artistId = 'UCtest1234567890';
-      final isValid =
-          artistId.isNotEmpty && artistId.startsWith('UC');
+      final isValid = artistId.isNotEmpty && artistId.startsWith('UC');
 
       expect(isValid, true);
     });
 
     test('invalid artist ID without UC prefix', () {
       final artistId = 'test1234567890';
-      final isValid =
-          artistId.isNotEmpty && artistId.startsWith('UC');
+      final isValid = artistId.isNotEmpty && artistId.startsWith('UC');
 
       expect(isValid, false);
     });
 
     test('empty artist ID is invalid', () {
       final artistId = '';
-      final isValid =
-          artistId.isNotEmpty && artistId.startsWith('UC');
+      final isValid = artistId.isNotEmpty && artistId.startsWith('UC');
 
       expect(isValid, false);
     });

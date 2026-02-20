@@ -271,7 +271,8 @@ void main() {
       expect(rec.youtubeId, 'yt123');
       expect(rec.youtubeLink, 'https://youtube.com/watch?v=yt123');
       expect(rec.youtubeTitle, 'YT Title');
-      expect(rec.youtubeThumbnail, 'https://i.ytimg.com/vi/yt123/mqdefault.jpg');
+      expect(
+          rec.youtubeThumbnail, 'https://i.ytimg.com/vi/yt123/mqdefault.jpg');
       expect(rec.spotifyId, 'sp456');
       expect(rec.spotifyName, 'SP Name');
       expect(rec.spotifyAlbumArt, 'https://spotify.com/art.jpg');

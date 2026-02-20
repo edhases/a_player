@@ -54,12 +54,6 @@
 @import home_widget;
 #endif
 
-#if __has_include(<integration_test/IntegrationTestPlugin.h>)
-#import <integration_test/IntegrationTestPlugin.h>
-#else
-@import integration_test;
-#endif
-
 #if __has_include(<just_audio/JustAudioPlugin.h>)
 #import <just_audio/JustAudioPlugin.h>
 #else
@@ -76,12 +70,6 @@
 #import <open_filex/OpenFilePlugin.h>
 #else
 @import open_filex;
-#endif
-
-#if __has_include(<package_info_plus/FPPPackageInfoPlusPlugin.h>)
-#import <package_info_plus/FPPPackageInfoPlusPlugin.h>
-#else
-@import package_info_plus;
 #endif
 
 #if __has_include(<permission_handler_apple/PermissionHandlerPlugin.h>)
@@ -131,11 +119,9 @@
   [FlutterSecureStorageDarwinPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterSecureStorageDarwinPlugin"]];
   [FLTGoogleSignInPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTGoogleSignInPlugin"]];
   [HomeWidgetPlugin registerWithRegistrar:[registry registrarForPlugin:@"HomeWidgetPlugin"]];
-  [IntegrationTestPlugin registerWithRegistrar:[registry registrarForPlugin:@"IntegrationTestPlugin"]];
   [JustAudioPlugin registerWithRegistrar:[registry registrarForPlugin:@"JustAudioPlugin"]];
   [OnAudioQueryPlugin registerWithRegistrar:[registry registrarForPlugin:@"OnAudioQueryPlugin"]];
   [OpenFilePlugin registerWithRegistrar:[registry registrarForPlugin:@"OpenFilePlugin"]];
-  [FPPPackageInfoPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPPackageInfoPlusPlugin"]];
   [PermissionHandlerPlugin registerWithRegistrar:[registry registrarForPlugin:@"PermissionHandlerPlugin"]];
   [FPPSharePlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPSharePlusPlugin"]];
   [SharedPreferencesPlugin registerWithRegistrar:[registry registrarForPlugin:@"SharedPreferencesPlugin"]];

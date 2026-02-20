@@ -12,21 +12,19 @@ import 'settings_service.dart';
 import '../../data/datasources/app_database.dart';
 import 'cache_service.dart';
 import 'package:get_it/get_it.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'version_service.dart';
 
 class DataManagementService {
   final SettingsService _settings;
   final AppDatabase _db;
   final CacheService? _cacheService;
 
-  DataManagementService(
-    this._settings,
-    this._db, {
-    CacheService? cacheService,
-  }) : _cacheService = cacheService ??
-            (GetIt.I.isRegistered<CacheService>()
-                ? GetIt.I<CacheService>()
-                : null);
+  DataManagementService(this._settings, this._db, {CacheService? cacheService})
+    : _cacheService =
+          cacheService ??
+          (GetIt.I.isRegistered<CacheService>()
+              ? GetIt.I<CacheService>()
+              : null);
 
   static const int kBackupVersion = 1;
 
@@ -43,7 +41,8 @@ class DataManagementService {
       final jsonString = jsonEncode(backupData);
       final tempDir = await getTemporaryDirectory();
       final backupFile = File(
-          '${tempDir.path}/oxide_backup_${DateTime.now().millisecondsSinceEpoch}.json');
+        '${tempDir.path}/oxide_backup_${DateTime.now().millisecondsSinceEpoch}.json',
+      );
       await backupFile.writeAsString(jsonString);
       return backupFile;
     } catch (e) {
@@ -61,7 +60,8 @@ class DataManagementService {
       final version = data['version'] as int? ?? 0;
       if (version > kBackupVersion) {
         debugPrint(
-            '[DataManagementService] Backup version $version is newer than current $kBackupVersion');
+          '[DataManagementService] Backup version $version is newer than current $kBackupVersion',
+        );
         // We might want to warn the user, but for now we try best effort or abort?
         // Let's proceed with caution.
       }
@@ -97,8 +97,9 @@ class DataManagementService {
       // For now, let's just reset known keys to defaults.
       await _settings.saveThemeMode(0); // System
       await _settings.saveAmoledMode(false);
-      await _settings
-          .saveAccentColor(Colors.blue.toARGB32()); // Wait, this needs check
+      await _settings.saveAccentColor(
+        Colors.blue.toARGB32(),
+      ); // Wait, this needs check
       // Actually, let's implement clearAll in SettingsService.
 
       // 2. Clear Database
@@ -111,11 +112,12 @@ class DataManagementService {
 
       // For Tracks (local files), we just reset 'isFavorite' and 'isExcluded'.
       // We don't want to delete the tracks themselves as they represent files.
-      (_db.update(_db.tracks)
-        ..write(const TracksCompanion(
+      (_db.update(_db.tracks)..write(
+        const TracksCompanion(
           isFavorite: drift.Value(false),
           isExcluded: drift.Value(false),
-        )));
+        ),
+      ));
 
       // 3. Clear Cache
       if (_cacheService != null) {
@@ -133,10 +135,7 @@ class DataManagementService {
 
   /// Get estimated backup sizes for UI display
   Future<Map<String, int>> getBackupSizes() async {
-    final sizes = <String, int>{
-      'settings_db': 0,
-      'cache': 0,
-    };
+    final sizes = <String, int>{'settings_db': 0, 'cache': 0};
 
     try {
       // Settings + DB estimate (small, typically < 1MB)
@@ -169,22 +168,17 @@ class DataManagementService {
       final settingsJson = jsonEncode(_serializeSettings());
       final settingsBytes = utf8.encode(settingsJson);
       checksums['settings.json'] = sha256.convert(settingsBytes).toString();
-      archive.addFile(ArchiveFile(
-        'settings.json',
-        settingsBytes.length,
-        settingsBytes,
-      ));
+      archive.addFile(
+        ArchiveFile('settings.json', settingsBytes.length, settingsBytes),
+      );
 
       // 2. Add database.json (with history flag)
-      final dbJson =
-          jsonEncode(await _serializeDatabase(includeHistory: includeHistory));
+      final dbJson = jsonEncode(
+        await _serializeDatabase(includeHistory: includeHistory),
+      );
       final dbBytes = utf8.encode(dbJson);
       checksums['database.json'] = sha256.convert(dbBytes).toString();
-      archive.addFile(ArchiveFile(
-        'database.json',
-        dbBytes.length,
-        dbBytes,
-      ));
+      archive.addFile(ArchiveFile('database.json', dbBytes.length, dbBytes));
 
       // 3. Add cache files if requested
       if (includeCache && _cacheService != null) {
@@ -195,13 +189,12 @@ class DataManagementService {
             if (entity is File) {
               final relativePath = p.relative(entity.path, from: cacheDir.path);
               final bytes = await entity.readAsBytes();
-              checksums['cache/$relativePath'] =
-                  sha256.convert(bytes).toString();
-              archive.addFile(ArchiveFile(
-                'cache/$relativePath',
-                bytes.length,
-                bytes,
-              ));
+              checksums['cache/$relativePath'] = sha256
+                  .convert(bytes)
+                  .toString();
+              archive.addFile(
+                ArchiveFile('cache/$relativePath', bytes.length, bytes),
+              );
             }
           }
         }
@@ -211,22 +204,24 @@ class DataManagementService {
       if (includeCookies) {
         try {
           final appDir = await getApplicationDocumentsDirectory();
-          final webviewDir =
-              Directory(p.join(appDir.parent.path, 'app_webview'));
+          final webviewDir = Directory(
+            p.join(appDir.parent.path, 'app_webview'),
+          );
 
           if (await webviewDir.exists()) {
             await for (final entity in webviewDir.list(recursive: true)) {
               if (entity is File) {
-                final relativePath =
-                    p.relative(entity.path, from: webviewDir.path);
+                final relativePath = p.relative(
+                  entity.path,
+                  from: webviewDir.path,
+                );
                 final bytes = await entity.readAsBytes();
-                checksums['webview/$relativePath'] =
-                    sha256.convert(bytes).toString();
-                archive.addFile(ArchiveFile(
-                  'webview/$relativePath',
-                  bytes.length,
-                  bytes,
-                ));
+                checksums['webview/$relativePath'] = sha256
+                    .convert(bytes)
+                    .toString();
+                archive.addFile(
+                  ArchiveFile('webview/$relativePath', bytes.length, bytes),
+                );
               }
             }
           }
@@ -236,11 +231,9 @@ class DataManagementService {
           if (cookiesJson != null && cookiesJson.isNotEmpty) {
             final cookiesBytes = utf8.encode(cookiesJson);
             checksums['cookies.json'] = sha256.convert(cookiesBytes).toString();
-            archive.addFile(ArchiveFile(
-              'cookies.json',
-              cookiesBytes.length,
-              cookiesBytes,
-            ));
+            archive.addFile(
+              ArchiveFile('cookies.json', cookiesBytes.length, cookiesBytes),
+            );
           }
         } catch (e) {
           debugPrint('[DataManagementService] Error backing up cookies: $e');
@@ -248,11 +241,11 @@ class DataManagementService {
       }
 
       // 5. Create manifest.json
-      final packageInfo = await PackageInfo.fromPlatform();
       final manifest = {
         'backupVersion': kBackupVersionV2,
         'createdAt': DateTime.now().toIso8601String(),
-        'appVersion': '${packageInfo.version}+${packageInfo.buildNumber}',
+        'appVersion':
+            '${VersionService.versionName}+${VersionService.versionCode}',
         'includes': {
           'settings': true,
           'database': true,
@@ -263,11 +256,9 @@ class DataManagementService {
         'checksums': checksums,
       };
       final manifestBytes = utf8.encode(jsonEncode(manifest));
-      archive.addFile(ArchiveFile(
-        'manifest.json',
-        manifestBytes.length,
-        manifestBytes,
-      ));
+      archive.addFile(
+        ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
+      );
 
       // 6. Encode to ZIP
       final zipData = ZipEncoder().encode(archive);
@@ -429,24 +420,27 @@ class DataManagementService {
 
     // ... restore others ...
     if (map.containsKey('shuffle_mode')) {
-      await _settings
-          .saveShuffleMode(AudioServiceShuffleMode.values[map['shuffle_mode']]);
+      await _settings.saveShuffleMode(
+        AudioServiceShuffleMode.values[map['shuffle_mode']],
+      );
     }
     if (map.containsKey('repeat_mode')) {
-      await _settings
-          .saveRepeatMode(AudioServiceRepeatMode.values[map['repeat_mode']]);
+      await _settings.saveRepeatMode(
+        AudioServiceRepeatMode.values[map['repeat_mode']],
+      );
     }
   }
 
-  Future<Map<String, dynamic>> _serializeDatabase(
-      {bool includeHistory = true}) async {
+  Future<Map<String, dynamic>> _serializeDatabase({
+    bool includeHistory = true,
+  }) async {
     final youtubeTracks = await _db.select(_db.youTubeTracks).get();
     final radioStations = await _db.select(_db.radioStations).get();
     final trackOverrides = await _db.select(_db.trackOverrides).get();
     // For Tracks, we only care about favorites and overrides (isExcluded)
-    final modifiedTracks = await (_db.select(_db.tracks)
-          ..where((t) => t.isFavorite | t.isExcluded))
-        .get();
+    final modifiedTracks = await (_db.select(
+      _db.tracks,
+    )..where((t) => t.isFavorite | t.isExcluded)).get();
 
     final result = <String, dynamic>{
       'youtube_tracks': youtubeTracks.map((e) {
@@ -461,12 +455,14 @@ class DataManagementService {
       'radio_stations': radioStations.map((e) => e.toJson()).toList(),
       'track_overrides': trackOverrides.map((e) => e.toJson()).toList(),
       'local_tracks_metadata': modifiedTracks
-          .map((e) => {
-                'path': e.path,
-                'isFailure': false, // drift generated toJson might include this
-                'isFavorite': e.isFavorite,
-                'isExcluded': e.isExcluded,
-              })
+          .map(
+            (e) => {
+              'path': e.path,
+              'isFailure': false, // drift generated toJson might include this
+              'isFavorite': e.isFavorite,
+              'isExcluded': e.isExcluded,
+            },
+          )
           .toList(),
     };
 

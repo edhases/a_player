@@ -42,15 +42,9 @@ class DurationFormatter {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
-  /// Formats duration as M:SS (no leading zero for minutes).
-  ///
-  /// Example: 125 seconds → "2:05"
-  static String formatCompact(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds.remainder(60);
-
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
+  /// Alias for [formatMinimal]. Formats duration as M:SS.
+  /// @deprecated Use [formatMinimal] instead.
+  static String formatCompact(Duration duration) => formatMinimal(duration);
 
   /// Formats duration as LRC timestamp [MM:SS.xx].
   ///

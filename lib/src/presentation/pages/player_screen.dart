@@ -18,7 +18,6 @@ import '../blocs/player/player_bloc.dart';
 import '../widgets/lyrics_view.dart';
 import '../utils/track_actions.dart';
 import 'playlist_tracks_screen.dart';
-import 'detail_screen.dart';
 import '../widgets/player/player_widgets.dart';
 import '../../core/theme/app_theme.dart';
 

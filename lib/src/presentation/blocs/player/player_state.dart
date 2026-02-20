@@ -1,9 +1,10 @@
 part of 'player_bloc.dart';
 
-enum PlayerStatus { initial, loading, success, failure }
+/// @deprecated Use [BlocStatus] instead
+typedef PlayerStatus = BlocStatus;
 
 class PlayerState extends Equatable {
-  final PlayerStatus status;
+  final BlocStatus status;
   final MediaItem? mediaItem;
   final bool isPlaying;
   final AudioProcessingState processingState;
@@ -13,7 +14,7 @@ class PlayerState extends Equatable {
   final AudioServiceRepeatMode repeatMode;
 
   const PlayerState({
-    this.status = PlayerStatus.initial,
+    this.status = BlocStatus.initial,
     this.mediaItem,
     this.isPlaying = false,
     this.processingState = AudioProcessingState.idle,
@@ -24,7 +25,7 @@ class PlayerState extends Equatable {
   });
 
   PlayerState copyWith({
-    PlayerStatus? status,
+    BlocStatus? status,
     MediaItem? mediaItem,
     bool? isPlaying,
     AudioProcessingState? processingState,

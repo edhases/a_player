@@ -126,7 +126,7 @@ class _LyricsViewState extends State<LyricsView> {
                 Icon(
                   Icons.music_note,
                   size: 64,
-                  color: colors.textMuted.withOpacity(0.3),
+                  color: colors.textMuted.withValues(alpha: 0.3),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -268,7 +268,7 @@ class _LyricsViewState extends State<LyricsView> {
                   color: isCurrent
                       ? colors.textPrimary
                       : (lineText.trim().isEmpty
-                          ? colors.textMuted.withOpacity(0.4)
+                          ? colors.textMuted.withValues(alpha: 0.4)
                           : colors.textSecondary),
                   fontSize: isCurrent ? 24 : 18,
                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
